@@ -52,17 +52,13 @@ pub struct Vars {
     pub hiz: bool,
 }
 
+
 /// The command lines of a template.
 pub fn lines(tpl: &str, v: &Vars) -> Vec<String> {
     let fmt = oos_dsp::bode::fmt_hz;
     tpl.split('\n')
         .filter(|l| !l.trim().is_empty())
-        .map(|l| {
-            l.replace("{f}", &fmt(v.f))
-                .replace("{a}", &fmt(v.a))
-                .replace("{c}", &(v.ch + 1).to_string())
-                .replace("{z}", if v.hiz { "INFinity" } else { "50" })
-        })
+        .map(|l| l.replace("{f}", &fmt(v.f)).replace("{a}", &fmt(v.a)).replace("{c}", &(v.ch + 1).to_string()).replace("{z}", if v.hiz { "INFinity" } else { "50" }))
         .collect()
 }
 
@@ -143,10 +139,7 @@ impl Link {
         }
         let target = if addr.contains(':') { addr.to_string() } else { format!("{}:5555", addr) };
         let what = format!("generator {}", target);
-        let sock = target
-            .parse::<std::net::SocketAddr>()
-            .map_err(|e| e.to_string())
-            .and_then(|a| std::net::TcpStream::connect_timeout(&a, ANSWER).map_err(|e| e.to_string()));
+        let sock = target.parse::<std::net::SocketAddr>().map_err(|e| e.to_string()).and_then(|a| std::net::TcpStream::connect_timeout(&a, ANSWER).map_err(|e| e.to_string()));
         match sock {
             Ok(s) => {
                 // an answer that does not come must not hold the thread for ever; small commands go out at once
@@ -305,9 +298,7 @@ pub mod tests {
                 g.lock().unwrap().push(line.clone());
                 let answer = match line.as_str() {
                     "*IDN?" => Some(idn.to_string()),
-                    "SYSTem:ERRor?" => {
-                        Some(if queue.is_empty() { "0,\"No error\"".to_string() } else { queue.remove(0) })
-                    }
+                    "SYSTem:ERRor?" => Some(if queue.is_empty() { "0,\"No error\"".to_string() } else { queue.remove(0) }),
                     l if !refuse.is_empty() && l.contains(refuse) => {
                         queue.push("-222,\"Data out of range\"".into());
                         None
@@ -353,22 +344,10 @@ pub mod tests {
         assert_eq!(lines(GENERATORS[1].step, &Vars { f: 1e3, a: 1.0, ..V }), [":SOUR1:APPL:SIN 1000,1,0"]);
         assert_eq!(lines(GENERATORS[1].on, &V), [":OUTP1 ON"]);
         assert!(lines(GENERATORS[1].setup, &V).is_empty());
-        assert_eq!(
-            lines(GENERATORS[2].step, &Vars { f: 1e3, a: 1.0, ..V }),
-            ["C1:BSWV WVTP,SINE,FRQ,1000,AMP,1,OFST,0"]
-        );
+        assert_eq!(lines(GENERATORS[2].step, &Vars { f: 1e3, a: 1.0, ..V }), ["C1:BSWV WVTP,SINE,FRQ,1000,AMP,1,OFST,0"]);
         assert_eq!(lines(GENERATORS[3].step, &Vars { f: 1e3, a: 1.0, ..V }), ["FREQ 1000;VOLT 1"]);
         let g = &GENERATORS[5];
-        assert_eq!(
-            lines(g.setup, &Vars { f: 100.0, ..V }),
-            [
-                ":CHANnel1:MODe CONTINUE",
-                ":CHANnel1:BASE:WAVe SINe",
-                ":CHANnel1:AMPLitude:UNIT VPP",
-                ":CHANnel1:BASE:AMPLitude 2",
-                ":CHANnel1:BASE:OFFSet 0"
-            ]
-        );
+        assert_eq!(lines(g.setup, &Vars { f: 100.0, ..V }), [":CHANnel1:MODe CONTINUE", ":CHANnel1:BASE:WAVe SINe", ":CHANnel1:AMPLitude:UNIT VPP", ":CHANnel1:BASE:AMPLitude 2", ":CHANnel1:BASE:OFFSet 0"]);
         assert_eq!(lines(g.step, &V), [":CHANnel1:BASE:FREQuency 12500"]);
         assert_eq!(lines(g.on, &V), [":CHANnel1:OUTPut ON"]);
         // the second channel
@@ -383,21 +362,13 @@ pub mod tests {
         assert_eq!(g.name, "OWON DGE");
         assert_eq!(
             lines(g.setup, &V),
-            [
-                "OUTPut1:IMPedance INFinity",
-                "SOURce1:FUNCtion:SHAPe SIN",
-                "SOURce1:VOLTage:LEVel:IMMediate:OFFSet 0mV",
-                "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude 2Vpp"
-            ]
+            ["OUTPut1:IMPedance INFinity", "SOURce1:FUNCtion:SHAPe SIN", "SOURce1:VOLTage:LEVel:IMMediate:OFFSet 0mV", "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude 2Vpp"]
         );
         assert_eq!(lines(g.setup, &Vars { ch: 1, hiz: false, a: 0.05, ..V })[0], "OUTPut2:IMPedance 50");
         assert_eq!(lines(g.setup, &Vars { a: 0.05, ..V })[3], "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude 0.05Vpp");
         assert_eq!(lines(g.step, &V), ["SOURce1:FREQuency:FIXed 12500Hz"]);
         assert_eq!(lines(g.step, &Vars { f: 70e6, ..V }), ["SOURce1:FREQuency:FIXed 70000000Hz"]);
-        assert_eq!(
-            (lines(g.on, &V), lines(g.off, &V)),
-            (vec!["OUTPut1:STATe ON".to_string()], vec!["OUTPut1:STATe OFF".to_string()])
-        );
+        assert_eq!((lines(g.on, &V), lines(g.off, &V)), (vec!["OUTPut1:STATe ON".to_string()], vec!["OUTPut1:STATe OFF".to_string()]));
         assert_eq!(g.err, "SYSTem:ERRor?");
         assert!(g.has("{c}") && g.has("{z}"));
         // no model for what is not known
@@ -407,15 +378,8 @@ pub mod tests {
 
     #[test]
     fn answers_of_the_error_queue() {
-        assert!(
-            no_error("0,\"No error\"") && no_error("+0,\"No error\"") && no_error("0") && no_error(" 0,No error\r")
-        );
-        assert!(
-            !no_error("-201,\"Invalid while in local\"")
-                && !no_error("-102,\"Syntax error\"")
-                && !no_error("")
-                && !no_error("01")
-        );
+        assert!(no_error("0,\"No error\"") && no_error("+0,\"No error\"") && no_error("0") && no_error(" 0,No error\r"));
+        assert!(!no_error("-201,\"Invalid while in local\"") && !no_error("-102,\"Syntax error\"") && !no_error("") && !no_error("01"));
     }
 
     #[test]
@@ -465,8 +429,7 @@ pub mod tests {
         let (addr, got) = fake_generator("x", "");
         let shared = Arc::new(Mutex::new(Shared::default()));
         let tx = spawn(Target { usb: false, addr, identify: false }, shared.clone());
-        tx.send(Batch { lines: lines(GENERATORS[1].step, &Vars { f: 1e3, a: 1.0, ..V }), check: "", pace_ms: 0 })
-            .unwrap();
+        tx.send(Batch { lines: lines(GENERATORS[1].step, &Vars { f: 1e3, a: 1.0, ..V }), check: "", pace_ms: 0 }).unwrap();
         assert!(wait(&shared, |s| s.done == 1));
         drop(tx);
         assert!(wait(&shared, |s| s.conn == Conn::Off));
@@ -481,14 +444,7 @@ pub mod tests {
         // no USB device in the tests, and a port nobody listens on
         let shared = Arc::new(Mutex::new(Shared::default()));
         let _tx = spawn(Target { usb: true, addr: String::new(), identify: true }, shared.clone());
-        assert!(
-            wait(
-                &shared,
-                |s| matches!(&s.conn, Conn::Failed(e) if e.starts_with("generator USB: no USB device found"))
-            ),
-            "{:?}",
-            shared.lock().unwrap().conn
-        );
+        assert!(wait(&shared, |s| matches!(&s.conn, Conn::Failed(e) if e.starts_with("generator USB: no USB device found"))), "{:?}", shared.lock().unwrap().conn);
         assert!(shared.lock().unwrap().err.is_some());
         let shared = Arc::new(Mutex::new(Shared::default()));
         let _tx = spawn(Target { usb: false, addr: "not an address".into(), identify: true }, shared.clone());

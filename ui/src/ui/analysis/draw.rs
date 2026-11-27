@@ -174,8 +174,7 @@ impl Ui {
                 _ => DIM,
             };
             for &(v, i, k) in pts.iter().filter(|p| p.2 == kind) {
-                let (x, y) =
-                    (g.x + 4 + ((v - vl) / (vh - vl) * gw) as i32, g.bottom() - 4 - ((i - il) / (ih - il) * gh) as i32);
+                let (x, y) = (g.x + 4 + ((v - vl) / (vh - vl) * gw) as i32, g.bottom() - 4 - ((i - il) / (ih - il) * gh) as i32);
                 cv.blend(Rect::new(x, y, 2, 2), col, if k == 0 { 140 } else { 220 });
             }
         }

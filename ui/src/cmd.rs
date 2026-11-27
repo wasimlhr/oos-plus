@@ -50,10 +50,8 @@ pub enum Out {
 /// they stay with the local control FIFO and the host scripts.
 pub fn remote_ok(line: &str) -> bool {
     let words: Vec<&str> = line.split_whitespace().collect();
-    matches!(
-        words.first().copied(),
-        Some("key" | "knob" | "tap" | "drag" | "down" | "move" | "up" | "wheel" | "keysym" | "context")
-    ) || words == ["zoom"]
+    matches!(words.first().copied(), Some("key" | "knob" | "tap" | "drag" | "down" | "move" | "up" | "wheel" | "keysym" | "context"))
+        || words == ["zoom"]
         || (words.len() == 2
             && words[0] == "workflow"
             && matches!(words[1], "live" | "sim" | "load" | "measure" | "settings"))

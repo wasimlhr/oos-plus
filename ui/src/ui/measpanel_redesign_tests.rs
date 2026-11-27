@@ -18,50 +18,31 @@ fn studio_with(n: usize) -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
     frame(&mut u);
-    let all = [
-        (Meas::Vpp, WaveId::Ch(0)),
-        (Meas::Freq, WaveId::Ch(0)),
-        (Meas::Vamp, WaveId::Ch(1)),
-        (Meas::Freq, WaveId::Ch(1)),
-        (Meas::Rise, WaveId::Ch(0)),
-        (Meas::Vrms, WaveId::Ch(0)),
-        (Meas::Vmax, WaveId::Ch(0)),
-        (Meas::Vmin, WaveId::Ch(0)),
-        (Meas::Fall, WaveId::Ch(0)),
-        (Meas::Period, WaveId::Ch(0)),
-        (Meas::Vmax, WaveId::Ch(1)),
-        (Meas::Vmin, WaveId::Ch(1)),
-    ];
+    let all = [(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vamp, WaveId::Ch(1)), (Meas::Freq, WaveId::Ch(1)), (Meas::Rise, WaveId::Ch(0)), (Meas::Vrms, WaveId::Ch(0)),
+        (Meas::Vmax, WaveId::Ch(0)), (Meas::Vmin, WaveId::Ch(0)), (Meas::Fall, WaveId::Ch(0)), (Meas::Period, WaveId::Ch(0)), (Meas::Vmax, WaveId::Ch(1)), (Meas::Vmin, WaveId::Ch(1))];
     u.m.meas = all.iter().take(n).copied().collect();
     u.ensure_meas_own();
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     u
 }
 
 fn studio_bottom(n: usize) -> Ui {
     let mut u = studio_with(n);
     u.dock_apply(VKind::Measure, Drop::Split(VKind::Wave, Side::Bottom));
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     u
 }
+
 
 // ---------------------------------------------------------------------------------------------------- helpers
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -81,15 +62,11 @@ fn tap_at(u: &mut Ui, x: i32, y: i32) {
     frame(u);
 }
 
-fn tap(u: &mut Ui, r: Rect) {
-    tap_at(u, r.x + r.w / 2, r.y + r.h / 2);
-}
+fn tap(u: &mut Ui, r: Rect) { tap_at(u, r.x + r.w / 2, r.y + r.h / 2); }
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 {
-        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
-    }
+    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
     touch(u, Phase::Up, b.0, b.1);
 }
 
@@ -97,19 +74,14 @@ fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
 fn full_rows(u: &Ui) -> usize {
     let g = u.studio_panel_geo().unwrap();
     let n = u.studio_listed(&u.meas_rows()).len();
-    u.detail_layout(&g, n, u.studio_first(n, g.page))
-        .iter()
-        .filter(|(_, r)| r.y >= g.list.y && r.bottom() <= g.list.bottom())
-        .count()
+    u.detail_layout(&g, n, u.studio_first(n, g.page)).iter().filter(|(_, r)| r.y >= g.list.y && r.bottom() <= g.list.bottom()).count()
 }
 
 fn with_dock(text: &str, n: usize) -> Ui {
     let mut u = studio_with(n);
     u.dock_restore(text);
     u.dock_changed();
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     u
 }
 
@@ -176,9 +148,7 @@ fn rows_visible_at_the_bottom_and_right_dock_sizes() {
 fn the_panel_at_990_by_230_shows_at_least_five_rows() {
     let mut u = studio_with(12);
     u.dock_apply(VKind::Measure, Drop::Float(Rect::new(17, 330, 990, 230)));
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     let r = u.dock_rect(VKind::Measure).unwrap();
     assert_eq!((r.w, r.h), (990, 230), "{r:?}");
     assert!(full_rows(&u) >= 5, "{} rows", full_rows(&u));
@@ -209,9 +179,7 @@ fn a_narrow_dock_keeps_name_and_value_and_puts_the_rest_of_the_controls_behind_t
     let first = bar.hidden[0];
     tap(&mut u, Ui::panel_drop_row(p, 0));
     // the gate is in the list with its two choices: the first is the full record, taken with that one tap
-    if first == super::measpanel::BarItem::Gate {
-        assert!(u.m.meas_full_record && u.studio.panel.drop.is_none());
-    }
+    if first == super::measpanel::BarItem::Gate { assert!(u.m.meas_full_record && u.studio.panel.drop.is_none()); }
 }
 
 #[test]
@@ -246,9 +214,7 @@ fn a_swipe_scrolls_the_list_and_a_flick_keeps_it_moving() {
     let (x, y) = (g.list.x + 60, g.list.y + g.list.h - 30);
     // a slow drag (the finger rests before it lifts): the list follows by pixels
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=6 {
-        touch(&mut u, Phase::Move, x, y - 7 * k);
-    }
+    for k in 1..=6 { touch(&mut u, Phase::Move, x, y - 7 * k); }
     u.step(0.4);
     touch(&mut u, Phase::Up, x, y - 42);
     assert!(u.panel_scroll_px() > 0 && u.panel_scroll_px() <= 42, "{}", u.panel_scroll_px());
@@ -258,21 +224,12 @@ fn a_swipe_scrolls_the_list_and_a_flick_keeps_it_moving() {
     drag(&mut u, (x, y), (x, y - 40));
     let lifted = u.panel_scroll_px();
     assert!(lifted > at);
-    for _ in 0..10 {
-        u.step(0.016);
-    }
+    for _ in 0..10 { u.step(0.016); }
     assert!(u.panel_scroll_px() > lifted, "it coasts");
-    for _ in 0..300 {
-        u.step(0.016);
-    }
+    for _ in 0..300 { u.step(0.016); }
     assert_eq!(u.studio.panel.vel, 0.0, "and it comes to rest");
     // the other way brings it back to the top, and the top stops it
-    for _ in 0..6 {
-        drag(&mut u, (x, y - 90), (x, y + 10));
-        for _ in 0..300 {
-            u.step(0.016);
-        }
-    }
+    for _ in 0..6 { drag(&mut u, (x, y - 90), (x, y + 10)); for _ in 0..300 { u.step(0.016); } }
     assert_eq!(u.panel_scroll_px(), 0);
     // the wheel
     u.handle(Ev::Wheel { x, y, steps: -2, ctrl: false, shift: false, alt: false });
@@ -307,9 +264,7 @@ fn a_swipe_left_removes_a_row_and_a_vertical_drag_only_scrolls() {
     let n = u.m.meas.len();
     let r = u.detail_layout(&g, n, 0)[0].1;
     drag(&mut u, (r.right() - 20, r.y + 10), (r.right() - 60, r.y + 10));
-    for _ in 0..30 {
-        frame(&mut u);
-    }
+    for _ in 0..30 { frame(&mut u); }
     assert_eq!(u.m.meas.len(), n);
 }
 
@@ -356,14 +311,9 @@ fn the_thumbtack_toggles_the_pin_and_is_filled_when_pinned() {
         let bg = cv.px[0];
         super::studio::icon_pin(&mut cv, 10, 20, filled, 0xFFFFFF);
         let mut k = 0;
-        for y in 0..40 {
-            for x in 0..40 {
-                if cv.px[(y * 40 + x) as usize] != bg {
-                    k += 1;
-                    assert!((10..22).contains(&x) && (11..29).contains(&y), "({x},{y}) is outside the glyph box");
-                }
-            }
-        }
+        for y in 0..40 { for x in 0..40 {
+            if cv.px[(y * 40 + x) as usize] != bg { k += 1; assert!((10..22).contains(&x) && (11..29).contains(&y), "({x},{y}) is outside the glyph box"); }
+        } }
         k
     };
     assert!(ink(true) > ink(false) + 20, "filled {} outline {}", ink(true), ink(false));
@@ -378,9 +328,7 @@ fn default_and_minimal_layouts_do_not_see_the_new_panel() {
     for layout in [Layout::Default, Layout::Minimal] {
         let mut a = Ui::new(Source::Demo { t: 0.0 });
         a.m.layout = layout;
-        for _ in 0..8 {
-            frame(&mut a);
-        }
+        for _ in 0..8 { frame(&mut a); }
         assert!(!a.studio_detailed() && a.studio_panel_geo().is_none(), "{layout:?}");
         let mut cva = Canvas::new(W, H);
         a.render(&mut cva);
@@ -399,15 +347,11 @@ fn zoom_on_with_the_panel_at_the_bottom_shows_six_rows_and_the_zoom_row() {
     let mut u = studio_bottom(12);
     u.m.studio_zoom_tab = false;
     u.m.zoom = true;
-    for _ in 0..8 {
-        frame(&mut u);
-    }
+    for _ in 0..8 { frame(&mut u); }
     let row = u.zoom_readout();
     assert_eq!(row.h, 32, "the zoom row has the height of the Default row");
     let bar = u.studio_zoom_bar().expect("the zoom bar");
-    for r in [bar.label, bar.plus, bar.minus, bar.fit, bar.close] {
-        assert!(r.y >= row.y && r.bottom() <= row.bottom(), "{r:?} in {row:?}");
-    }
+    for r in [bar.label, bar.plus, bar.minus, bar.fit, bar.close] { assert!(r.y >= row.y && r.bottom() <= row.bottom(), "{r:?} in {row:?}"); }
     assert!(full_rows(&u) >= 6, "{} rows", full_rows(&u));
     // the split stays resizable: the divider under the overview moves the zoom area
     let (hit, handle) = u.ov_divider().expect("the overview divider");
@@ -451,9 +395,7 @@ fn the_comparison_picture_of_rows_visible_before_and_after() {
 // ---------------------------------------------------------------------------------------------------- follow-ups (b32b)
 
 fn shotb(u: &mut Ui, name: &str) {
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -466,9 +408,7 @@ fn zoomed(tab: bool) -> Ui {
     let mut u = studio_bottom(8);
     u.m.studio_zoom_tab = tab;
     u.set_zoom(true);
-    for _ in 0..8 {
-        frame(&mut u);
-    }
+    for _ in 0..8 { frame(&mut u); }
     u
 }
 
@@ -485,17 +425,8 @@ fn the_top_bar_has_one_add_button_and_its_menu_starts_with_measurement() {
     assert_eq!(rows[0].0, super::addmenu::AddRow::Measurement, "Measurement is first");
     assert!(rows.iter().all(|(_, r)| r.h >= 24 && r.right() <= W && r.bottom() <= H));
     let have: Vec<_> = rows.iter().map(|r| r.0).collect();
-    for want in [
-        super::addmenu::AddRow::ResultsTable,
-        super::addmenu::AddRow::Plot,
-        super::addmenu::AddRow::Cursors,
-        super::addmenu::AddRow::Search,
-        super::addmenu::AddRow::Math,
-        super::addmenu::AddRow::Reference,
-        super::addmenu::AddRow::Bus,
-        super::addmenu::AddRow::Zoom,
-        super::addmenu::AddRow::ZoomBox,
-    ] {
+    for want in [super::addmenu::AddRow::ResultsTable, super::addmenu::AddRow::Plot, super::addmenu::AddRow::Cursors, super::addmenu::AddRow::Search,
+        super::addmenu::AddRow::Math, super::addmenu::AddRow::Reference, super::addmenu::AddRow::Bus, super::addmenu::AddRow::Zoom, super::addmenu::AddRow::ZoomBox] {
         assert!(have.contains(&want), "{want:?}");
     }
     shotb(&mut u, "add-menu");
@@ -526,16 +457,12 @@ fn the_top_bar_has_one_add_button_and_its_menu_starts_with_measurement() {
 fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
     let mut u = studio_with(6);
     u.studio_set_view(StudioView::Waveform);
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert!(u.studio_tab().is_none());
     shotb(&mut u, "strip");
     // with the strip hidden (View > Show pinned badges) the bottom bar has a chip that brings it back
     u.studio_set_pin_all_for_test();
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     if u.studio_badges_visible() {
         u.studio_hide_badges();
         assert!(u.studio.hide_badges);
@@ -546,19 +473,13 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
         // the Add menu adds things: showing the strip is the chip above and View > Show pinned badges
         let t = u.studio_top();
         tap(&mut u, t.add);
-        assert_eq!(
-            u.studio_add_rows().len(),
-            18,
-            "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box, the windows"
-        );
+        assert_eq!(u.studio_add_rows().len(), 18, "measurement, results table, plot, cursors, search, math, reference, bus, zoom, zoom box, the windows");
         u.studio.add_menu = false;
     }
     // without any pinned measurement the restore chip is there all the same
     u.studio.pinned = Some(Vec::new());
     u.studio.hide_badges = true;
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert!(u.studio_bottom().show.is_some());
 }
 
@@ -566,9 +487,7 @@ fn the_meas_tab_is_gone_and_hiding_the_strip_is_reversible_in_one_tap() {
 fn the_plot_context_menu_is_a_clamped_grouped_popover_with_the_lane_and_the_mode() {
     let mut u = studio_with(4);
     u.m.ch[1].on = true;
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     // near the bottom right corner: kept on the screen. Two columns of rows a finger high (it was one of 28 px rows)
     u.context_menu(W - 10, H - 80);
     assert!(u.studio.ctx.is_some() && u.workspace.popup.is_none(), "the old list popup is not used");
@@ -581,10 +500,7 @@ fn the_plot_context_menu_is_a_clamped_grouped_popover_with_the_lane_and_the_mode
     for want in ["Overlay", "Stacked", "Fit record", "Zoom here", "Zoom box", "Cursor here"] {
         assert!(labels.iter().any(|l| l == &want), "{want} in {labels:?}");
     }
-    assert!(
-        labels.iter().any(|l| l.starts_with("Trigger on ")) && labels.iter().any(|l| l.starts_with("Measurement on ")),
-        "{labels:?}"
-    );
+    assert!(labels.iter().any(|l| l.starts_with("Trigger on ")) && labels.iter().any(|l| l.starts_with("Measurement on ")), "{labels:?}");
     shotb(&mut u, "context-menu-corner");
     // a tap outside closes it
     tap_at(&mut u, 100, 100);
@@ -600,9 +516,7 @@ fn the_plot_context_menu_is_a_clamped_grouped_popover_with_the_lane_and_the_mode
     // Default and Minimal keep the old popup
     let mut d = Ui::new(Source::Demo { t: 0.0 });
     d.m.layout = Layout::Default;
-    for _ in 0..4 {
-        frame(&mut d);
-    }
+    for _ in 0..4 { frame(&mut d); }
     d.context_menu(300, 200);
     assert!(d.studio.ctx.is_none());
 }
@@ -683,12 +597,7 @@ fn the_new_presentation_state_is_per_view() {
     u.view_go(1);
     assert_eq!(u.panel_view(), PanelView::Detailed);
     assert_eq!((u.studio.panel.first, u.studio.panel.sub), (0, 0));
-    assert!(
-        u.studio.panel.query.is_empty()
-            && !u.studio.panel.searching
-            && !u.studio.panel.pinned_only
-            && !u.studio.hide_badges
-    );
+    assert!(u.studio.panel.query.is_empty() && !u.studio.panel.searching && !u.studio.panel.pinned_only && !u.studio.hide_badges);
     // Cards are per view too
     u.panel_set_view(PanelView::Cards);
     u.view_go(0);
@@ -712,19 +621,13 @@ fn the_dots_list_the_choices_of_the_statistics_and_one_tap_takes_one() {
         tap(&mut u, more);
         assert_eq!(u.studio.panel.drop, Some(super::measpanel::PanelDrop::More));
         let rows = u.panel_more_rows();
-        assert_eq!(
-            rows.iter().filter(|r| matches!(r.2, MoreAct::Stats(_)) && r.1).count(),
-            1,
-            "one choice is the one in use: {rows:?}"
-        );
+        assert_eq!(rows.iter().filter(|r| matches!(r.2, MoreAct::Stats(_)) && r.1).count(), 1, "one choice is the one in use: {rows:?}");
         assert_eq!(rows.iter().filter(|r| matches!(r.2, MoreAct::Gate(_)) && r.1).count(), 1, "{rows:?}");
         let i = rows.iter().position(|r| r.0 == name).expect(name);
         let p = u.panel_drop_rect().unwrap();
         assert!(p.y >= 0 && p.bottom() <= H && p.x >= 0 && p.right() <= W, "{p:?}");
         assert!(Ui::panel_drop_row(p, rows.len() - 1).bottom() <= p.bottom());
-        if mode == 2 && u.studio.panel.stats_mode == 0 {
-            shot(&mut u, "dots-list");
-        }
+        if mode == 2 && u.studio.panel.stats_mode == 0 { shot(&mut u, "dots-list"); }
         tap(&mut u, Ui::panel_drop_row(p, i));
         assert_eq!(u.studio.panel.stats_mode, mode, "{name}");
         assert_eq!(u.studio.panel.stats, mode != 0);
@@ -753,22 +656,12 @@ fn the_statistics_of_a_card_fit_the_card() {
     for unit in ["V", "A", "Hz", "s", "%", "Vs", "W"] {
         for range in [true, false] {
             let mut forms = Vec::new();
-            for (a, b) in [
-                ("1", "2"),
-                ("145 m", "212 m"),
-                ("-9.89 m", "-9.80 m"),
-                ("-99.9 m", "-99.9 m"),
-                ("7.26 \u{b5}", "7.54 \u{b5}"),
-            ] {
+            for (a, b) in [("1", "2"), ("145 m", "212 m"), ("-9.89 m", "-9.80 m"), ("-99.9 m", "-99.9 m"), ("7.26 \u{b5}", "7.54 \u{b5}")] {
                 let (a, b) = (format!("{a}{unit}"), format!("{b}{unit}"));
                 let line = Ui::card_stats_line(f, range, unit, &a, &b, room);
                 assert!(f.width(&line) <= room, "{line:?} is {} wide in {room}", f.width(&line));
                 assert!(line.contains(&b), "{line:?} has no {b}");
-                forms.push((
-                    line.starts_with("min") || line.starts_with('\u{b5}'),
-                    line.contains(".."),
-                    line.contains('\u{b1}'),
-                ));
+                forms.push((line.starts_with("min") || line.starts_with('\u{b5}'), line.contains(".."), line.contains('\u{b1}')));
             }
             assert!(forms.windows(2).all(|w| w[0] == w[1]), "the form changes with the value: {unit} {forms:?}");
         }
@@ -784,14 +677,7 @@ fn a_narrow_card_shows_its_value_whole() {
     let f = u.fonts();
     let card_w = 95;
     let sw = f.sb.width("CH2");
-    let cards = [
-        ("ns", "1.73 ns"),
-        ("V/s", "91.8 MV/s"),
-        ("Hz", "40.0 MHz"),
-        ("V/s", "-5.78 V/s"),
-        ("%", "33.6 %"),
-        ("V", "327 mV"),
-    ];
+    let cards = [("ns", "1.73 ns"), ("V/s", "91.8 MV/s"), ("Hz", "40.0 MHz"), ("V/s", "-5.78 V/s"), ("%", "33.6 %"), ("V", "327 mV")];
     let ft = Ui::card_value_shared(f, card_w, cards.iter().map(|(u, _)| (*u, sw)));
     for (u, v) in cards {
         let tag = ft.width(&Ui::card_value_widest(u)) <= Ui::card_value_beside(card_w, sw);
@@ -800,15 +686,8 @@ fn a_narrow_card_shows_its_value_whole() {
     }
     // one font for every card, whatever the value of the moment (on a unit, 2026-11-20, "68.5 mV" stood smaller than
     // "270 mV" beside it); the large one on cards wide enough
-    assert_eq!(
-        Ui::card_value_shared(f, card_w, [("V", sw)].into_iter()).size,
-        Ui::card_value_shared(f, card_w, [("V", sw), ("V", sw)].into_iter()).size
-    );
-    assert_eq!(
-        Ui::card_value_shared(f, 240, cards.iter().map(|(u, _)| (*u, sw))).size,
-        f.lb.size,
-        "the large font where it fits"
-    );
+    assert_eq!(Ui::card_value_shared(f, card_w, [("V", sw)].into_iter()).size, Ui::card_value_shared(f, card_w, [("V", sw), ("V", sw)].into_iter()).size);
+    assert_eq!(Ui::card_value_shared(f, 240, cards.iter().map(|(u, _)| (*u, sw))).size, f.lb.size, "the large font where it fits");
     let line = Ui::card_stats_line(&f.s, true, "V/s", "90.3 MV/s", "92.7 MV/s", card_w - 16);
     assert!(f.s.width(&line) <= card_w - 16, "{line:?}");
 }
@@ -840,9 +719,7 @@ fn a_narrow_card_gives_its_value_the_whole_line() {
     // a row that reads a slot with nothing in it says "R1 empty", the widest value there is
     let eye = crate::measures::all().map(|x| x.1).find(|d| d.name == "Eye Height").expect("Eye Height");
     u.m.cat.push((eye.id, WaveId::Ref(0), WaveId::Ch(1), WaveId::Ch(2), WaveId::Ch(3)));
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     u.results.rows.clear();
     u.studio.panel.stats_mode = 0;
     // no statistics yet: the card's third line says the source

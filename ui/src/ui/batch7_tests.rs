@@ -9,21 +9,15 @@ fn fresh(l: Layout) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = l;
     u.m.ch[1].on = true;
-    if l == Layout::Studio {
-        u.studio.enter = true;
-    }
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    if l == Layout::Studio { u.studio.enter = true; }
+    for _ in 0..10 { u.step(0.05); }
     u
 }
 
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
@@ -31,9 +25,7 @@ fn shot(u: &mut Ui, name: &str) {
     }
 }
 
-fn tap_in(u: &mut Ui, r: Rect) {
-    u.tap(r.x + r.w / 2, r.y + r.h / 2);
-}
+fn tap_in(u: &mut Ui, r: Rect) { u.tap(r.x + r.w / 2, r.y + r.h / 2); }
 
 #[test]
 fn the_defaults_keep_the_current_levels() {
@@ -54,18 +46,7 @@ fn the_levels_tab_has_seven_rows_and_the_fall_page_is_in_the_footer() {
     let spec = u.sheet_spec(MenuId::Measure).unwrap();
     assert_eq!(spec.tabs.iter().map(|t| t.name).collect::<Vec<_>>(), ["Settings", "Sources", "Parameters", "Levels"]);
     let levels = &spec.tabs[3];
-    assert_eq!(
-        levels.rows,
-        [
-            Item::MeasLvType,
-            Item::MeasRefs,
-            Item::MeasLow,
-            Item::MeasMid,
-            Item::MeasHigh,
-            Item::MeasHyst,
-            Item::MeasBaseTop
-        ]
-    );
+    assert_eq!(levels.rows, [Item::MeasLvType, Item::MeasRefs, Item::MeasLow, Item::MeasMid, Item::MeasHigh, Item::MeasHyst, Item::MeasBaseTop]);
     assert_eq!(levels.foot, [Item::Open(MenuId::MeasFall)]);
     assert!(!spec.tabs.iter().any(|t| t.rows.contains(&Item::MeasRefs) && t.name != "Levels"));
     assert!(!u.items(MenuId::Measure).contains(&Item::Open(MenuId::MeasLevels)));
@@ -176,9 +157,7 @@ fn top_base_method_cycles_and_separate_fall_starts_from_the_rise_levels() {
 }
 
 impl Ui {
-    fn shared_fall(&self) -> [f64; 3] {
-        self.m.shared_levels().fall
-    }
+    fn shared_fall(&self) -> [f64; 3] { self.m.shared_levels().fall }
 }
 
 #[test]
@@ -191,17 +170,7 @@ fn levels_reach_the_measurements_of_a_reference() {
         v.extend((0..100).map(|i| 1.0 - i as f32 / 99.0));
         v.extend(vec![0.0; 80]);
     }
-    u.refs[0] = Some(RefWave {
-        src: 0,
-        color: 0,
-        label: String::new(),
-        t0: 0.0,
-        dt: 1e-9,
-        v: v.into(),
-        vpd: 0.5,
-        offset: 0.0,
-        on: true,
-    });
+    u.refs[0] = Some(RefWave { src: 0, color: 0, label: String::new(), t0: 0.0, dt: 1e-9, v: v.into(), vpd: 0.5, offset: 0.0, on: true });
     let src = WaveId::Ref(0);
     let ten = u.meas_at(src, Meas::Rise);
     assert!(ten.is_finite() && (ten - 80e-9).abs() < 5e-9, "{ten}");

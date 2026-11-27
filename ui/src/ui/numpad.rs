@@ -72,36 +72,19 @@ pub(super) const PAD_H: i32 = 352;
 const KEY_H: i32 = 48;
 
 /// The SI prefixes of the pad: label and power of ten ("None" is 0).
-pub(super) const PREFIXES: [(&str, i32); 8] =
-    [("G", 9), ("M", 6), ("k", 3), ("m", -3), ("\u{b5}", -6), ("n", -9), ("p", -12), ("None", 0)];
+pub(super) const PREFIXES: [(&str, i32); 8] = [("G", 9), ("M", 6), ("k", 3), ("m", -3), ("\u{b5}", -6), ("n", -9), ("p", -12), ("None", 0)];
 
 /// A displayed value split into its number (in base units) and its unit without the prefix: "449 mV" is (0.449, "V").
 pub(super) fn split_value(s: &str) -> Option<(f64, String)> {
     let s = s.trim();
-    let end = s
-        .char_indices()
-        .find(|&(i, c)| !(c.is_ascii_digit() || c == '.' || ((c == '-' || c == '+') && i == 0)))
-        .map_or(s.len(), |(i, _)| i);
+    let end = s.char_indices().find(|&(i, c)| !(c.is_ascii_digit() || c == '.' || ((c == '-' || c == '+') && i == 0))).map_or(s.len(), |(i, _)| i);
     let num: f64 = s[..end].parse().ok()?;
     let rest = s[end..].trim();
     let mut cs = rest.chars();
     let (factor, unit) = match cs.next() {
         Some(p) if cs.as_str().chars().next().is_some_and(|c| c.is_alphabetic() || c == '%') => {
-            let f = match p {
-                'G' => 1e9,
-                'M' => 1e6,
-                'k' => 1e3,
-                'm' => 1e-3,
-                '\u{b5}' | 'u' => 1e-6,
-                'n' => 1e-9,
-                'p' => 1e-12,
-                _ => 0.0,
-            };
-            if f != 0.0 {
-                (f, cs.as_str().to_string())
-            } else {
-                (1.0, rest.to_string())
-            }
+            let f = match p { 'G' => 1e9, 'M' => 1e6, 'k' => 1e3, 'm' => 1e-3, '\u{b5}' | 'u' => 1e-6, 'n' => 1e-9, 'p' => 1e-12, _ => 0.0 };
+            if f != 0.0 { (f, cs.as_str().to_string()) } else { (1.0, rest.to_string()) }
         }
         _ => (1.0, rest.to_string()),
     };
@@ -111,12 +94,8 @@ pub(super) fn split_value(s: &str) -> Option<(f64, String)> {
 /// A number as typed: no exponent notation, no trailing zeros.
 fn plain(v: f64) -> String {
     let mut s = format!("{v:.9}");
-    if s.contains('.') {
-        s = s.trim_end_matches('0').trim_end_matches('.').to_string();
-    }
-    if s == "-0" || s.is_empty() {
-        s = "0".into();
-    }
+    if s.contains('.') { s = s.trim_end_matches('0').trim_end_matches('.').to_string(); }
+    if s == "-0" || s.is_empty() { s = "0".into(); }
     s
 }
 
@@ -128,9 +107,7 @@ impl Ui {
 
     /// Opens the pad on a "- value +" item. False when its value is not a number.
     pub(super) fn open_numpad(&mut self, it: Item) -> bool {
-        if self.item_blocked_toast(it) {
-            return true;
-        }
+        if self.item_blocked_toast(it) { return true; }
         let Some((v, unit)) = self.numpad_value(it) else { return false };
         self.keypad = plain(v);
         self.numpad = Some(NumPad { it, fresh: true, unit });
@@ -150,9 +127,7 @@ impl Ui {
             for _ in 0..8 {
                 self.adjust(it, dir * 512);
                 let Some((v, _)) = self.numpad_value(it) else { break };
-                if (v - last).abs() <= last.abs() * 1e-9 {
-                    break;
-                }
+                if (v - last).abs() <= last.abs() * 1e-9 { break; }
                 last = v;
             }
             ends[k] = last;
@@ -182,18 +157,14 @@ impl Ui {
                 let before = self.m.clone();
                 self.adjust(it, dir * d);
                 let Some((nv, _)) = self.numpad_value(it) else { break };
-                if (nv - cur).abs() <= cur.abs() * 1e-12 {
-                    break;
-                }
+                if (nv - cur).abs() <= cur.abs() * 1e-12 { break; }
                 let past = (dir > 0 && nv > want) || (dir < 0 && nv < want);
                 if past && !(d == 1 && (nv - want).abs() < (cur - want).abs()) {
                     self.m = before;
                     break;
                 }
                 cur = nv;
-                if past {
-                    break;
-                }
+                if past { break; }
             }
         }
         self.settings_changed();
@@ -206,10 +177,7 @@ impl Ui {
         let clamped = v < lo || v > hi;
         self.numpad_apply(it, v);
         self.numpad = None;
-        if clamped {
-            let s = self.value(it);
-            self.toast(&format!("Limited to {s}"));
-        }
+        if clamped { let s = self.value(it); self.toast(&format!("Limited to {s}")); }
     }
 
     // ------------------------------------------------------------------------------------------------ geometry
@@ -232,9 +200,7 @@ impl Ui {
             [NumKey::Digit(1), NumKey::Digit(2), NumKey::Digit(3), NumKey::Sign],
         ];
         for (r, line) in layout.iter().enumerate() {
-            for (c, k) in line.iter().enumerate() {
-                keys.push((*k, Rect::new(col(c as i32), row(r as i32), kw, KEY_H)));
-            }
+            for (c, k) in line.iter().enumerate() { keys.push((*k, Rect::new(col(c as i32), row(r as i32), kw, KEY_H))); }
         }
         keys.push((NumKey::Digit(0), Rect::new(col(0), row(3), kw * 2 + gap, KEY_H)));
         keys.push((NumKey::Dot, Rect::new(col(2), row(3), kw, KEY_H)));
@@ -280,71 +246,39 @@ impl Ui {
         let Some(pad) = self.numpad.clone() else { return };
         match k {
             NumKey::Digit(d) => {
-                if pad.fresh {
-                    self.keypad.clear();
-                }
-                if self.keypad == "0" {
-                    self.keypad.clear();
-                }
-                if self.keypad == "-0" {
-                    self.keypad = "-".into();
-                }
-                if self.keypad.len() < 14 {
-                    self.keypad.push((b'0' + d) as char);
-                }
+                if pad.fresh { self.keypad.clear(); }
+                if self.keypad == "0" { self.keypad.clear(); }
+                if self.keypad == "-0" { self.keypad = "-".into(); }
+                if self.keypad.len() < 14 { self.keypad.push((b'0' + d) as char); }
             }
             NumKey::Dot => {
-                if pad.fresh {
-                    self.keypad.clear();
-                }
+                if pad.fresh { self.keypad.clear(); }
                 let tail = self.keypad.rsplit(['e', 'E']).next().unwrap_or("");
                 if !self.keypad.contains(['e', 'E']) && !tail.contains('.') {
-                    if self.keypad.is_empty() || self.keypad == "-" {
-                        self.keypad.push('0');
-                    }
+                    if self.keypad.is_empty() || self.keypad == "-" { self.keypad.push('0'); }
                     self.keypad.push('.');
                 }
             }
             NumKey::Sign => {
                 if let Some(p) = self.keypad.find(['e', 'E']) {
                     // the sign of the exponent
-                    if self.keypad[p + 1..].starts_with('-') {
-                        self.keypad.remove(p + 1);
-                    } else {
-                        self.keypad.insert(p + 1, '-');
-                    }
-                } else if self.keypad.starts_with('-') {
-                    self.keypad.remove(0);
-                } else {
-                    self.keypad.insert(0, '-');
-                }
+                    if self.keypad[p + 1..].starts_with('-') { self.keypad.remove(p + 1); } else { self.keypad.insert(p + 1, '-'); }
+                } else if self.keypad.starts_with('-') { self.keypad.remove(0); } else { self.keypad.insert(0, '-'); }
             }
             NumKey::Exp => {
-                if pad.fresh {
-                    self.keypad.clear();
-                }
-                if !self.keypad.contains(['e', 'E']) && !self.keypad.is_empty() && self.keypad != "-" {
-                    self.keypad.push('e');
-                }
+                if pad.fresh { self.keypad.clear(); }
+                if !self.keypad.contains(['e', 'E']) && !self.keypad.is_empty() && self.keypad != "-" { self.keypad.push('e'); }
             }
             NumKey::Bksp => {
-                if pad.fresh {
-                    self.keypad.clear();
-                } else {
-                    self.keypad.pop();
-                }
+                if pad.fresh { self.keypad.clear(); } else { self.keypad.pop(); }
             }
             NumKey::Clear => self.keypad.clear(),
             NumKey::Prefix(e) => {
-                if let Some(v) = self.numpad_typed() {
-                    self.numpad_enter(pad.it, v * 10f64.powi(e));
-                }
+                if let Some(v) = self.numpad_typed() { self.numpad_enter(pad.it, v * 10f64.powi(e)); }
                 return;
             }
             NumKey::Min | NumKey::Max => {
-                if let Some((lo, hi)) = self.numpad_limits(pad.it) {
-                    self.numpad_enter(pad.it, if k == NumKey::Min { lo } else { hi });
-                }
+                if let Some((lo, hi)) = self.numpad_limits(pad.it) { self.numpad_enter(pad.it, if k == NumKey::Min { lo } else { hi }); }
                 return;
             }
             NumKey::Cancel => {
@@ -359,16 +293,12 @@ impl Ui {
                 return;
             }
         }
-        if let Some(p) = &mut self.numpad {
-            p.fresh = false;
-        }
+        if let Some(p) = &mut self.numpad { p.fresh = false; }
     }
 
     /// A tap while the pad is open: a key, or outside it (nothing: the pad is modal). Always taken.
     pub(super) fn numpad_tap(&mut self, x: i32, y: i32) -> bool {
-        if self.numpad.is_none() {
-            return false;
-        }
+        if self.numpad.is_none() { return false; }
         let (_, keys) = self.numpad_geo();
         if let Some(&(k, _)) = keys.iter().find(|(_, r)| Self::hit40(*r).contains(x, y) && r.contains(x, y)) {
             self.numpad_key(k);
@@ -393,9 +323,7 @@ impl Ui {
         let text = if self.keypad.is_empty() { "0".to_string() } else { self.keypad.clone() };
         let sel = pad.fresh;
         let tw = f.lb.width(&text);
-        if sel {
-            cv.fill(Rect::new(field.x + 8, field.y + 21, tw + 4, 30), mix(BG, ACCENT, 90));
-        }
+        if sel { cv.fill(Rect::new(field.x + 8, field.y + 21, tw + 4, 30), mix(BG, ACCENT, 90)); }
         cv.text(&f.lb, field.x + 10, field.y + 44, &text, if sel { DARK_TEXT } else { TEXT });
         cv.text(&f.mb, field.x + 16 + tw, field.y + 44, &pad.unit, DIM);
         let (lo, hi) = (self.numpad_limit_text(pad.it, false), self.numpad_limit_text(pad.it, true));
@@ -407,9 +335,7 @@ impl Ui {
             let (fill, border, ink) = match k {
                 NumKey::Enter => (ACCENT, ACCENT, DARK_TEXT),
                 NumKey::Cancel => (mix(DLG_BG, RED, 30), RED, RED),
-                NumKey::Prefix(_) | NumKey::Min | NumKey::Max | NumKey::Exp => {
-                    (mix(DLG_BG, ACCENT, 25), BTN_BORDER, TEXT)
-                }
+                NumKey::Prefix(_) | NumKey::Min | NumKey::Max | NumKey::Exp => (mix(DLG_BG, ACCENT, 25), BTN_BORDER, TEXT),
                 _ => (BTN, BTN_BORDER, TEXT),
             };
             btn(cv, r, fill, border);

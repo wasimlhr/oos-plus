@@ -59,10 +59,7 @@ impl Ui {
 
     /// Left edge and width of the graticule. A side dock keeps a column for the strip and for a docked card.
     pub(super) fn plot_span(&self) -> (i32, i32) {
-        if self.dock_on() {
-            let l = self.dock_wave_rect();
-            return (l.x, l.w);
-        }
+        if self.dock_on() { let l = self.dock_wave_rect(); return (l.x, l.w); }
         let body = self.frame().body;
         let side = if self.strip_rows() > 0 { STRIP_SIDE } else { 0 } + self.results_side_w();
         let dock = self.studio_dock_w();
@@ -154,8 +151,7 @@ impl Ui {
                 let mine: Vec<(usize, &tools::MeasRow)> =
                     rows.iter().enumerate().filter(|(_, r)| r.src == id).collect();
                 for (i, &(k, row)) in mine.iter().enumerate() {
-                    let short =
-                        keys.get(k).map_or_else(|| row.name.clone(), |&key| self.studio_badge_name(key, &row.name));
+                    let short = keys.get(k).map_or_else(|| row.name.clone(), |&key| self.studio_badge_name(key, &row.name));
                     lines.push(StripLine {
                         pill: (i == 0).then(|| (label.clone(), col)),
                         name: row.name.clone(),
@@ -191,14 +187,7 @@ impl Ui {
                 });
             }
             for (name, value) in vals.iter().skip(1) {
-                lines.push(StripLine {
-                    pill: None,
-                    name: name.clone(),
-                    short: name.clone(),
-                    value: value.clone(),
-                    col: TEXT,
-                    align: true,
-                });
+                lines.push(StripLine { pill: None, name: name.clone(), short: name.clone(), value: value.clone(), col: TEXT, align: true });
             }
         }
         lines
@@ -237,8 +226,7 @@ impl Ui {
         if !self.results_panel() && !in_pane {
             let (rows, keys) = (self.meas_rows(), self.studio_keys());
             for id in self.meas_groups() {
-                let mine: Vec<(usize, &tools::MeasRow)> =
-                    rows.iter().enumerate().filter(|(_, r)| r.src == id).collect();
+                let mine: Vec<(usize, &tools::MeasRow)> = rows.iter().enumerate().filter(|(_, r)| r.src == id).collect();
                 let col = self.wave_color(id);
                 let label = self.wave_name(id);
                 for part in mine.chunks(tools::STRIP_PER_ROW) {
@@ -383,9 +371,10 @@ impl Ui {
             Some(StripDock::Right) => (fr.body.right() - strip_side - rw - 2, body_top),
             Some(StripDock::Above) => (plot_x + (plot_w - rw) / 2, body_top + strip_h + 2),
             Some(StripDock::Below) => (plot_x + (plot_w - rw) / 2, bottom - strip_h - panel_h - 2),
-            Some(StripDock::Hidden) | None => {
-                (a.x + a.w - 56 - rw, a.y + 22 + 26 * (0..NMATH).filter(|&k| self.m.math_shown(k)).count() as i32)
-            }
+            Some(StripDock::Hidden) | None => (
+                a.x + a.w - 56 - rw,
+                a.y + 22 + 26 * (0..NMATH).filter(|&k| self.m.math_shown(k)).count() as i32,
+            ),
         };
         let (mut x, mut y) = self.workspace.measure_float.unwrap_or(default);
         // A floating card never covers the corner buttons or the zoom bar.
@@ -447,8 +436,7 @@ impl Ui {
         if self.results.folded {
             return;
         }
-        let rows: Vec<(usize, tools::MeasRow)> =
-            self.meas_rows().into_iter().enumerate().filter(|(_, r)| !self.meas_row_hidden(r)).collect();
+        let rows: Vec<(usize, tools::MeasRow)> = self.meas_rows().into_iter().enumerate().filter(|(_, r)| !self.meas_row_hidden(r)).collect();
         let pitch = self.results_row(rows.len() as i32);
         let (one, two) = self.lay().res_pitch;
         // baselines: 16 and 35 px into a row at the normal text size

@@ -13,12 +13,7 @@ use crate::ui::Ui;
 
 /// At least `pairs` vertices, each a time and a voltage. A box is exactly two.
 fn point_list(arg: &str, pairs: usize) -> Option<Vec<(f64, f64)>> {
-    let nums: Vec<f64> = arg
-        .split(',')
-        .map(str::trim)
-        .filter(|s| !s.is_empty())
-        .map(|s| s.parse::<f64>().ok())
-        .collect::<Option<_>>()?;
+    let nums: Vec<f64> = arg.split(',').map(str::trim).filter(|s| !s.is_empty()).map(|s| s.parse::<f64>().ok()).collect::<Option<_>>()?;
     if nums.len() < pairs * 2 || nums.len() % 2 != 0 || nums.iter().any(|n| !n.is_finite()) {
         return None;
     }
@@ -168,9 +163,7 @@ impl Scpi {
                 return t(&ui.m.trig_line().map_or(format!("CHAN{}", ui.m.trig_src + 1), |n| format!("D{}", n)));
             }
             let word = arg.trim();
-            if let Some(n) =
-                word.to_ascii_uppercase().strip_prefix('D').and_then(|n| n.parse::<u8>().ok()).filter(|&n| n < 16)
-            {
+            if let Some(n) = word.to_ascii_uppercase().strip_prefix('D').and_then(|n| n.parse::<u8>().ok()).filter(|&n| n < 16) {
                 if !ui.m.la_on() {
                     self.push_err("-224,\"Illegal parameter value\" no logic analyser".into());
                     return None;
@@ -564,12 +557,7 @@ impl Scpi {
         if query {
             return t(&ui.m.trig_line().map_or(format!("CHAN{}", ui.m.trig_src + 1), |n| format!("D{}", n)));
         }
-        let digital = arg
-            .trim()
-            .to_ascii_uppercase()
-            .strip_prefix('D')
-            .and_then(|n| n.parse::<u8>().ok())
-            .filter(|&n| n < 16 && ui.m.trig_la_ok());
+        let digital = arg.trim().to_ascii_uppercase().strip_prefix('D').and_then(|n| n.parse::<u8>().ok()).filter(|&n| n < 16 && ui.m.trig_la_ok());
         if let Some(n) = digital {
             ui.m.trig_type = kind;
             ui.m.trig_la = Some(n);
@@ -902,8 +890,7 @@ impl Scpi {
     /// The stored frames. Frame 1 is the oldest. Live reports the newest.
     pub(super) fn record_cmd(&mut self, ui: &mut Ui, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
         let t = |s: &str| Some(s.as_bytes().to_vec());
-        let current =
-            n.len() == 1 && kw(n[0], "CURRent") || n.len() == 2 && kw(n[0], "WREPlay") && kw(n[1], "FCURrent");
+        let current = n.len() == 1 && kw(n[0], "CURRent") || n.len() == 2 && kw(n[0], "WREPlay") && kw(n[1], "FCURrent");
         if current {
             if query {
                 return t(&ui.history_frame().to_string());
@@ -1047,14 +1034,7 @@ impl Scpi {
     }
 
     /// Two zones. A box is two corners. A shape is three or more vertices. Rigol has no zone command; these names are Keysight's.
-    pub(super) fn trigger_zone(
-        &mut self,
-        ui: &mut Ui,
-        index: Option<usize>,
-        which: &str,
-        query: bool,
-        arg: &str,
-    ) -> Option<Vec<u8>> {
+    pub(super) fn trigger_zone(&mut self, ui: &mut Ui, index: Option<usize>, which: &str, query: bool, arg: &str) -> Option<Vec<u8>> {
         let t = |s: &str| Some(s.as_bytes().to_vec());
         let Some(i) = index.and_then(|n| n.checked_sub(1)).filter(|&i| i < ui.m.zones.len()) else {
             self.push_err("-224,\"Illegal parameter value\" zone 1 or 2".into());
@@ -1146,15 +1126,7 @@ impl Scpi {
     }
 
     /// Rising, falling, or either edge. `second` is source B or the clock.
-    pub(super) fn edge_slope(
-        &mut self,
-        ui: &mut Ui,
-        kind: TrigType,
-        second: bool,
-        allow_either: bool,
-        query: bool,
-        arg: &str,
-    ) -> Option<Vec<u8>> {
+    pub(super) fn edge_slope(&mut self, ui: &mut Ui, kind: TrigType, second: bool, allow_either: bool, query: bool, arg: &str) -> Option<Vec<u8>> {
         let t = |s: &str| Some(s.as_bytes().to_vec());
         let cur = if second { ui.m.trig_slope2 } else { ui.m.slope };
         if query {
@@ -1197,14 +1169,7 @@ impl Scpi {
     }
 
     /// Upper is the screen's first level. Lower is the second level.
-    pub(super) fn pair_level(
-        &mut self,
-        ui: &mut Ui,
-        kind: TrigType,
-        upper: bool,
-        query: bool,
-        arg: &str,
-    ) -> Option<Vec<u8>> {
+    pub(super) fn pair_level(&mut self, ui: &mut Ui, kind: TrigType, upper: bool, query: bool, arg: &str) -> Option<Vec<u8>> {
         let t = |s: &str| Some(s.as_bytes().to_vec());
         let cur = if upper { ui.m.trig_level } else { ui.m.trig_level2 };
         if query {
@@ -1225,14 +1190,7 @@ impl Scpi {
     }
 
     /// A time the screen stores in seconds.
-    pub(super) fn positive_time(
-        &mut self,
-        ui: &mut Ui,
-        kind: TrigType,
-        query: bool,
-        arg: &str,
-        slot: TimeSlot,
-    ) -> Option<Vec<u8>> {
+    pub(super) fn positive_time(&mut self, ui: &mut Ui, kind: TrigType, query: bool, arg: &str, slot: TimeSlot) -> Option<Vec<u8>> {
         let t = |s: &str| Some(s.as_bytes().to_vec());
         let cur = match slot {
             TimeSlot::Limit => ui.m.trig_t1,
@@ -1276,14 +1234,7 @@ impl Scpi {
     }
 
     /// Upper (`upper`) or lower time limit for a pulse, a slope, a duration, a runt, or a delay. Greater uses the lower limit. Less uses the upper limit. Inside and outside use both. The single limit is the screen's Time.
-    pub(super) fn when_width(
-        &mut self,
-        ui: &mut Ui,
-        upper: bool,
-        query: bool,
-        arg: &str,
-        kind: TrigType,
-    ) -> Option<Vec<u8>> {
+    pub(super) fn when_width(&mut self, ui: &mut Ui, upper: bool, query: bool, arg: &str, kind: TrigType) -> Option<Vec<u8>> {
         let t = |s: &str| Some(s.as_bytes().to_vec());
         let uses = match ui.m.trig_when {
             WhenKind::Gt => !upper,
@@ -1296,11 +1247,7 @@ impl Scpi {
             return if query { t("9.9E37") } else { None };
         }
         let read = if matches!(ui.m.trig_when, WhenKind::In | WhenKind::Out) {
-            if upper {
-                ui.m.trig_t2
-            } else {
-                ui.m.trig_t1
-            }
+            if upper { ui.m.trig_t2 } else { ui.m.trig_t1 }
         } else {
             ui.m.trig_t1
         };

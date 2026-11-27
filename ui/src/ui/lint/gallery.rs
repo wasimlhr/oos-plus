@@ -26,10 +26,7 @@ fn gallery_at(dir: &std::path::Path, ts: TextSize) {
     let new = || {
         let mut u = demo_on(scr);
         u.m.text_size = ts;
-        if let Some(l) = std::env::var("OOS_LAYOUT")
-            .ok()
-            .and_then(|n| LAYOUTS.into_iter().find(|l| l.name().eq_ignore_ascii_case(&n)))
-        {
+        if let Some(l) = std::env::var("OOS_LAYOUT").ok().and_then(|n| LAYOUTS.into_iter().find(|l| l.name().eq_ignore_ascii_case(&n))) {
             u.m.layout = l;
         }
         u.relayout();

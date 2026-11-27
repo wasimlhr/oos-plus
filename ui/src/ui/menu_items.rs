@@ -199,10 +199,7 @@ impl Ui {
         }
         // which source stands in which window: only while the traces are in four windows
         if self.arrangement() == windows::Arrangement::Windows {
-            v.insert(
-                v.iter().position(|i| *i == Item::Histogram).map_or(v.len(), |p| p + 1),
-                Item::Open(MenuId::Windows),
-            );
+            v.insert(v.iter().position(|i| *i == Item::Histogram).map_or(v.len(), |p| p + 1), Item::Open(MenuId::Windows));
         }
         // the Default layout has a strip of its own (Studio has none, its measurements are a panel)
         if self.m.layout == Layout::Default {

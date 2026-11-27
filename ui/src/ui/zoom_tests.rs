@@ -623,7 +623,8 @@ fn ctrl_wheel_anchors_main_detail_and_overview_for_reference_native_and_mixed_re
                     stacked(&mut ui);
                 }
                 let selected = if source == 1 { WaveId::Ch(0) } else { WaveId::Ref(0) };
-                let area = if surface == 2 { ui.split_zoom(ui.plot.grid).0 } else { ui.source_area(selected).unwrap() };
+                let area =
+                    if surface == 2 { ui.split_zoom(ui.plot.grid).0 } else { ui.source_area(selected).unwrap() };
                 let (x, y) = (area.x + area.w / 3, area.y + area.h / 3);
                 let fraction = (x - area.x) as f64 / area.w as f64;
                 let before = if surface == 1 { ui.view() } else { (ui.m.time_per_div(), ui.m.delay) };

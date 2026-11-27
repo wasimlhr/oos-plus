@@ -53,11 +53,7 @@ const NUM_W_STUDIO: i32 = 26;
 
 /// The width of the Studio top bar's view segment for `views` views (0 with fewer than two).
 pub(super) fn studio_box_w(views: usize) -> i32 {
-    if views < 2 {
-        0
-    } else {
-        NUM_W_STUDIO * views as i32 + 2
-    }
+    if views < 2 { 0 } else { NUM_W_STUDIO * views as i32 + 2 }
 }
 
 /// A view not set up yet: the plot alone.
@@ -81,9 +77,7 @@ pub(super) fn unesc(v: &str) -> String {
 
 /// The value of `key` in a slot's text.
 fn slot_get(slot: &str, key: &str) -> Option<String> {
-    slot.split(';')
-        .map(str::trim)
-        .find_map(|p| p.split_once('=').filter(|(k, _)| k.trim() == key).map(|(_, v)| unesc(v.trim())))
+    slot.split(';').map(str::trim).find_map(|p| p.split_once('=').filter(|(k, _)| k.trim() == key).map(|(_, v)| unesc(v.trim())))
 }
 
 fn key_text(k: MeasKey) -> String {
@@ -99,13 +93,7 @@ fn key_parse(s: &str) -> Option<MeasKey> {
     match f[..] {
         ["o", m, id] => Some(MeasKey::One(store::parse_meas(m).ok()?, WaveId::parse(id).ok()?)),
         ["p", i, a, b] => Some(MeasKey::Pair(i.parse().ok()?, WaveId::parse(a).ok()?, WaveId::parse(b).ok()?)),
-        ["c", i, a, b, c, d] => Some(MeasKey::Cat(
-            i.parse().ok()?,
-            WaveId::parse(a).ok()?,
-            WaveId::parse(b).ok()?,
-            WaveId::parse(c).ok()?,
-            WaveId::parse(d).ok()?,
-        )),
+        ["c", i, a, b, c, d] => Some(MeasKey::Cat(i.parse().ok()?, WaveId::parse(a).ok()?, WaveId::parse(b).ok()?, WaveId::parse(c).ok()?, WaveId::parse(d).ok()?)),
         _ => None,
     }
 }
@@ -120,12 +108,8 @@ fn keys_parse(s: &str) -> Vec<MeasKey> {
 
 fn trace_parse(s: &str) -> Option<Trace> {
     let n = |r: &str, max: usize| r.parse::<usize>().ok().filter(|n| (1..=max).contains(n)).map(|n| n - 1);
-    if let Some(r) = s.strip_prefix("CH") {
-        return n(r, NCH).map(Trace::Channel);
-    }
-    if let Some(r) = s.strip_prefix('R') {
-        return n(r, NREF).map(Trace::Reference);
-    }
+    if let Some(r) = s.strip_prefix("CH") { return n(r, NCH).map(Trace::Channel); }
+    if let Some(r) = s.strip_prefix('R') { return n(r, NREF).map(Trace::Reference); }
     s.strip_prefix('M').and_then(|r| n(r, NMATH)).map(Trace::Math)
 }
 
@@ -133,12 +117,7 @@ fn trace_parse(s: &str) -> Option<Trace> {
 /// the state text and the lanes shown).
 fn snapshot_of(m: &Model, xy: bool, full: bool, ui: &[(&str, String)]) -> String {
     let text = store::setup_text(m);
-    let mut parts: Vec<String> = text
-        .lines()
-        .filter_map(|l| l.split_once(" = "))
-        .filter(|(k, _)| KEYS.contains(k))
-        .map(|(k, v)| format!("{}={}", k, esc(v)))
-        .collect();
+    let mut parts: Vec<String> = text.lines().filter_map(|l| l.split_once(" = ")).filter(|(k, _)| KEYS.contains(k)).map(|(k, v)| format!("{}={}", k, esc(v))).collect();
     parts.push(format!("xy={}", xy));
     parts.push(format!("full={}", full));
     parts.extend(ui.iter().map(|(k, v)| format!("{}={}", k, esc(v))));
@@ -151,99 +130,44 @@ impl Ui {
     pub(super) fn view_ui_text(&self) -> String {
         let s = &self.studio;
         let mut p: Vec<String> = Vec::new();
-        if let Some(pin) = &s.pinned {
-            p.push(format!("pin={}", keys_text(pin)));
-        }
-        if !s.unpinned.is_empty() {
-            p.push(format!("unpin={}", keys_text(&s.unpinned)));
-        }
-        if !s.floated.is_empty() {
-            p.push(format!("float={}", keys_text(&s.floated)));
-        }
-        for (on, k) in [
-            (s.hide_badges, "hide"),
-            (s.compact, "compact"),
-            (s.cur_badge, "curbadge"),
-            (s.cur_linked, "curlink"),
-            (s.eye_full, "eyefull"),
-            (s.overlay, "overlay"),
-        ] {
-            if on {
-                p.push(format!("{}=1", k));
-            }
+        if let Some(pin) = &s.pinned { p.push(format!("pin={}", keys_text(pin))); }
+        if !s.unpinned.is_empty() { p.push(format!("unpin={}", keys_text(&s.unpinned))); }
+        if !s.floated.is_empty() { p.push(format!("float={}", keys_text(&s.floated))); }
+        for (on, k) in [(s.hide_badges, "hide"), (s.compact, "compact"), (s.cur_badge, "curbadge"), (s.cur_linked, "curlink"), (s.eye_full, "eyefull"), (s.overlay, "overlay")] {
+            if on { p.push(format!("{}=1", k)); }
         }
         let pa = &s.panel;
         if pa.collapsed || pa.stats || pa.cards || pa.pinned_only || pa.stats_mode != 0 || pa.hx != 0 {
-            p.push(format!(
-                "panel={}/{}/{}/{}/{}/{}",
-                pa.stats_mode, pa.cards as u8, pa.pinned_only as u8, pa.collapsed as u8, pa.stats as u8, pa.hx
-            ));
+            p.push(format!("panel={}/{}/{}/{}/{}/{}", pa.stats_mode, pa.cards as u8, pa.pinned_only as u8, pa.collapsed as u8, pa.stats as u8, pa.hx));
         }
-        if let Some((x, y)) = pa.at {
-            p.push(format!("panelat={}/{}", x, y));
-        }
-        if pa.first != 0 || pa.sub != 0 {
-            p.push(format!("scroll={}/{}", pa.first, pa.sub));
-        }
-        if !pa.query.is_empty() {
-            p.push(format!("query={}", pa.query.replace(' ', "_")));
-        }
-        if let Some(f) = s.filter {
-            p.push(format!("filter={}", f.token()));
-        }
+        if let Some((x, y)) = pa.at { p.push(format!("panelat={}/{}", x, y)); }
+        if pa.first != 0 || pa.sub != 0 { p.push(format!("scroll={}/{}", pa.first, pa.sub)); }
+        if !pa.query.is_empty() { p.push(format!("query={}", pa.query.replace(' ', "_"))); }
+        if let Some(f) = s.filter { p.push(format!("filter={}", f.token())); }
         // Search 1 keeps the key it had while it was the only one; the others have their number
         for (i, q) in s.searches.iter().enumerate().filter_map(|(i, q)| Some((i, q.as_ref()?))) {
             let n = if i == 0 { String::new() } else { (i + 1).to_string() };
             // (the type and its settings follow the three an edge search has, which is all an older view names)
-            let mut more = if q.kind == TrigType::Edge {
-                String::new()
-            } else {
-                format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.cond(), q.t1, q.t2)
-            };
-            if q.kind == TrigType::Bus {
-                more.push_str(&format!("/{}/{}", BUS_WHATS.iter().position(|&w| w == q.bus).unwrap_or(0), q.val));
-            }
+            let mut more = if q.kind == TrigType::Edge { String::new() } else { format!("/{}/{}/{}/{}/{}", q.kind.name(), q.level2, q.cond(), q.t1, q.t2) };
+            if q.kind == TrigType::Bus { more.push_str(&format!("/{}/{}", BUS_WHATS.iter().position(|&w| w == q.bus).unwrap_or(0), q.val)); }
             p.push(format!("search{n}={}/{}/{}{more}", q.src.token(), q.level, q.slope));
         }
-        if s.search_sel != 0 {
-            p.push(format!("searchsel={}", s.search_sel + 1));
-        }
+        if s.search_sel != 0 { p.push(format!("searchsel={}", s.search_sel + 1)); }
         let hidden: Vec<String> = s.search_list().filter(|(_, q)| q.hidden).map(|(i, _)| (i + 1).to_string()).collect();
-        if !hidden.is_empty() {
-            p.push(format!("searchhide={}", hidden.join(",")));
-        }
-        if let Some(t) = s.sz.lane {
-            p.push(format!("zlane={}", super::sharedzoom::trace_name(t)));
-        }
+        if !hidden.is_empty() { p.push(format!("searchhide={}", hidden.join(","))); }
+        if let Some(t) = s.sz.lane { p.push(format!("zlane={}", super::sharedzoom::trace_name(t))); }
         if !s.sz.ref_h.is_empty() {
-            p.push(format!(
-                "refh={}",
-                s.sz.ref_h.iter().map(|(i, (t, d))| format!("{}/{}/{}", i, t, d)).collect::<Vec<_>>().join(",")
-            ));
+            p.push(format!("refh={}", s.sz.ref_h.iter().map(|(i, (t, d))| format!("{}/{}/{}", i, t, d)).collect::<Vec<_>>().join(",")));
         }
-        if self.zoom_view.vfactor != 1.0 || self.zoom_view.vcenter != 0.0 {
-            p.push(format!("yzoom={}/{}", self.zoom_view.vfactor, self.zoom_view.vcenter));
-        }
+        if self.zoom_view.vfactor != 1.0 || self.zoom_view.vcenter != 0.0 { p.push(format!("yzoom={}/{}", self.zoom_view.vfactor, self.zoom_view.vcenter)); }
         let w = &self.workspace;
-        if w.stacked {
-            p.push("stacked=1".into());
-        }
-        if w.measure_docked {
-            p.push("mdock=1".into());
-        }
-        if let Some((x, y)) = w.measure_float {
-            p.push(format!("mfloat={}/{}", x, y));
-        }
-        if let Some(r) = w.eye_float {
-            p.push(format!("efloat={}/{}/{}/{}", r.x, r.y, r.w, r.h));
-        }
-        if w.eye_left {
-            p.push("eleft=1".into());
-        }
+        if w.stacked { p.push("stacked=1".into()); }
+        if w.measure_docked { p.push("mdock=1".into()); }
+        if let Some((x, y)) = w.measure_float { p.push(format!("mfloat={}/{}", x, y)); }
+        if let Some(r) = w.eye_float { p.push(format!("efloat={}/{}/{}/{}", r.x, r.y, r.w, r.h)); }
+        if w.eye_left { p.push("eleft=1".into()); }
         // the columns of the event tables, where a divider was dragged
-        if let Some([b, c]) = self.table_cols {
-            p.push(format!("tcols={}/{}", b, c));
-        }
+        if let Some([b, c]) = self.table_cols { p.push(format!("tcols={}/{}", b, c)); }
         p.join(" ")
     }
 
@@ -295,86 +219,49 @@ impl Ui {
                     let n = num(v);
                     if let [mode, cards, pinned, folded, stats, hx] = n[..] {
                         let p = &mut self.studio.panel;
-                        (p.stats_mode, p.cards, p.pinned_only, p.collapsed, p.stats, p.hx) = (
-                            mode.clamp(0, 2) as u8,
-                            cards != 0,
-                            pinned != 0,
-                            folded != 0,
-                            stats != 0,
-                            hx.clamp(0, 10_000),
-                        );
+                        (p.stats_mode, p.cards, p.pinned_only, p.collapsed, p.stats, p.hx) = (mode.clamp(0, 2) as u8, cards != 0, pinned != 0, folded != 0, stats != 0, hx.clamp(0, 10_000));
                     }
                 }
-                "panelat" => {
-                    if let [x, y] = num(v)[..] {
-                        self.studio.panel.at = Some((x, y));
-                    }
-                }
-                "scroll" => {
-                    if let [first, sub] = num(v)[..] {
-                        self.studio.panel.first = first.clamp(0, 100_000) as usize;
-                        self.studio.panel.sub = sub.clamp(0, 1000);
-                    }
-                }
+                "panelat" => if let [x, y] = num(v)[..] { self.studio.panel.at = Some((x, y)); },
+                "scroll" => if let [first, sub] = num(v)[..] { self.studio.panel.first = first.clamp(0, 100_000) as usize; self.studio.panel.sub = sub.clamp(0, 1000); },
                 // (a view saved with the pull-down zoom toolbar open: there is none any more)
                 "zoomtab" => {}
-                "query" => {
-                    self.studio.panel.query = v.replace('_', " ");
-                    self.studio.panel.searching = !self.studio.panel.query.is_empty();
-                }
+                "query" => { self.studio.panel.query = v.replace('_', " "); self.studio.panel.searching = !self.studio.panel.query.is_empty(); }
                 "filter" => self.studio.filter = WaveId::parse(v).ok(),
                 "searchhide" => hide = v.split(',').filter_map(|n| n.parse::<usize>().ok()).collect(),
-                "searchsel" => {
-                    self.studio.search_sel =
-                        v.parse::<usize>().map_or(0, |n| n.clamp(1, super::addrail::SEARCH_SLOTS) - 1)
-                }
+                "searchsel" => self.studio.search_sel = v.parse::<usize>().map_or(0, |n| n.clamp(1, super::addrail::SEARCH_SLOTS) - 1),
                 "search" | "search2" | "search3" => {
                     let slot = k[6..].parse::<usize>().map_or(0, |n| n - 1);
                     let f: Vec<&str> = v.split('/').collect();
                     if let [src, level, slope, more @ ..] = &f[..] {
-                        if let (Ok(src), Ok(level), Ok(slope)) =
-                            (WaveId::parse(src), level.parse::<f32>(), slope.parse::<u8>())
-                        {
+                        if let (Ok(src), Ok(level), Ok(slope)) = (WaveId::parse(src), level.parse::<f32>(), slope.parse::<u8>()) {
                             let mut sp = super::addrail::SearchSpec::edge(src, level, slope.min(2));
                             if let [kind, level2, when, t1, t2, bus @ ..] = more {
                                 let num = |s: &str| s.parse::<f32>().ok().filter(|v| v.is_finite());
                                 let kind = super::addrail::SEARCH_TYPES.iter().find(|t| t.name() == *kind);
                                 let cond = when.parse::<u8>().ok().filter(|&c| c <= 6);
-                                if let (Some(&kind), Some(level2), Some(cond), Some(t1), Some(t2)) =
-                                    (kind, num(level2), cond, num(t1), num(t2))
-                                {
+                                if let (Some(&kind), Some(level2), Some(cond), Some(t1), Some(t2)) = (kind, num(level2), cond, num(t1), num(t2)) {
                                     sp = super::addrail::SearchSpec { kind, level2, t1, t2, ..sp }.with_cond(cond);
                                     if let [what, val] = bus {
-                                        if let (Some(&what), Ok(val)) = (
-                                            what.parse::<usize>().ok().and_then(|i| BUS_WHATS.get(i)),
-                                            val.parse::<u64>(),
-                                        ) {
+                                        if let (Some(&what), Ok(val)) = (what.parse::<usize>().ok().and_then(|i| BUS_WHATS.get(i)), val.parse::<u64>()) {
                                             sp = super::addrail::SearchSpec { bus: what, val, ..sp };
                                         }
                                     }
                                 }
                             }
-                            if level.is_finite() {
-                                self.studio.searches[slot] = Some(sp.fit());
-                            }
+                            if level.is_finite() { self.studio.searches[slot] = Some(sp.fit()); }
                         }
                     }
                 }
                 // the table clamps them to its width when it draws (`table_col_x`)
-                "tcols" => {
-                    if let [b, c] = num(v)[..] {
-                        self.table_cols = Some([b.clamp(0, 4096), c.clamp(0, 4096)]);
-                    }
-                }
+                "tcols" => if let [b, c] = num(v)[..] { self.table_cols = Some([b.clamp(0, 4096), c.clamp(0, 4096)]); },
                 "zlane" => self.studio.sz.lane = trace_parse(v),
                 "refh" => {
                     for e in v.split(',') {
                         let f: Vec<&str> = e.split('/').collect();
                         if let [i, t, d] = f[..] {
                             if let (Ok(i), Ok(t), Ok(d)) = (i.parse::<usize>(), t.parse::<f32>(), d.parse::<f32>()) {
-                                if i < NREF && t.is_finite() && d.is_finite() && t > 0.0 {
-                                    self.studio.sz.ref_h.insert(i, (t, d));
-                                }
+                                if i < NREF && t.is_finite() && d.is_finite() && t > 0.0 { self.studio.sz.ref_h.insert(i, (t, d)); }
                             }
                         }
                     }
@@ -383,48 +270,29 @@ impl Ui {
                     let f: Vec<&str> = v.split('/').collect();
                     if let [a, b] = f[..] {
                         if let (Ok(a), Ok(b)) = (a.parse::<f32>(), b.parse::<f32>()) {
-                            if a.is_finite() && b.is_finite() {
-                                (self.zoom_view.vfactor, self.zoom_view.vcenter) = (a.clamp(1.0, 1024.0), b);
-                            }
+                            if a.is_finite() && b.is_finite() { (self.zoom_view.vfactor, self.zoom_view.vcenter) = (a.clamp(1.0, 1024.0), b); }
                         }
                     }
                 }
                 "stacked" => self.workspace.stacked = v == "1",
                 "mdock" => self.workspace.measure_docked = v == "1",
-                "mfloat" => {
-                    if let [x, y] = num(v)[..] {
-                        self.workspace.measure_float = Some((x, y));
-                    }
-                }
-                "efloat" => {
-                    if let [x, y, w, h] = num(v)[..] {
-                        if w > 0 && h > 0 {
-                            self.workspace.eye_float = Some(Rect::new(x, y, w, h));
-                        }
-                    }
-                }
+                "mfloat" => if let [x, y] = num(v)[..] { self.workspace.measure_float = Some((x, y)); },
+                "efloat" => if let [x, y, w, h] = num(v)[..] { if w > 0 && h > 0 { self.workspace.eye_float = Some(Rect::new(x, y, w, h)); } },
                 "eleft" => self.workspace.eye_left = v == "1",
                 _ => {}
             }
         }
         for n in hide {
-            if let Some(sp) = self.studio.searches.get_mut(n.wrapping_sub(1)).and_then(Option::as_mut) {
-                sp.hidden = true;
-            }
+            if let Some(sp) = self.studio.searches.get_mut(n.wrapping_sub(1)).and_then(Option::as_mut) { sp.hidden = true; }
         }
         self.studio.search_select(self.studio.search_sel);
     }
 
     /// The references and the bus shown, for a view's slot: `R1 R3 B`. None while a record session owns the refs.
     fn view_lanes_text(&self) -> Option<String> {
-        if self.record_mode() {
-            return None;
-        }
-        let mut v: Vec<String> =
-            (0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on)).map(|i| format!("R{}", i + 1)).collect();
-        if self.m.bus.on {
-            v.push("B".into());
-        }
+        if self.record_mode() { return None; }
+        let mut v: Vec<String> = (0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on)).map(|i| format!("R{}", i + 1)).collect();
+        if self.m.bus.on { v.push("B".into()); }
         Some(v.join(" "))
     }
 
@@ -432,9 +300,7 @@ impl Ui {
     /// views kept their math lanes counts as showing it.
     fn math_shown_in_slot(&self, j: usize, k: usize) -> bool {
         let s = &self.m.view_slots[j];
-        let words = |key: &str| {
-            slot_get(s, key).map(|v| v.split_whitespace().filter_map(|w| w.parse::<usize>().ok()).collect::<Vec<_>>())
-        };
+        let words = |key: &str| slot_get(s, key).map(|v| v.split_whitespace().filter_map(|w| w.parse::<usize>().ok()).collect::<Vec<_>>());
         match words("math_def") {
             None => true,
             Some(def) => def.contains(&(k + 1)) && !words("math_hidden").unwrap_or_default().contains(&(k + 1)),
@@ -445,32 +311,21 @@ impl Ui {
     /// shows goes off altogether when it is hidden (the slot is free again). Showing one that is off defines it as an
     /// addition, like the display switch of `:MATH<n>:DISPlay`.
     pub(crate) fn math_set_shown(&mut self, k: usize, on: bool) {
-        if k >= NMATH {
-            return;
-        }
+        if k >= NMATH { return; }
         if on {
             if self.m.math_ch(k).op == MathOp::Off {
                 let mut c = self.m.math_ch(k);
                 c.op = MathOp::Add;
-                if k == self.m.math_sel {
-                    self.m.math = c.op;
-                } else {
-                    self.m.maths[k] = c;
-                }
+                if k == self.m.math_sel { self.m.math = c.op; } else { self.m.maths[k] = c; }
             }
             self.m.math_hidden[k] = false;
             return;
         }
-        let elsewhere =
-            self.m.views >= 2 && (0..self.m.views).any(|j| j != self.m.view_cur && self.math_shown_in_slot(j, k));
+        let elsewhere = self.m.views >= 2 && (0..self.m.views).any(|j| j != self.m.view_cur && self.math_shown_in_slot(j, k));
         if elsewhere {
             self.m.math_hidden[k] = true;
         } else {
-            if k == self.m.math_sel {
-                self.m.math = MathOp::Off;
-            } else {
-                self.m.maths[k].op = MathOp::Off;
-            }
+            if k == self.m.math_sel { self.m.math = MathOp::Off; } else { self.m.maths[k].op = MathOp::Off; }
             self.m.math_hidden[k] = false;
         }
     }
@@ -478,14 +333,10 @@ impl Ui {
     /// Writes what the Ui keeps of the shown view into the model, so a setup written now has it.
     pub fn sync_view_state(&mut self) {
         let t = self.view_ui_text();
-        if self.m.studio_state != t {
-            self.m.studio_state = t;
-        }
+        if self.m.studio_state != t { self.m.studio_state = t; }
         // a channel that is off is not "hidden": defining it again shows it here
         for k in 0..NMATH {
-            if self.m.math_hidden[k] && self.m.math_ch(k).op == MathOp::Off {
-                self.m.math_hidden[k] = false;
-            }
+            if self.m.math_hidden[k] && self.m.math_ch(k).op == MathOp::Off { self.m.math_hidden[k] = false; }
         }
     }
 
@@ -503,31 +354,16 @@ impl Ui {
         if n >= 2 && self.m.layout != Layout::Default {
             let snap = self.view_snapshot();
             for k in 0..n {
-                if k != self.m.view_cur && self.m.view_slots[k].is_empty() {
-                    self.m.view_slots[k] = snap.clone();
-                }
+                if k != self.m.view_cur && self.m.view_slots[k].is_empty() { self.m.view_slots[k] = snap.clone(); }
             }
         }
     }
 
     /// What the shown view is now.
     pub(super) fn view_snapshot(&self) -> String {
-        let mut ui = vec![
-            ("studio_view", self.studio.view.token().to_string()),
-            ("studio_dock", self.dock_text()),
-            ("studio_state", self.view_ui_text()),
-        ];
-        if let Some(l) = self.view_lanes_text() {
-            ui.push(("lanes", l));
-        }
-        ui.push((
-            "math_def",
-            (0..NMATH)
-                .filter(|&k| self.m.math_ch(k).op != MathOp::Off)
-                .map(|k| (k + 1).to_string())
-                .collect::<Vec<_>>()
-                .join(" "),
-        ));
+        let mut ui = vec![("studio_view", self.studio.view.token().to_string()), ("studio_dock", self.dock_text()), ("studio_state", self.view_ui_text())];
+        if let Some(l) = self.view_lanes_text() { ui.push(("lanes", l)); }
+        ui.push(("math_def", (0..NMATH).filter(|&k| self.m.math_ch(k).op != MathOp::Off).map(|k| (k + 1).to_string()).collect::<Vec<_>>().join(" ")));
         snapshot_of(&self.m, self.xy, self.full.on, &ui)
     }
 
@@ -558,11 +394,7 @@ impl Ui {
                 "xy" => self.xy = v == "true",
                 "full" => self.full.on = v == "true",
                 // a record session (SIM, a loaded file) has its own panel and goes with the session, not the view
-                "studio_view" => {
-                    if !self.studio.view.is_record() {
-                        self.studio.view = StudioView::from_token(&v);
-                    }
-                }
+                "studio_view" => if !self.studio.view.is_record() { self.studio.view = StudioView::from_token(&v); },
                 "studio_dock" => {
                     let ver = self.studio.dock.ver;
                     self.dock_restore(&v);
@@ -573,18 +405,14 @@ impl Ui {
                 "math_def" => {
                     let def: Vec<usize> = v.split_whitespace().filter_map(|w| w.parse().ok()).collect();
                     for k in 0..NMATH {
-                        if self.m.math_ch(k).op != MathOp::Off && !def.contains(&(k + 1)) {
-                            self.m.math_hidden[k] = true;
-                        }
+                        if self.m.math_ch(k).op != MathOp::Off && !def.contains(&(k + 1)) { self.m.math_hidden[k] = true; }
                     }
                 }
                 "lanes" => {
                     if !self.record_mode() {
                         let shown: Vec<&str> = v.split_whitespace().collect();
                         for i in 0..NREF {
-                            if let Some(r) = self.refs[i].as_mut() {
-                                r.on = shown.contains(&format!("R{}", i + 1).as_str());
-                            }
+                            if let Some(r) = self.refs[i].as_mut() { r.on = shown.contains(&format!("R{}", i + 1).as_str()); }
                         }
                         self.m.bus.on = shown.contains(&"B");
                     }
@@ -605,9 +433,7 @@ impl Ui {
         self.meas_pages.readouts = 0;
         self.meas_pages.selected = 0;
         // the scroll of the panel is part of the view (`scroll=` of its state); a slot from before keeps no state: top
-        if !new {
-            self.studio.panel.scroll_top();
-        }
+        if !new { self.studio.panel.scroll_top(); }
         self.studio.md = Default::default();
         self.m.studio_view = self.studio.view.token().to_string();
         self.dock_sync_setup();
@@ -728,11 +554,7 @@ impl Ui {
     // ------------------------------------------------------------------------------------------------ the top bar
 
     fn num_w(&self) -> i32 {
-        if self.m.layout == Layout::Studio {
-            NUM_W_STUDIO
-        } else {
-            NUM_W
-        }
+        if self.m.layout == Layout::Studio { NUM_W_STUDIO } else { NUM_W }
     }
 
     /// The numbered buttons in the top bar, left of the menu buttons, while there is more than one view.

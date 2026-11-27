@@ -36,9 +36,7 @@ impl Ui {
     pub(in crate::ui) fn eye_place_control(&self) -> Rect {
         let a = self.eye_pane_rect();
         // Studio: the eye is a view of its own, there is no placement to choose
-        if self.dock_on() {
-            return Rect::new(a.x + 96, a.y + 1, 0, 0);
-        }
+        if self.dock_on() { return Rect::new(a.x + 96, a.y + 1, 0, 0); }
         Rect::new(a.x + 96, a.y + 1, 48, workspace::HEADER - 2)
     }
 
@@ -81,11 +79,8 @@ impl Ui {
             cv.text_in(&self.fonts().s, place, 1, &self.value(Item::EyePlace), TEXT);
         }
         let studio = self.dock_on();
-        let settings = if studio {
-            Rect::new(pick.right() + 4, pick.y, (a.right() - 6 - pick.right() - 4).max(1), pick.h)
-        } else {
-            Rect::new(place.x + place.w + 4, pick.y, (close.x - place.x - place.w - 8).max(1), pick.h)
-        };
+        let settings = if studio { Rect::new(pick.right() + 4, pick.y, (a.right() - 6 - pick.right() - 4).max(1), pick.h) }
+            else { Rect::new(place.x + place.w + 4, pick.y, (close.x - place.x - place.w - 8).max(1), pick.h) };
         btn(cv, settings, BTN, BTN_BORDER);
         cv.set_clip(Rect::new(settings.x + 5, settings.y, (settings.w - 23).max(1), settings.h));
         let scope = self.azr.eye_auto.snapshot_caption().unwrap_or_else(|| self.eye_source_mode_label().into());
@@ -184,9 +179,7 @@ impl Ui {
         let r = self.eye_tab();
         // a slim handle: three dots on a faint pill, no arrow box
         cv.round(r, 7, PANEL_BG, 160);
-        for k in -1..=1 {
-            cv.circle(r.x + r.w / 2, r.y + r.h / 2 + 7 * k, 2, DIM);
-        }
+        for k in -1..=1 { cv.circle(r.x + r.w / 2, r.y + r.h / 2 + 7 * k, 2, DIM); }
     }
 
     /// The eye: frame, axes in volts and UI, the coloured hits and the two levels.
@@ -210,9 +203,7 @@ impl Ui {
                 x - w / 2
             };
             // a narrow plot leaves out the label that would run into the one before ("1" and "1.5 UI")
-            if tx < axis_free + 6 {
-                continue;
-            }
+            if tx < axis_free + 6 { continue; }
             axis_free = tx + w;
             cv.text(&f.s, tx, r.y + r.h + 13, s, AXIS_TEXT);
         }

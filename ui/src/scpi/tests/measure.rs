@@ -146,11 +146,7 @@ fn a_reset_puts_the_read_out_back_and_starts_in_the_default_layout() {
     line(&mut s, &mut ui, &cv, "*CLS;:CHAN2:DISP ON;:WAV:SOUR CHAN2;:WAV:MODE RAW;:WAV:FORM WORD;:WAV:STAR 10;:WAV:STOP 20;:CALL:ADD CHAN2,0,\"old\";:TIM:DEL:VZO 4;*ESE 32");
     line(&mut s, &mut ui, &cv, "*RST");
     assert_eq!(line(&mut s, &mut ui, &cv, ":WAV:SOUR?;:WAV:MODE?;:WAV:FORM?;:WAV:STAR?"), "CHAN1;NORM;BYTE;1");
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":CALL:COUN?;:TIM:DEL:VZO?;*ESE?"),
-        "0;1.000000E+00;32",
-        "notes and zoom go, the enable register stays (IEEE 488.2)"
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":CALL:COUN?;:TIM:DEL:VZO?;*ESE?"), "0;1.000000E+00;32", "notes and zoom go, the enable register stays (IEEE 488.2)");
     assert!(ui.m.layout == Layout::Default && !ui.m.compact(), "the stock bars");
     // a notice on the screen does not swallow the reset, and stays for the person it is for (on a unit a *RST
     // closed the notice of an update and reset nothing)
@@ -169,17 +165,10 @@ fn a_reset_puts_the_read_out_back_and_starts_in_the_default_layout() {
 fn a_logic_threshold_preset_by_the_beginning_of_its_name() {
     let (mut s, mut ui, cv) = session();
     line(&mut s, &mut ui, &cv, "*CLS;:LA:STAT ON;:LA:POD1:PRES ECL;:LA:POD2:PRES lvcmos_1.8");
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?;:SYST:ERR?"),
-        "ECL_-1.3_V;LVCMOS_1.8_V:_0.9_V;0,\"No error\""
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?;:SYST:ERR?"), "ECL_-1.3_V;LVCMOS_1.8_V:_0.9_V;0,\"No error\"");
     assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:THR?;:LA:POD2:THR?"), "-1.300000E+00;9.000000E-01");
     line(&mut s, &mut ui, &cv, ":LA:POD1:PRES CMOS_5_V:_2.5_V;:LA:POD2:PRES CMOS");
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?"),
-        "CMOS_5_V:_2.5_V;LVCMOS_1.8_V:_0.9_V",
-        "two names begin with CMOS"
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":LA:POD1:PRES?;:LA:POD2:PRES?"), "CMOS_5_V:_2.5_V;LVCMOS_1.8_V:_0.9_V", "two names begin with CMOS");
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"));
 }
 
@@ -188,50 +177,23 @@ fn a_logic_threshold_preset_by_the_beginning_of_its_name() {
 #[test]
 fn a_setup_holds_the_generator_but_never_switches_its_output_on() {
     let (mut s, mut ui, cv) = session();
-    line(
-        &mut s,
-        &mut ui,
-        &cv,
-        "*CLS;:SOUR:FUNC SQU;:SOUR:FREQ 12345;:SOUR:VOLT 0.5;:SOUR:VOLT:OFFS 0.1;:SOUR:FUNC:SQU:DUTY 30;:SOUR:OUTP ON",
-    );
-    let before =
-        line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?");
+    line(&mut s, &mut ui, &cv, "*CLS;:SOUR:FUNC SQU;:SOUR:FREQ 12345;:SOUR:VOLT 0.5;:SOUR:VOLT:OFFS 0.1;:SOUR:FUNC:SQU:DUTY 30;:SOUR:OUTP ON");
+    let before = line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?");
     let text = ui.setup_text_full();
-    assert!(
-        text.lines().any(|l| l.starts_with("gen = Square 12345 ")),
-        "{:?}",
-        text.lines().filter(|l| l.starts_with("gen")).collect::<Vec<_>>()
-    );
-    assert!(
-        !text.contains("afg_on") && !text.to_ascii_lowercase().contains("output"),
-        "the output state is not in a set-up"
-    );
+    assert!(text.lines().any(|l| l.starts_with("gen = Square 12345 ")), "{:?}", text.lines().filter(|l| l.starts_with("gen")).collect::<Vec<_>>());
+    assert!(!text.contains("afg_on") && !text.to_ascii_lowercase().contains("output"), "the output state is not in a set-up");
     line(&mut s, &mut ui, &cv, "*RST");
     assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FREQ?;:SOUR:OUTP?"), "1.000000E+03;0");
     line(&mut s, &mut ui, &cv, ":SOUR:OUTP ON");
     ui.apply_setup_text(&text).unwrap();
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?"),
-        before
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FUNC?;:SOUR:FREQ?;:SOUR:VOLT?;:SOUR:VOLT:OFFS?;:SOUR:FUNC:SQU:DUTY?"), before);
     assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:OUTP?"), "0", "a recall leaves the output off, also one that was on");
     // a set-up of before the keys leaves the generator at its defaults, and a bad line is an error, not a guess
-    let old: String = text
-        .lines()
-        .filter(|l| !l.starts_with("gen"))
-        .map(|l| {
-            format!(
-                "{l}
-"
-            )
-        })
-        .collect();
+    let old: String = text.lines().filter(|l| !l.starts_with("gen")).map(|l| format!("{l}
+")).collect();
     ui.apply_setup_text(&old).unwrap();
     assert_eq!(line(&mut s, &mut ui, &cv, ":SOUR:FREQ?"), "1.000000E+03");
-    assert!(
-        crate::store::set(&mut ui.m, "gen", "Arb 1000 1 0 50 50").is_err()
-            && crate::store::set(&mut ui.m, "gen", "Sine 1e3").is_err()
-    );
+    assert!(crate::store::set(&mut ui.m, "gen", "Arb 1000 1 0 50 50").is_err() && crate::store::set(&mut ui.m, "gen", "Sine 1e3").is_err());
     assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
 }
 
@@ -267,10 +229,7 @@ fn run_after_single_keeps_the_sweep_and_the_ieee_status_commands_answer() {
     assert_eq!((ui.m.run, ui.m.trig_mode), (RunState::Run, TrigMode::Normal));
 
     line(&mut s, &mut ui, &cv, "*CLS");
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, "*STB?;*ESE?;*SRE?;*PSC?;*TST?;*OPT?"),
-        format!("0;0;0;1;0;{}", crate::scpi::dispatch::options_text())
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, "*STB?;*ESE?;*SRE?;*PSC?;*TST?;*OPT?"), format!("0;0;0;1;0;{}", crate::scpi::dispatch::options_text()));
     line(&mut s, &mut ui, &cv, "*ESE 32;*SRE 36;*PSC 0;*WAI");
     assert_eq!(line(&mut s, &mut ui, &cv, "*ESE?;*SRE?;*PSC?"), "32;36;0");
     line(&mut s, &mut ui, &cv, ":NOSUCH:HEADER 1");
@@ -292,10 +251,7 @@ fn a_reference_colour_by_name_and_a_track_cursor_y() {
     assert_eq!(line(&mut s, &mut ui, &cv, ":REF:COL?;:SYST:ERR?"), "RED;0,\"No error\"");
     line(&mut s, &mut ui, &cv, ":REF:COL 1,BLUE;:REF:COL R99,RED");
     assert_eq!(line(&mut s, &mut ui, &cv, ":REF:COL? 1"), "BLUE");
-    assert!(
-        line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"),
-        "a slot that does not exist is still refused"
-    );
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"), "a slot that does not exist is still refused");
     line(&mut s, &mut ui, &cv, "*CLS;:CURS:MODE TRAC;:CURS:TRAC:SOUR1 R1;:CURS:TRAC:CAX 0");
     let (y, value) = (line(&mut s, &mut ui, &cv, ":CURS:TRAC:CAY?"), line(&mut s, &mut ui, &cv, ":CURS:TRAC:AYV?"));
     assert_eq!(y, value);
@@ -337,10 +293,7 @@ fn a_math_channel_is_read_and_measured() {
     let one: Vec<f64> = std::str::from_utf8(&data[11..]).unwrap().split(',').map(|v| v.parse().unwrap()).collect();
     assert_eq!(one.len(), sum.len());
     assert!(one.iter().zip(&sum).all(|(a, b)| (2.0 * a - b).abs() < 1e-4), "CH1 + CH1 is twice CH1");
-    let (math, chan): (f64, f64) = (
-        line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,MATH1").parse().unwrap(),
-        line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,CHAN1").parse().unwrap(),
-    );
+    let (math, chan): (f64, f64) = (line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,MATH1").parse().unwrap(), line(&mut s, &mut ui, &cv, ":MEAS:ITEM? VPP,CHAN1").parse().unwrap());
     assert!(chan > 0.0 && (math / chan - 2.0).abs() < 0.05, "{math} {chan}");
     assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
     // an FFT is a spectrum, not a record in time: no points, and no stale ones of the channel
@@ -390,11 +343,7 @@ fn a_paged_read_of_a_100_kpt_memory_answers_in_every_mode_and_format() {
                         let stop = (start + 24_999).min(points);
                         line(&mut s, &mut ui, &cv, &format!(":WAV:STAR {start};:WAV:STOP {stop}"));
                         let block = s.exec_line(&mut ui, &cv, ":WAV:DATA?");
-                        assert!(
-                            block.starts_with(b"#9"),
-                            "{state} {mode} {format}: {:?}",
-                            String::from_utf8_lossy(&block)
-                        );
+                        assert!(block.starts_with(b"#9"), "{state} {mode} {format}: {:?}", String::from_utf8_lossy(&block));
                         let length: usize = std::str::from_utf8(&block[2..11]).unwrap().parse().unwrap();
                         assert_eq!(block.len(), 11 + length, "{state} {mode} {format}");
                         total += if width == 0 { block[11..].split(|&b| b == b',').count() } else { length / width };
@@ -425,33 +374,18 @@ fn saved_files_are_listed_fetched_and_deleted_and_the_memory_is_saved() {
     let (mut s, mut ui, cv) = session();
     ui.files.dir = dir.clone();
     ui.step(0.05);
-    line(
-        &mut s,
-        &mut ui,
-        &cv,
-        ":STOP;*CLS;:SAVE:DEST DESK;:SAVE:WAV \"a.csv\";:SAVE:MEM:WAV \"m.bin\";:SAVE:MEM:WAV \"m.csv\"",
-    );
+    line(&mut s, &mut ui, &cv, ":STOP;*CLS;:SAVE:DEST DESK;:SAVE:WAV \"a.csv\";:SAVE:MEM:WAV \"m.bin\";:SAVE:MEM:WAV \"m.csv\"");
     assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
     // a reference exported under a name is loaded by that name (it lies in the save folder, and the load looked
     // beside the setups only: -256 on a unit, 2026-11-18)
-    line(
-        &mut s,
-        &mut ui,
-        &cv,
-        ":REF:CURR 1;:REF:SOUR 1,CHAN1;:REF:SAVE;:REF:EXP \"r-export.csv\";:REF:CURR 2;:REF:LOAD \"r-export.csv\"",
-    );
+    line(&mut s, &mut ui, &cv, ":REF:CURR 1;:REF:SOUR 1,CHAN1;:REF:SAVE;:REF:EXP \"r-export.csv\";:REF:CURR 2;:REF:LOAD \"r-export.csv\"");
     assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
     line(&mut s, &mut ui, &cv, ":WAV:SOUR R2");
     assert!(line(&mut s, &mut ui, &cv, ":WAV:POIN?").parse::<usize>().unwrap() > 100);
     line(&mut s, &mut ui, &cv, ":WAV:SOUR CHAN1;:REF:CLE;:MMEM:DEL \"r-export.csv\"");
     let catalog = line(&mut s, &mut ui, &cv, ":MMEM:CAT?");
     let size = std::fs::metadata(dir.join("a.csv")).unwrap().len();
-    assert!(
-        catalog.contains(&format!("\"a.csv,,{size}\""))
-            && catalog.contains("\"m.bin,,")
-            && catalog.contains("\"m.csv,,"),
-        "{catalog}"
-    );
+    assert!(catalog.contains(&format!("\"a.csv,,{size}\"")) && catalog.contains("\"m.bin,,") && catalog.contains("\"m.csv,,"), "{catalog}");
     let data = s.exec_line(&mut ui, &cv, ":MMEM:DATA? \"a.csv\"");
     assert_eq!(&data[..11], format!("#9{size:09}").as_bytes());
     assert_eq!(&data[11..], std::fs::read(dir.join("a.csv")).unwrap());
@@ -660,9 +594,7 @@ fn rigol_measurement_names_match_the_screen_items() {
     for _ in 0..8 {
         ui.step(0.05);
     }
-    for (rigol, screen) in
-        [("MAREA", "AREA"), ("MPAREA", "CAREA"), ("PVRMS", "CRMS"), ("PSLEWRATE", "PSLEW"), ("NSLEWRATE", "NSLEW")]
-    {
+    for (rigol, screen) in [("MAREA", "AREA"), ("MPAREA", "CAREA"), ("PVRMS", "CRMS"), ("PSLEWRATE", "PSLEW"), ("NSLEWRATE", "NSLEW")] {
         let a: f64 = line(&mut s, &mut ui, &cv, &format!(":MEAS:ITEM? {rigol},CHAN1")).parse().unwrap();
         let b: f64 = line(&mut s, &mut ui, &cv, &format!(":MEAS:ITEM? {screen},CHAN1")).parse().unwrap();
         assert!((a - b).abs() < 1e-9 || (a > 1e37 && b > 1e37), "{rigol} {a} {screen} {b}");
@@ -746,10 +678,7 @@ fn measurement_gate_changes_burst_outside_and_duration() {
 #[test]
 fn stop_keeps_the_accumulated_statistics() {
     let (mut s, mut ui, cv) = session();
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":MEAS:STAT:ITEM FREQ,CHAN1;:MEAS:STAT:RES;:RUN;:SYST:ERR?"),
-        "0,\"No error\""
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:STAT:ITEM FREQ,CHAN1;:MEAS:STAT:RES;:RUN;:SYST:ERR?"), "0,\"No error\"");
     let count = |s: &mut _, ui: &mut Ui| line(s, ui, &cv, ":MEAS:STAT:ITEM? CNT,FREQ,CHAN1").parse::<f64>().unwrap();
     let end = std::time::Instant::now() + Duration::from_secs(20);
     while count(&mut s, &mut ui) < 5.0 {
@@ -787,12 +716,10 @@ fn spectrum_queries_answer_the_record_now_with_every_harmonic_asked_for() {
     let lines = |s: &mut _, ui: &mut Ui, src: &str| -> Vec<(f64, f64)> {
         line(s, ui, &cv, &format!(":VIEW SCOPE;:SPEC:SOUR {src};:SPEC:SPAN 0;:SPEC:PEAK:HARM 20"));
         let a = line(s, ui, &cv, ":SPEC:PEAK:LIST?");
-        a.split(';')
-            .map(|p| {
-                let mut x = p.split(',').map(|v| v.parse::<f64>().unwrap());
-                (x.next().unwrap(), x.next().unwrap())
-            })
-            .collect()
+        a.split(';').map(|p| {
+            let mut x = p.split(',').map(|v| v.parse::<f64>().unwrap());
+            (x.next().unwrap(), x.next().unwrap())
+        }).collect()
     };
     assert!(!ui.spectrum_runs(), "the page is not shown");
     let one = lines(&mut s, &mut ui, "R1");
@@ -860,10 +787,7 @@ fn measurement_slots_hold_a_row_each_and_keep_their_number() {
     line(&mut s, &mut ui, &cv, "*CLS");
     assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT:LIST?"), "");
     // add: the row is on the table and is the slot's
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":MEAS:SLOT1 VPP,CHAN1;:MEAS:SLOT2 RRDELAY,CHAN1,CHAN2;:SYST:ERR?"),
-        "0,\"No error\""
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT1 VPP,CHAN1;:MEAS:SLOT2 RRDELAY,CHAN1,CHAN2;:SYST:ERR?"), "0,\"No error\"");
     assert_eq!(ui.m.meas, vec![(Meas::Vpp, WaveId::Ch(0))]);
     assert_eq!(ui.m.meas2.len(), 1);
     assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT1:ITEM?"), "VPP,CHAN1");
@@ -872,18 +796,12 @@ fn measurement_slots_hold_a_row_each_and_keep_their_number() {
     assert_eq!(one, line(&mut s, &mut ui, &cv, ":MEAS:STRIP?").split(';').next().unwrap().rsplit(',').next().unwrap());
     assert!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT:LIST?").starts_with("1,VPP,CHAN1,"));
     // a row added another way has no number; removing a row keeps the numbers of the others
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":MEAS:ITEM VMAX,CHAN1;:MEAS:ITEM:REMove VPP,CHAN1;:SYST:ERR?"),
-        "0,\"No error\""
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:ITEM VMAX,CHAN1;:MEAS:ITEM:REMove VPP,CHAN1;:SYST:ERR?"), "0,\"No error\"");
     assert!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT1:ITEM?").contains("MEAS1 is empty"));
     line(&mut s, &mut ui, &cv, "*CLS");
     assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT2:ITEM?"), "RRDELAY,CHAN1,CHAN2");
     // a slot that is used again replaces its measurement; a row has one number
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":MEAS:SLOT2 VRMS,CHAN3;:MEAS:SLOT4 VRMS,CHAN3;:SYST:ERR?"),
-        "0,\"No error\""
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT2 VRMS,CHAN3;:MEAS:SLOT4 VRMS,CHAN3;:SYST:ERR?"), "0,\"No error\"");
     assert!(ui.m.meas2.is_empty());
     assert!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT2:ITEM?").contains("MEAS2 is empty"));
     line(&mut s, &mut ui, &cv, "*CLS");

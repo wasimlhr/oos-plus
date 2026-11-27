@@ -39,8 +39,7 @@ pub(super) enum BarItem {
     Add,
     Stats,
 }
-const BAR_ORDER: [BarItem; 6] =
-    [BarItem::Source, BarItem::Gate, BarItem::Search, BarItem::Pinned, BarItem::Stats, BarItem::Add];
+const BAR_ORDER: [BarItem; 6] = [BarItem::Source, BarItem::Gate, BarItem::Search, BarItem::Pinned, BarItem::Stats, BarItem::Add];
 /// The order in which controls go behind the ... button when the room is short. Add (+) stays: it sits next to the view switch.
 const BAR_DROP: [BarItem; 4] = [BarItem::Gate, BarItem::Stats, BarItem::Source, BarItem::Pinned];
 const MORE_W: i32 = 34;
@@ -87,9 +86,7 @@ pub(super) enum PanelView {
 
 impl Ui {
     pub(super) fn panel_is_cards(&self) -> bool {
-        self.m.layout == Layout::Studio
-            && self.studio.panel.cards
-            && !self.m.studio_detail
+        self.m.layout == Layout::Studio && self.studio.panel.cards && !self.m.studio_detail
             && matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline)
     }
 
@@ -97,34 +94,20 @@ impl Ui {
     /// first of the three views. It was a list of one measurement a row, which showed two of them in a low panel
     /// under the plot (the owner on the unit).
     pub(super) fn panel_is_strip(&self) -> bool {
-        self.m.layout == Layout::Studio
-            && !self.studio.panel.cards
-            && !self.m.studio_detail
+        self.m.layout == Layout::Studio && !self.studio.panel.cards && !self.m.studio_detail
             && matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline)
     }
 
     /// The panel lays its measurements out in cells: the cards, or the strip.
-    pub(super) fn panel_cells(&self) -> bool {
-        self.panel_is_cards() || self.panel_is_strip()
-    }
+    pub(super) fn panel_cells(&self) -> bool { self.panel_is_cards() || self.panel_is_strip() }
 
     /// The cells of a list `w` wide: columns, the height of a cell, the space between two.
     pub(super) fn panel_cell_geo(&self, w: i32) -> (i32, i32, i32) {
-        if self.panel_is_strip() {
-            ((w / CELL_W).clamp(1, 6), CELL_H, CELL_GAP)
-        } else {
-            (Self::panel_card_cols(w), CARD_H, CARD_GAP)
-        }
+        if self.panel_is_strip() { ((w / CELL_W).clamp(1, 6), CELL_H, CELL_GAP) } else { (Self::panel_card_cols(w), CARD_H, CARD_GAP) }
     }
 
     pub(super) fn panel_view(&self) -> PanelView {
-        if self.m.studio_detail {
-            PanelView::Detailed
-        } else if self.studio.panel.cards {
-            PanelView::Cards
-        } else {
-            PanelView::List
-        }
+        if self.m.studio_detail { PanelView::Detailed } else if self.studio.panel.cards { PanelView::Cards } else { PanelView::List }
     }
 
     pub(super) fn panel_set_view(&mut self, v: PanelView) {
@@ -135,11 +118,7 @@ impl Ui {
 
     /// The statistics button says what a tap shows next: Off, Mean + sigma, Min Max.
     pub(super) fn panel_stats_label(&self) -> &'static str {
-        match self.studio.panel.stats_mode {
-            1 => "Mean + \u{3c3}",
-            2 => "Min Max",
-            _ => "Stats off",
-        }
+        match self.studio.panel.stats_mode { 1 => "Mean + \u{3c3}", 2 => "Min Max", _ => "Stats off" }
     }
 
     pub(super) fn panel_stats_cycle(&mut self) {
@@ -161,20 +140,12 @@ impl Ui {
         let mut v = Vec::new();
         for it in hidden {
             match it {
-                BarItem::Gate => {
-                    for full in [true, false] {
-                        v.push((
-                            format!("Gate: {}", if full { "Full record" } else { "Screen" }),
-                            self.m.meas_full_record == full,
-                            MoreAct::Gate(full),
-                        ));
-                    }
-                }
-                BarItem::Stats => {
-                    for (mode, name) in [(0u8, "Statistics off"), (1, "Mean + \u{3c3}"), (2, "Min Max")] {
-                        v.push((name.to_string(), self.studio.panel.stats_mode == mode, MoreAct::Stats(mode)));
-                    }
-                }
+                BarItem::Gate => for full in [true, false] {
+                    v.push((format!("Gate: {}", if full { "Full record" } else { "Screen" }), self.m.meas_full_record == full, MoreAct::Gate(full)));
+                },
+                BarItem::Stats => for (mode, name) in [(0u8, "Statistics off"), (1, "Mean + \u{3c3}"), (2, "Min Max")] {
+                    v.push((name.to_string(), self.studio.panel.stats_mode == mode, MoreAct::Stats(mode)));
+                },
                 _ => v.push((self.panel_item_label(it), self.panel_item_on(it), MoreAct::Item(it))),
             }
         }
@@ -185,19 +156,11 @@ impl Ui {
     /// tabs. In front of a group the strip belongs to the tabs, and the controls are a line of the content as in a
     /// narrow panel: in the strip they pushed the names of the tabs into the list behind the arrow (the owner on
     /// his unit).
-    pub(super) fn panel_bar_wide(&self, p: Rect) -> bool {
-        p.w >= WIDE_BAR_FROM && self.dock_tab_group(VKind::Measure).is_none()
-    }
+    pub(super) fn panel_bar_wide(&self, p: Rect) -> bool { p.w >= WIDE_BAR_FROM && self.dock_tab_group(VKind::Measure).is_none() }
 
     /// Height the controls take from the content: the toolbar of a narrow panel or of one in front of a group of
     /// tabs, nothing for a wide one that has them in its strip.
-    pub(super) fn panel_tool_h(&self, p: Rect) -> i32 {
-        if self.panel_bar_wide(p) {
-            0
-        } else {
-            TOOL_H
-        }
-    }
+    pub(super) fn panel_tool_h(&self, p: Rect) -> i32 { if self.panel_bar_wide(p) { 0 } else { TOOL_H } }
 
     /// The controls of the panel `p`: as many as fit, whole; the others are behind the ... button.
     pub(super) fn panel_bar(&self, p: Rect) -> PanelBar {
@@ -208,35 +171,19 @@ impl Ui {
         let right = if wide {
             let r = Rect::new(p.x, p.y - STRIP_H, p.w, p.h + STRIP_H);
             self.dock_view_rect(VKind::Measure, r).map_or(p.right() - 100, |v| v.x) - 6
-        } else {
-            p.right() - 3
-        };
+        } else { p.right() - 3 };
         let left = if wide { p.x + 140 } else { p.x + 3 };
-        let slot = |item, x: i32, w: i32| BarSlot {
-            item,
-            r: Rect::new(x, y, w, h),
-            hit: Rect::new(x - 1, hit_y, w + 2, hit_h),
-        };
+        let slot = |item, x: i32, w: i32| BarSlot { item, r: Rect::new(x, y, w, h), hit: Rect::new(x - 1, hit_y, w + 2, hit_h) };
         if self.studio.panel.searching {
             let xw = 30;
             let (fx, fw) = if wide { (p.x + 28, right - p.x - 28) } else { (p.x + 3, p.w - 6) };
             let field = Rect::new(fx, y, fw.max(60), h);
             let close = Rect::new(field.right() - xw, y, xw, h);
-            return PanelBar {
-                slots: Vec::new(),
-                more: None,
-                hidden: Vec::new(),
-                wide,
-                full: false,
-                field: Some((field, close)),
-                left: fx,
-            };
+            return PanelBar { slots: Vec::new(), more: None, hidden: Vec::new(), wide, full: false, field: Some((field, close)), left: fx };
         }
         let width = |full: bool, it: BarItem| match (it, full) {
-            (BarItem::Source, true) => 104,
-            (BarItem::Source, false) => 56,
-            (BarItem::Gate, true) => 84,
-            (BarItem::Gate, false) => 56,
+            (BarItem::Source, true) => 104, (BarItem::Source, false) => 56,
+            (BarItem::Gate, true) => 84, (BarItem::Gate, false) => 56,
             (BarItem::Stats, true) => 74,
             _ => 34,
         };
@@ -246,20 +193,16 @@ impl Ui {
             keep.iter().map(|&i| width(full, i) + gap).sum::<i32>() + if more { MORE_W + gap } else { 0 } - gap
         };
         let all: Vec<BarItem> = BAR_ORDER.to_vec();
-        let (full, keep, more) = if sum(true, &all, false) <= avail {
-            (true, all, false)
-        } else if sum(false, &all, false) <= avail {
-            (false, all, false)
-        } else {
-            let mut keep = all;
-            for d in BAR_DROP {
-                keep.retain(|&i| i != d);
-                if sum(false, &keep, true) <= avail {
-                    break;
+        let (full, keep, more) = if sum(true, &all, false) <= avail { (true, all, false) }
+            else if sum(false, &all, false) <= avail { (false, all, false) }
+            else {
+                let mut keep = all;
+                for d in BAR_DROP {
+                    keep.retain(|&i| i != d);
+                    if sum(false, &keep, true) <= avail { break; }
                 }
-            }
-            (false, keep, true)
-        };
+                (false, keep, true)
+            };
         let hidden: Vec<BarItem> = BAR_ORDER.into_iter().filter(|i| !keep.contains(i)).collect();
         let total = sum(full, &keep, more);
         let mut x = if wide { right - total } else { left };
@@ -279,25 +222,17 @@ impl Ui {
         let bar = self.panel_bar(p);
         let (hy, hh) = if bar.wide { (p.y - STRIP_H, 40) } else { (p.y, TOOL_H) };
         if let Some((field, close)) = bar.field {
-            if Rect::new(close.x, hy, close.w, hh).contains(x, y) {
-                return Some(Some(BarItem::Search));
-            }
+            if Rect::new(close.x, hy, close.w, hh).contains(x, y) { return Some(Some(BarItem::Search)); }
             return Rect::new(field.x, hy, field.w, hh).contains(x, y).then_some(None);
         }
-        if let Some(s) = bar.slots.iter().find(|s| s.hit.contains(x, y)) {
-            return Some(Some(s.item));
-        }
+        if let Some(s) = bar.slots.iter().find(|s| s.hit.contains(x, y)) { return Some(Some(s.item)); }
         bar.more.filter(|m| m.hit.contains(x, y)).map(|_| None)
     }
 
     /// The rectangle a dropdown opens under: its control, or the ... button when the control is behind it.
     fn panel_anchor(&self, p: Rect, which: PanelDrop) -> Option<Rect> {
         let bar = self.panel_bar(p);
-        let item = match which {
-            PanelDrop::Source => BarItem::Source,
-            PanelDrop::Gate => BarItem::Gate,
-            PanelDrop::More => return bar.more.map(|m| m.r),
-        };
+        let item = match which { PanelDrop::Source => BarItem::Source, PanelDrop::Gate => BarItem::Gate, PanelDrop::More => return bar.more.map(|m| m.r) };
         bar.slots.iter().find(|s| s.item == item).map(|s| s.r).or(bar.more.map(|m| m.r))
     }
 
@@ -344,9 +279,7 @@ impl Ui {
     pub(super) fn panel_sources(&self) -> Vec<WaveId> {
         let mut v: Vec<WaveId> = Vec::new();
         for r in self.meas_rows().iter().filter(|r| !self.meas_row_hidden(r)) {
-            if !v.contains(&r.src) {
-                v.push(r.src);
-            }
+            if !v.contains(&r.src) { v.push(r.src); }
         }
         v
     }
@@ -378,15 +311,10 @@ impl Ui {
         match which {
             PanelDrop::Source => {
                 let mut v = vec![("All sources".to_string(), self.studio.filter.is_none())];
-                for s in self.panel_sources() {
-                    v.push((self.wave_name(s), self.studio.filter == Some(s)));
-                }
+                for s in self.panel_sources() { v.push((self.wave_name(s), self.studio.filter == Some(s))); }
                 v
             }
-            PanelDrop::Gate => vec![
-                ("Full record".to_string(), self.m.meas_full_record),
-                ("Screen".to_string(), !self.m.meas_full_record),
-            ],
+            PanelDrop::Gate => vec![("Full record".to_string(), self.m.meas_full_record), ("Screen".to_string(), !self.m.meas_full_record)],
             PanelDrop::More => self.panel_more_rows().into_iter().map(|(label, on, _)| (label, on)).collect(),
         }
     }
@@ -396,11 +324,7 @@ impl Ui {
     }
 
     pub(super) fn panel_gate_label(&self) -> &'static str {
-        if self.m.meas_full_record {
-            "Full record"
-        } else {
-            "Screen"
-        }
+        if self.m.meas_full_record { "Full record" } else { "Screen" }
     }
 
     /// The popup list of the open dropdown: under its button, one row of `MENU_ROW` per option.
@@ -422,14 +346,9 @@ impl Ui {
     /// A tap while a dropdown is open: it picks an option or closes. Always taken.
     pub(super) fn panel_drop_tap(&mut self, x: i32, y: i32) -> bool {
         let Some(which) = self.studio.panel.drop else { return false };
-        let Some(p) = self.panel_drop_rect() else {
-            self.studio.panel.drop = None;
-            return false;
-        };
+        let Some(p) = self.panel_drop_rect() else { self.studio.panel.drop = None; return false };
         self.studio.panel.drop = None;
-        if !p.contains(x, y) {
-            return true;
-        }
+        if !p.contains(x, y) { return true; }
         let opts = self.panel_drop_options(which);
         let Some(i) = (0..opts.len()).find(|&i| Self::panel_drop_row(p, i).contains(x, y)) else { return true };
         match which {
@@ -441,9 +360,7 @@ impl Ui {
             PanelDrop::Gate => self.select_option(Item::MeasGate, if i == 0 { "Full record" } else { "Screen" }),
             PanelDrop::More => match self.panel_more_rows().get(i).map(|r| r.2) {
                 Some(MoreAct::Item(it)) => self.panel_bar_do(it),
-                Some(MoreAct::Gate(full)) => {
-                    self.select_option(Item::MeasGate, if full { "Full record" } else { "Screen" })
-                }
+                Some(MoreAct::Gate(full)) => self.select_option(Item::MeasGate, if full { "Full record" } else { "Screen" }),
                 Some(MoreAct::Stats(mode)) => self.panel_stats_set(mode),
                 None => {}
             },
@@ -453,9 +370,7 @@ impl Ui {
 
     /// A tap on the toolbar of a narrow panel. False: not on it. (The bar in the title strip is taken by the dock.)
     pub(super) fn panel_head_tap(&mut self, g: &PanelGeo, x: i32, y: i32) -> bool {
-        if self.panel_bar_wide(g.p) {
-            return false;
-        }
+        if self.panel_bar_wide(g.p) { return false; }
         let Some(hit) = self.panel_bar_hit(g.p, x, y) else { return false };
         self.panel_bar_tap_item(hit);
         true
@@ -480,9 +395,7 @@ impl Ui {
     /// "6 results . 3 pinned": only while something filters the list.
     pub(super) fn panel_caption(&self) -> Option<String> {
         let st = &self.studio.panel;
-        if st.query.is_empty() && self.studio.filter.is_none() && !st.pinned_only {
-            return None;
-        }
+        if st.query.is_empty() && self.studio.filter.is_none() && !st.pinned_only { return None; }
         let rows = self.meas_rows();
         Some(format!("{} results \u{b7} {} pinned", self.studio_listed(&rows).len(), self.studio_pinned().len()))
     }
@@ -498,11 +411,7 @@ impl Ui {
             cv.line(cx + 3, cy + 3, cx + 7, cy + 7, TEXT);
             let text = Rect::new(field.x + 24, field.y, (close.x - field.x - 26).max(1), field.h);
             cv.set_clip(text);
-            if st.query.is_empty() {
-                cv.text_in(&f.s, text, 0, "Search measurements", DIM);
-            } else {
-                cv.text_in(&f.m, text, 0, &st.query, TEXT);
-            }
+            if st.query.is_empty() { cv.text_in(&f.s, text, 0, "Search measurements", DIM); } else { cv.text_in(&f.m, text, 0, &st.query, TEXT); }
             cv.no_clip();
             let (xc, yc) = (close.x + close.w / 2, close.y + close.h / 2);
             cv.line(xc - 4, yc - 4, xc + 4, yc + 4, TEXT);
@@ -513,50 +422,26 @@ impl Ui {
             let r = s.r;
             let more = bar.more.is_some_and(|m| m.r == r);
             let on = !more && self.panel_item_on(s.item);
-            let open = match s.item {
-                BarItem::Source => st.drop == Some(PanelDrop::Source),
-                BarItem::Gate => st.drop == Some(PanelDrop::Gate),
-                _ => false,
-            } || (more && st.drop == Some(PanelDrop::More));
+            let open = match s.item { BarItem::Source => st.drop == Some(PanelDrop::Source), BarItem::Gate => st.drop == Some(PanelDrop::Gate), _ => false } || (more && st.drop == Some(PanelDrop::More));
             let lit = on && matches!(s.item, BarItem::Pinned | BarItem::Search | BarItem::Stats);
             let fill = if lit { mix(BTN, ACCENT, if s.item == BarItem::Pinned { 70 } else { 35 }) } else { BTN };
             chip(cv, r, fill, if open || on { ACCENT } else { BTN_BORDER });
             let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
             if more {
-                for dx in [-6, 0, 6] {
-                    cv.circle(cx + dx, cy, 2, TEXT);
-                }
+                for dx in [-6, 0, 6] { cv.circle(cx + dx, cy, 2, TEXT); }
                 continue;
             }
             match s.item {
                 BarItem::Source | BarItem::Gate => {
                     let label = if s.item == BarItem::Source {
-                        if bar.full {
-                            self.panel_source_label()
-                        } else {
-                            self.studio.filter.map_or("All".to_string(), |id| self.wave_name(id))
-                        }
-                    } else if bar.full {
-                        self.panel_gate_label().to_string()
-                    } else if self.m.meas_full_record {
-                        "Record".to_string()
-                    } else {
-                        "Screen".to_string()
-                    };
+                        if bar.full { self.panel_source_label() } else { self.studio.filter.map_or("All".to_string(), |id| self.wave_name(id)) }
+                    } else if bar.full { self.panel_gate_label().to_string() } else if self.m.meas_full_record { "Record".to_string() } else { "Screen".to_string() };
                     let room = r.w - if bar.full { 26 } else { 8 };
                     let font = if f.m.width(&label) <= room { &f.m } else { &f.s };
                     cv.set_clip(Rect::new(r.x + 3, r.y, r.w - if bar.full { 20 } else { 6 }, r.h));
-                    cv.text_in(
-                        font,
-                        Rect::new(r.x + 8, r.y, r.w - 10, r.h),
-                        if bar.full { 0 } else { 1 },
-                        &label,
-                        if on { ACCENT } else { TEXT },
-                    );
+                    cv.text_in(font, Rect::new(r.x + 8, r.y, r.w - 10, r.h), if bar.full { 0 } else { 1 }, &label, if on { ACCENT } else { TEXT });
                     cv.no_clip();
-                    if bar.full {
-                        chevron_down(cv, r.right() - 14, cy - 3, DIM);
-                    }
+                    if bar.full { chevron_down(cv, r.right() - 14, cy - 3, DIM); }
                 }
                 BarItem::Search => {
                     let c = if on { ACCENT } else { TEXT };
@@ -583,9 +468,7 @@ impl Ui {
 
     /// The toolbar of a narrow panel: its row under the title strip.
     pub(super) fn draw_panel_toolbar(&self, cv: &mut Canvas, g: &PanelGeo) {
-        if self.panel_bar_wide(g.p) {
-            return;
-        }
+        if self.panel_bar_wide(g.p) { return; }
         let bar = self.panel_bar(g.p);
         self.draw_panel_bar(cv, &bar);
         cv.hline(g.p.x + 4, g.p.right() - 5, g.p.y + TOOL_H - 1, LINE);
@@ -598,28 +481,15 @@ impl Ui {
         cv.round(p.inset(1), 7, PANEL_BG, 255);
         // the ... list: a line between its groups (the gate, the statistics, each other control)
         let groups: Vec<u8> = if which == PanelDrop::More {
-            self.panel_more_rows()
-                .iter()
-                .map(|r| match r.2 {
-                    MoreAct::Gate(_) => 1,
-                    MoreAct::Stats(_) => 2,
-                    MoreAct::Item(_) => 0,
-                })
-                .collect()
-        } else {
-            Vec::new()
-        };
+            self.panel_more_rows().iter().map(|r| match r.2 { MoreAct::Gate(_) => 1, MoreAct::Stats(_) => 2, MoreAct::Item(_) => 0 }).collect()
+        } else { Vec::new() };
         for (i, (label, cur)) in self.panel_drop_options(which).into_iter().enumerate() {
             let r = Self::panel_drop_row(p, i);
-            if cur {
-                cv.round(r, 5, mix(PANEL_BG, ACCENT, 40), 255);
-            }
+            if cur { cv.round(r, 5, mix(PANEL_BG, ACCENT, 40), 255); }
             cv.set_clip(r);
             cv.text_in(&f.m, Rect::new(r.x + 10, r.y, r.w - 12, r.h), 0, &label, if cur { ACCENT } else { TEXT });
             cv.no_clip();
-            if i > 0 && groups.get(i).is_some_and(|g| *g != groups[i - 1]) {
-                cv.hline(p.x + 10, p.right() - 11, r.y, BTN_BORDER);
-            }
+            if i > 0 && groups.get(i).is_some_and(|g| *g != groups[i - 1]) { cv.hline(p.x + 10, p.right() - 11, r.y, BTN_BORDER); }
         }
     }
 
@@ -636,12 +506,10 @@ impl Ui {
         let (cols, h, gap) = self.panel_cell_geo(list.w);
         let cw = (list.w - 10 - (cols - 1) * gap) / cols;
         let page = self.panel_cards_page(list.w, list.h);
-        (first..total.min(first + page))
-            .map(|pos| {
-                let k = (pos - first) as i32;
-                (pos, Rect::new(list.x + 2 + (k % cols) * (cw + gap), list.y + (k / cols) * (h + gap), cw, h))
-            })
-            .collect()
+        (first..total.min(first + page)).map(|pos| {
+            let k = (pos - first) as i32;
+            (pos, Rect::new(list.x + 2 + (k % cols) * (cw + gap), list.y + (k / cols) * (h + gap), cw, h))
+        }).collect()
     }
 
     /// How many cards a page of the list holds.
@@ -654,15 +522,7 @@ impl Ui {
     /// the right in the colour of the source, as the strip of the Default layout writes them. A pinned one has an
     /// amber edge. A tap on a cell opens the settings of its measurement; a cell has no pin and no Remove of its own
     /// (the cards have the pin, a row of the table is swiped away, a badge has both in its menu).
-    pub(super) fn draw_panel_strip(
-        &self,
-        cv: &mut Canvas,
-        g: &PanelGeo,
-        rows: &[tools::MeasRow],
-        keys: &[studio::MeasKey],
-        listed: &[usize],
-        first: usize,
-    ) {
+    pub(super) fn draw_panel_strip(&self, cv: &mut Canvas, g: &PanelGeo, rows: &[tools::MeasRow], keys: &[studio::MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
         let pinned = self.studio_pinned();
         for (pos, r) in self.panel_cards_layout(first, listed.len(), g.list) {
@@ -706,26 +566,14 @@ impl Ui {
 
     /// The cards: three lines each. The name and the pin; the value and, at the right, the source in its colour;
     /// two statistics and the count. No space is kept for anything else, so a panel shows as many as it can.
-    pub(super) fn draw_panel_cards(
-        &self,
-        cv: &mut Canvas,
-        g: &PanelGeo,
-        rows: &[tools::MeasRow],
-        keys: &[studio::MeasKey],
-        listed: &[usize],
-        first: usize,
-    ) {
+    pub(super) fn draw_panel_cards(&self, cv: &mut Canvas, g: &PanelGeo, rows: &[tools::MeasRow], keys: &[studio::MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
         let pinned = self.studio_pinned();
         // one font for the values of every card of the list, from the width of the cards and the units, not from the
         // values of the moment (on a unit, 2026-11-20, "68.5 mV" stood smaller than "270 mV" on the card beside it)
         let cards = self.panel_cards_layout(first, listed.len(), g.list);
         let vf = match cards.first() {
-            Some((_, r)) => Self::card_value_shared(
-                f,
-                r.w,
-                listed.iter().filter_map(|&i| rows.get(i)).map(|row| (row.unit, f.sb.width(&self.wave_name(row.src)))),
-            ),
+            Some((_, r)) => Self::card_value_shared(f, r.w, listed.iter().filter_map(|&i| rows.get(i)).map(|row| (row.unit, f.sb.width(&self.wave_name(row.src))))),
             None => &f.lb,
         };
         cv.set_clip(g.list);
@@ -767,30 +615,13 @@ impl Ui {
                 let cell = |v: Option<f64>| v.map_or("----".to_string(), |v| row.fmt(v));
                 let room = r.w - 16;
                 let range = self.studio.panel.stats_mode == 2;
-                let (a, b) = if range {
-                    (cell(st.map(|s| s.1)), cell(st.map(|s| s.2)))
-                } else {
-                    (cell(st.map(|s| s.0)), cell(st.map(|s| s.3)))
-                };
+                let (a, b) = if range { (cell(st.map(|s| s.1)), cell(st.map(|s| s.2))) } else { (cell(st.map(|s| s.0)), cell(st.map(|s| s.3))) };
                 let line = Self::card_stats_line(&f.s, range, row.unit, &a, &b, room);
                 let n = self.results.rows.get(i).map_or(0, |s| s.n);
                 // the source takes the place of the count when it did not fit beside the value
-                let tail = if beside {
-                    if n > 0 {
-                        format!("n {n}")
-                    } else {
-                        String::new()
-                    }
-                } else {
-                    src.clone()
-                };
+                let tail = if beside { if n > 0 { format!("n {n}") } else { String::new() } } else { src.clone() };
                 let with_tail = !tail.is_empty() && f.s.width(&line) + 10 + f.sb.width(&tail) <= room;
-                cv.set_clip(Rect::new(
-                    r.x + 4,
-                    r.y + 40,
-                    r.w - 8 - if with_tail { f.sb.width(&tail) + 8 } else { 0 },
-                    18,
-                ));
+                cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8 - if with_tail { f.sb.width(&tail) + 8 } else { 0 }, 18));
                 cv.text(&f.s, r.x + 8, r.y + 53, &line, DIM);
                 if with_tail {
                     cv.set_clip(Rect::new(r.x + 4, r.y + 40, r.w - 8, 18));
@@ -815,15 +646,10 @@ impl Ui {
     /// panel are 148 px wide: "min 145 mV  max 212 mV" ended at "max" there.
     pub(super) fn card_stats_line(f: &Font, range: bool, unit: &str, a: &str, b: &str, room: i32) -> String {
         let widest = format!("-00.0 m{unit}");
-        let long =
-            |a: &str, b: &str| if range { format!("min {a}  max {b}") } else { format!("\u{b5} {a}  \u{3c3} {b}") };
+        let long = |a: &str, b: &str| if range { format!("min {a}  max {b}") } else { format!("\u{b5} {a}  \u{3c3} {b}") };
         let short = |a: &str, b: &str| if range { format!("{a} .. {b}") } else { format!("{a} \u{b1} {b}") };
-        if f.width(&long(&widest, &widest)) <= room {
-            return long(a, b);
-        }
-        if f.width(&short(&widest, &widest)) <= room {
-            return short(a, b);
-        }
+        if f.width(&long(&widest, &widest)) <= room { return long(a, b); }
+        if f.width(&short(&widest, &widest)) <= room { return short(a, b); }
         // the unit once: the first value without its unit, when both end in the same one
         let tail = |s: &str| s.rsplit_once(' ').map(|(n, u)| (n.to_string(), u.to_string()));
         let once = match (tail(a), tail(b)) {
@@ -840,28 +666,18 @@ impl Ui {
 
     /// The largest font in which a card's value fits `room` px: large, then medium bold, then small bold.
     /// The widest value a card of `unit` shows: three digits with a sign and a prefix.
-    pub(super) fn card_value_widest(unit: &str) -> String {
-        format!("-00.0 m{unit}")
-    }
+    pub(super) fn card_value_widest(unit: &str) -> String { format!("-00.0 m{unit}") }
 
     /// The room of a card's value beside its source tag `sw` px wide, on a card `w` px wide.
-    pub(super) fn card_value_beside(w: i32, sw: i32) -> i32 {
-        w - 8 - sw - 10 - 4
-    }
+    pub(super) fn card_value_beside(w: i32, sw: i32) -> i32 { w - 8 - sw - 10 - 4 }
 
     /// The one font of the values of cards `w` px wide, given each card's unit and the width of its source tag: the
     /// largest in which the widest value of every unit ("-00.0 m" and the unit) fits beside its tag, else the largest
     /// in which it fits across the line, else the smallest.
-    pub(super) fn card_value_shared<'a>(
-        f: &'a crate::font::Fonts,
-        w: i32,
-        cards: impl Iterator<Item = (&'static str, i32)>,
-    ) -> &'a Font {
+    pub(super) fn card_value_shared<'a>(f: &'a crate::font::Fonts, w: i32, cards: impl Iterator<Item = (&'static str, i32)>) -> &'a Font {
         let cards: Vec<(String, i32)> = cards.map(|(unit, sw)| (Self::card_value_widest(unit), sw)).collect();
         let fonts = [&f.lb, &f.mb, &f.sb];
-        fonts
-            .into_iter()
-            .find(|ft| cards.iter().all(|(v, sw)| ft.width(v) <= Self::card_value_beside(w, *sw)))
+        fonts.into_iter().find(|ft| cards.iter().all(|(v, sw)| ft.width(v) <= Self::card_value_beside(w, *sw)))
             .or_else(|| fonts.into_iter().find(|ft| cards.iter().all(|(v, _)| ft.width(v) <= w - 12)))
             .unwrap_or(&f.sb)
     }
@@ -875,8 +691,7 @@ impl Ui {
 /// The pin of a measurement card: about two thirds of the toolbar's, so it sits on the name line (the owner, 2026-11-20:
 /// the pin was too big beside the name).
 fn icon_pin_small(cv: &mut Canvas, x: i32, cy: i32, filled: bool, c: Rgb) {
-    let (cap, barrel, rim) =
-        (Rect::new(x + 2, cy - 6, 8, 3), Rect::new(x + 4, cy - 3, 4, 3), Rect::new(x + 2, cy, 8, 2));
+    let (cap, barrel, rim) = (Rect::new(x + 2, cy - 6, 8, 3), Rect::new(x + 4, cy - 3, 4, 3), Rect::new(x + 2, cy, 8, 2));
     if filled {
         cv.fill(cap, c);
         cv.fill(barrel, c);

@@ -529,11 +529,7 @@ impl Ui {
                     // left in fine steps (the row is in the Horizontal menu) then looked like a broken knob, with no
                     // way back from the panel (reported from a unit, 2026-11-18). The zoom has its button on the
                     // screen and its row; while it is open the knob is the zoom's, and a push closes it.
-                    if self.m.zoom {
-                        self.set_zoom(false);
-                    } else {
-                        self.push_fine_time();
-                    }
+                    if self.m.zoom { self.set_zoom(false); } else { self.push_fine_time(); }
                 } else if self.m.zoom {
                     self.adjust(Item::ZScale, -dir);
                 } else {
@@ -650,15 +646,11 @@ impl Ui {
         self.studio.sz.press = None;
         self.studio.dock.press = None;
         // the lift of the first finger is not a tap either
-        if self.touch.down {
-            self.touch.held = true;
-        }
+        if self.touch.down { self.touch.held = true; }
     }
 
     fn multi_touch(&mut self, id: i32, ph: Phase, x: i32, y: i32) {
-        if id == 1 && ph == Phase::Down {
-            self.second_finger_down();
-        }
+        if id == 1 && ph == Phase::Down { self.second_finger_down(); }
         if self.load_slot_ask {
             if id == 0 && ph == Phase::Up {
                 self.load_slot_tap(x, y);
@@ -1122,9 +1114,7 @@ impl Ui {
                 // a math channel's position is in divisions
                 let mut c = self.m.math_ch(k);
                 c.offset = t.start_offset - dy as f32 / ppy;
-                if k == self.m.math_sel {
-                    self.m.math_offset = c.offset;
-                }
+                if k == self.m.math_sel { self.m.math_offset = c.offset; }
                 self.m.maths[k] = c;
                 self.settings_changed();
             }
@@ -1139,19 +1129,14 @@ impl Ui {
                 let at = x.clamp(overview.x, overview.right()) - overview.x - overview.w / 2;
                 let time = self.m.delay + at as f32 / (overview.w as f32 / HDIV) * self.m.time_per_div();
                 let (t0, t1) = (t.start_cur.min(time), t.start_cur.max(time));
-                if t1 - t0 < 4.0 * self.m.time_per_div() * HDIV / overview.w.max(1) as f32 {
-                    return;
-                }
+                if t1 - t0 < 4.0 * self.m.time_per_div() * HDIV / overview.w.max(1) as f32 { return; }
                 // the finest step whose window holds the box, and not slower than the main time base
                 let scales = tscales();
                 let mut z = 0;
-                while z < self.m.tscale && scales[z] * HDIV < (t1 - t0) * 0.999 {
-                    z += 1;
-                }
+                while z < self.m.tscale && scales[z] * HDIV < (t1 - t0) * 0.999 { z += 1; }
                 self.m.zscale = z;
                 self.m.zdelay = (t0 + t1) * 0.5;
-                self.clamp_zoom();
-                self.settings_changed();
+                self.clamp_zoom(); self.settings_changed();
             }
             Drag::ZoomLeft | Drag::ZoomRight => {
                 let overview = self.split_zoom(self.plot.grid).0;
@@ -1232,16 +1217,12 @@ impl Ui {
                     Drag::CursorA => {
                         let moved = v - self.m.cur_a;
                         self.m.cur_a = v;
-                        if self.studio.cur_linked && self.m.layout == Layout::Studio {
-                            self.m.cur_b = (self.m.cur_b + moved).clamp(0.0, 1.0);
-                        }
+                        if self.studio.cur_linked && self.m.layout == Layout::Studio { self.m.cur_b = (self.m.cur_b + moved).clamp(0.0, 1.0); }
                     }
                     Drag::CursorB => {
                         let moved = v - self.m.cur_b;
                         self.m.cur_b = v;
-                        if self.studio.cur_linked && self.m.layout == Layout::Studio {
-                            self.m.cur_a = (self.m.cur_a + moved).clamp(0.0, 1.0);
-                        }
+                        if self.studio.cur_linked && self.m.layout == Layout::Studio { self.m.cur_a = (self.m.cur_a + moved).clamp(0.0, 1.0); }
                     }
                     Drag::CursorC => self.m.cur_c = v,
                     Drag::CursorD => self.m.cur_d = v,
@@ -1659,9 +1640,7 @@ impl Ui {
             // only the page: an output does not come on by touching a card
             return self.toggle_menu(MenuId::Afg);
         }
-        if self.card_layout().refs.is_some_and(|r| r.contains(x, y)) {
-            return self.cycle_active_ref();
-        }
+        if self.card_layout().refs.is_some_and(|r| r.contains(x, y)) { return self.cycle_active_ref(); }
         if tr.contains(x, y) {
             // Default's cards, as upstream OOS: the zoom/delay line, the lower half, toggles zoom without opening
             // Horizontal. The compact bars of Minimal and Studio count only what is drawn as a button.
@@ -1707,17 +1686,11 @@ impl Ui {
             // compact bars: the Source and Mode buttons are what is drawn as buttons; the rest opens the trigger page
             let (sb, mb) = Self::trig_parts(trg);
             let near = |b: Rect| Rect::new(b.x - 2, b.y - 2, b.w + 4, b.h + 4).contains(x, y);
-            if near(sb) {
-                return self.adjust(Item::TrigSrc, 1);
-            }
-            if near(mb) {
-                return self.adjust(Item::TrigMode, 1);
-            }
+            if near(sb) { return self.adjust(Item::TrigSrc, 1); }
+            if near(mb) { return self.adjust(Item::TrigMode, 1); }
             return self.toggle_menu(MenuId::Trigger);
         }
-        if self.plot_tap(x, y) {
-            return;
-        }
+        if self.plot_tap(x, y) { return; }
         if self.menu_open && self.plot.grid.contains(x, y) {
             self.close_menu();
         }

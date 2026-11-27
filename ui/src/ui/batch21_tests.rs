@@ -11,9 +11,7 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -28,9 +26,7 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -54,20 +50,12 @@ fn tap(u: &mut Ui, r: Rect) {
 fn open_menu(u: &mut Ui) {
     let gear = u.studio_top().gear;
     tap(u, gear);
-    for _ in 0..3 {
-        frame(u);
-    }
+    for _ in 0..3 { frame(u); }
     assert!(u.menu_open && u.menu == MenuId::Main && u.sheet_active());
 }
 
 fn cell(u: &Ui, it: Item) -> Rect {
-    u.menu_geo()
-        .groups
-        .iter()
-        .flat_map(|g| g.items.iter())
-        .find(|(i, _)| *i == it)
-        .unwrap_or_else(|| panic!("{it:?} is in the Menu"))
-        .1
+    u.menu_geo().groups.iter().flat_map(|g| g.items.iter()).find(|(i, _)| *i == it).unwrap_or_else(|| panic!("{it:?} is in the Menu")).1
 }
 
 fn scroll_to(u: &mut Ui, it: Item) {
@@ -92,33 +80,8 @@ fn the_gear_sheet_is_the_grouped_menu_with_every_group_and_entry() {
     let want: [(&str, Vec<Item>); 7] = [
         ("Acquisition", vec![RunStop, SingleAct, AutosetAct, ClearDisp, DefaultAct, Open(M::Acquire)]),
         ("Trigger", vec![Open(M::Trigger), SlopeAct, ForceAct, Open(M::Zone)]),
-        (
-            "Analysis",
-            vec![
-                Open(M::Measure),
-                Open(M::Cursor),
-                Open(M::Math),
-                Open(M::Ref),
-                Open(M::Sim),
-                Open(M::Decode),
-                Open(M::Bus),
-                Open(M::Mask),
-            ],
-        ),
-        (
-            "Analysers",
-            vec![
-                Open(M::Spectrum),
-                Open(M::Eye),
-                Open(M::Power),
-                Open(M::Bode),
-                Open(M::BwTest),
-                IdentifyAct,
-                Open(M::Magnetic),
-                Open(M::Inverter),
-                Open(M::Dpt),
-            ],
-        ),
+        ("Analysis", vec![Open(M::Measure), Open(M::Cursor), Open(M::Math), Open(M::Ref), Open(M::Sim), Open(M::Decode), Open(M::Bus), Open(M::Mask)]),
+        ("Analysers", vec![Open(M::Spectrum), Open(M::Eye), Open(M::Power), Open(M::Bode), Open(M::BwTest), IdentifyAct, Open(M::Magnetic), Open(M::Inverter), Open(M::Dpt)]),
         ("Instruments", vec![Open(M::Dvm), Open(M::Logger)]),
         ("Display", vec![Open(M::Display), Open(M::Horizontal), NavHist]),
         ("System", vec![Open(M::Utility), Open(M::Storage), Shot, QuickRun, LockAct, PowerAct]),
@@ -128,9 +91,7 @@ fn the_gear_sheet_is_the_grouped_menu_with_every_group_and_entry() {
         let have: Vec<Item> = grp.items.iter().map(|x| x.0).collect();
         if name == "Instruments" {
             // the generator and the logic analyser only on models that have them
-            for it in &items {
-                assert!(have.contains(it), "{name}: {it:?}");
-            }
+            for it in &items { assert!(have.contains(it), "{name}: {it:?}"); }
             assert_eq!(have.contains(&Open(M::Afg)), oos_hal::model::platform().caps.has_gen());
             assert_eq!(have.contains(&Open(M::La)), la::available());
         } else {
@@ -237,9 +198,7 @@ fn the_other_layouts_keep_their_menu() {
     for layout in [Layout::Default, Layout::Minimal] {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = layout;
-        for _ in 0..8 {
-            u.step(0.05);
-        }
+        for _ in 0..8 { u.step(0.05); }
         u.open_menu(MenuId::Main);
         assert!(!u.sheet_active(), "{layout:?}: classic dialog");
         assert!(u.dlg_layout().is_some());
@@ -253,19 +212,12 @@ fn la_and_gen_pills_sit_after_plus_ch_and_open_their_sheets() {
     let b = u.studio_bottom();
     assert_eq!(b.la.is_some(), caps.la);
     assert_eq!(b.gen.is_some(), caps.has_gen());
-    if let (Some(la), Some(gen)) = (b.la, b.gen) {
-        assert!(b.add.right() < la.x && la.right() < gen.x);
-    }
+    if let (Some(la), Some(gen)) = (b.la, b.gen) { assert!(b.add.right() < la.x && la.right() < gen.x); }
     for r in [b.la, b.gen].into_iter().flatten() {
         assert!(r.h >= 28 && Ui::hit40(r).h >= 40);
         assert!(r.right() < b.time.x - 5, "inside the room before the time base");
     }
-    for c in 0..n_ch() {
-        if b.ch[c].w > 0 {
-            assert!(b.ch[c].right() < b.add.x);
-            assert!(b.ch[c].w >= if u.m.ch[c].on { 60 } else { 40 });
-        }
-    }
+    for c in 0..n_ch() { if b.ch[c].w > 0 { assert!(b.ch[c].right() < b.add.x); assert!(b.ch[c].w >= if u.m.ch[c].on { 60 } else { 40 }); } }
     if let Some(r) = b.gen {
         let off_w = r.w;
         u.m.afg_on = true;
@@ -308,9 +260,7 @@ fn sim_is_in_the_menu_and_live_is_in_the_top_bar_when_viewing_a_record() {
     assert!(u.menu_open && u.menu == MenuId::Sim, "the SIM sheet");
     u.activate(Item::SimPlay);
     u.wait_sim_generation();
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     assert!(u.record_mode());
     let t = u.studio_top();
     assert!(t.badge.w > 0);
@@ -339,17 +289,9 @@ fn tap_cell(u: &mut Ui, it: Item) {
 // ------------------------------------------------------------------------------------------------ measurement views
 
 fn two_sources(u: &mut Ui) {
-    u.m.meas = vec![
-        (Meas::Vpp, WaveId::Ch(0)),
-        (Meas::Freq, WaveId::Ch(0)),
-        (Meas::Vamp, WaveId::Ch(1)),
-        (Meas::Freq, WaveId::Ch(1)),
-        (Meas::Rise, WaveId::Ch(0)),
-    ];
+    u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vamp, WaveId::Ch(1)), (Meas::Freq, WaveId::Ch(1)), (Meas::Rise, WaveId::Ch(0))];
     u.ensure_meas_own();
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
 }
 
 fn listed(u: &Ui) -> usize {
@@ -364,10 +306,7 @@ fn tap_xy(u: &mut Ui, x: i32, y: i32) {
 }
 
 fn view_seg(u: &Ui, k: i32) -> (i32, i32) {
-    let r = u
-        .dock_rect(super::dock::VKind::Measure)
-        .and_then(|r| u.dock_view_rect(super::dock::VKind::Measure, r))
-        .expect("the view switch");
+    let r = u.dock_rect(super::dock::VKind::Measure).and_then(|r| u.dock_view_rect(super::dock::VKind::Measure, r)).expect("the view switch");
     let k = [0, 2, 1][k as usize]; // the switch reads strip (List), table (Detailed), cards
     (r.x + (2 * k + 1) * r.w / 6, r.y + r.h / 2)
 }
@@ -387,13 +326,7 @@ fn the_panel_has_list_cards_and_detailed_and_the_strip_switch_picks_one() {
     let l = u.studio_listed(&rows);
     let cards = u.panel_cards_layout(0, l.len(), g.list);
     assert!(cards.len() >= 2 && cards.len() == g.page.min(l.len()));
-    for (_, r) in &cards {
-        assert!(
-            r.x >= g.list.x && r.right() <= g.list.right() && r.bottom() <= g.list.bottom(),
-            "{r:?} in {:?}",
-            g.list
-        );
-    }
+    for (_, r) in &cards { assert!(r.x >= g.list.x && r.right() <= g.list.right() && r.bottom() <= g.list.bottom(), "{r:?} in {:?}", g.list); }
     assert!(cards[0].1.right() < cards[1].1.x, "two columns");
     shot(&mut u, "meas-cards");
     let (x, y) = view_seg(&u, 2);
@@ -457,9 +390,7 @@ fn the_list_has_the_header_with_source_gate_search_count_and_pinned_only() {
     u.studio_set_pin(super::studio::MeasKey::One(Meas::Vpp, WaveId::Ch(0)), true);
     let pinned = u.studio_pinned().len();
     assert!(pinned >= 1 && pinned < total);
-    let item = |u: &Ui, it| {
-        u.panel_bar(u.studio_panel_geo().unwrap().p).slots.iter().find(|s| s.item == it).expect("a control").r
-    };
+    let item = |u: &Ui, it| u.panel_bar(u.studio_panel_geo().unwrap().p).slots.iter().find(|s| s.item == it).expect("a control").r;
     let r = item(&u, super::measpanel::BarItem::Pinned);
     tap(&mut u, r);
     assert!(u.studio.panel.pinned_only);
@@ -525,33 +456,23 @@ fn the_classic_badge_strip_has_a_row_per_source_with_even_columns() {
     let mut u = studio();
     u.studio_set_view(StudioView::Waveform); // batch 22: the row is for a closed panel
     two_sources(&mut u);
-    for k in u.studio_keys() {
-        u.studio_set_pin(k, true);
-    }
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for k in u.studio_keys() { u.studio_set_pin(k, true); }
+    for _ in 0..4 { frame(&mut u); }
     // the classic strip is the style of a new set-up; the test starts from the other one
     assert!(u.m.studio_classic && Model::default().studio_classic, "Classic is the default");
     u.studio_set_classic(false);
-    for _ in 0..2 {
-        frame(&mut u);
-    }
+    for _ in 0..2 { frame(&mut u); }
     let studio_h = u.studio_row().h;
     assert!(u.studio_badges().len() >= 3);
     // the setting: Measure > Badge style
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
     assert_eq!(u.options(Item::BadgeStyle), ["Studio", "Classic"]);
     u.open_menu(MenuId::Measure);
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     assert!(u.sheet_spec(MenuId::Measure).unwrap().tabs.iter().any(|t| t.rows.contains(&Item::BadgeStyle)));
     u.select_option(Item::BadgeStyle, "Classic");
     u.close_menu();
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert!(u.m.studio_classic && u.studio_classic());
     let l = u.classic_layout();
     assert_eq!(l.chips.len(), 2, "CH1 and CH2");
@@ -567,26 +488,13 @@ fn the_classic_badge_strip_has_a_row_per_source_with_even_columns() {
     assert!(a[1] > a[0]);
     // nothing on top of each other, nothing past the lanes, and a pair is still a tap target
     let row = u.studio_row();
-    for (_, r) in &l.pairs {
-        assert!(
-            r.x >= row.x && r.right() <= u.studio_row_limit() && r.y >= row.y && r.bottom() <= row.bottom(),
-            "{r:?} in {row:?}"
-        );
-        assert!(r.h >= 20);
-    }
-    for w in l.pairs.windows(2) {
-        if w[0].1.y == w[1].1.y {
-            assert!(w[0].1.right() <= w[1].1.x);
-        }
-    }
+    for (_, r) in &l.pairs { assert!(r.x >= row.x && r.right() <= u.studio_row_limit() && r.y >= row.y && r.bottom() <= row.bottom(), "{r:?} in {row:?}"); assert!(r.h >= 20); }
+    for w in l.pairs.windows(2) { if w[0].1.y == w[1].1.y { assert!(w[0].1.right() <= w[1].1.x); } }
     shot(&mut u, "classic-badges");
     let (key, r) = u.studio_badges()[0];
     tap(&mut u, r);
     // a measurement that can be drawn is shown on the waveform first; the next tap opens the popup
-    if u.studio.popup.is_none() {
-        assert_eq!(u.studio.mark, Some(key));
-        tap(&mut u, r);
-    }
+    if u.studio.popup.is_none() { assert_eq!(u.studio.mark, Some(key)); tap(&mut u, r); }
     assert_eq!(u.studio.popup, Some(key), "a tap on a pair opens the badge popup");
     u.studio.popup = None;
     // no internal names: the amplitude shows its display name
@@ -604,17 +512,7 @@ fn the_classic_badge_strip_has_a_row_per_source_with_even_columns() {
 // ------------------------------------------------------------------------------------------------ R and M pills
 
 fn a_ref(label: &str) -> RefWave {
-    RefWave {
-        src: 0,
-        color: 0,
-        label: label.into(),
-        t0: 0.0,
-        dt: 1e-6,
-        v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(),
-        vpd: 1.0,
-        offset: 0.0,
-        on: true,
-    }
+    RefWave { src: 0, color: 0, label: label.into(), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true }
 }
 
 #[test]
@@ -622,9 +520,7 @@ fn an_r_pill_selects_its_slot_and_opens_the_reference_sheet_like_a_channel_pill(
     let mut u = studio();
     u.refs[0] = Some(a_ref("R1"));
     u.refs[1] = Some(a_ref("R2"));
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let b = u.studio_bottom();
     assert!(b.refs[0].w > 0 && b.refs[1].w > 0);
     tap(&mut u, b.refs[0]);
@@ -646,9 +542,7 @@ fn an_r_pill_selects_its_slot_and_opens_the_reference_sheet_like_a_channel_pill(
 fn an_m_pill_opens_the_math_sheet_on_its_slot() {
     let mut u = studio();
     u.m.math = crate::math::MathOp::Add;
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let b = u.studio_bottom();
     let k = (0..NMATH).find(|&k| b.math[k].w > 0).expect("an M pill");
     tap(&mut u, b.math[k]);
@@ -662,9 +556,7 @@ fn an_m_pill_opens_the_math_sheet_on_its_slot() {
 
 fn open_trigger(u: &mut Ui) {
     u.open_menu(MenuId::Trigger);
-    for _ in 0..3 {
-        frame(u);
-    }
+    for _ in 0..3 { frame(u); }
 }
 
 fn value_rect(u: &Ui, it: Item) -> Rect {
@@ -695,27 +587,12 @@ fn a_tap_on_the_value_of_a_stepper_row_opens_the_pad_and_the_keys_enter_a_value(
     assert!(p.x >= 0 && p.right() <= W && p.y >= 0 && p.bottom() <= H);
     for (k, r) in &keys {
         assert!(r.h >= 40 && r.w >= 40, "{k:?} {r:?}");
-        assert!(
-            r.x >= p.x && r.right() <= p.right() && r.y >= field.bottom() && r.bottom() <= p.bottom(),
-            "{k:?} inside"
-        );
+        assert!(r.x >= p.x && r.right() <= p.right() && r.y >= field.bottom() && r.bottom() <= p.bottom(), "{k:?} inside");
     }
-    for (i, (a, ra)) in keys.iter().enumerate() {
-        for (b, rb) in &keys[i + 1..] {
-            assert!(
-                ra.right() <= rb.x || rb.right() <= ra.x || ra.bottom() <= rb.y || rb.bottom() <= ra.y,
-                "{a:?} {b:?} overlap"
-            );
-        }
-    }
+    for (i, (a, ra)) in keys.iter().enumerate() { for (b, rb) in &keys[i + 1..] { assert!(ra.right() <= rb.x || rb.right() <= ra.x || ra.bottom() <= rb.y || rb.bottom() <= ra.y, "{a:?} {b:?} overlap"); } }
     // the labels the owner asked for
     let labels: Vec<String> = keys.iter().map(|(k, _)| Ui::numpad_label(*k)).collect();
-    for l in [
-        "0", "9", ".", "\u{b1}", "Bksp", "Clear", "Exp", "G", "M", "k", "m", "\u{b5}", "n", "p", "None", "Min", "Max",
-        "Cancel", "Enter",
-    ] {
-        assert!(labels.iter().any(|x| x == l), "{l}");
-    }
+    for l in ["0", "9", ".", "\u{b1}", "Bksp", "Clear", "Exp", "G", "M", "k", "m", "\u{b5}", "n", "p", "None", "Min", "Max", "Cancel", "Enter"] { assert!(labels.iter().any(|x| x == l), "{l}"); }
     assert_eq!(u.numpad.as_ref().unwrap().unit, "V");
     assert!(u.numpad.as_ref().unwrap().fresh, "the current value is selected");
     shot(&mut u, "keypad");
@@ -725,23 +602,13 @@ fn a_tap_on_the_value_of_a_stepper_row_opens_the_pad_and_the_keys_enter_a_value(
     assert!((u.m.trig_level - 0.45).abs() < 1e-6, "{}", u.m.trig_level);
     assert_eq!(u.value(Item::TrigLevel), "450 mV");
     // Enter without a prefix is in the unit shown
-    {
-        let r = value_rect(&u, Item::TrigLevel);
-        tap(&mut u, r);
-    }
+    { let r = value_rect(&u, Item::TrigLevel); tap(&mut u, r); }
     press(&mut u, &[Digit(1), Dot, Digit(2), Enter]);
     assert!((u.m.trig_level - 1.2).abs() < 1e-6 && u.numpad.is_none());
     // sign and Bksp and Exp
-    {
-        let r = value_rect(&u, Item::TrigLevel);
-        tap(&mut u, r);
-    }
+    { let r = value_rect(&u, Item::TrigLevel); tap(&mut u, r); }
     press(&mut u, &[Digit(5), Digit(5), Bksp, Sign, Digit(1), Exp, Sign, Digit(1), Enter]);
-    assert!(
-        (u.m.trig_level + 0.51).abs() < 1e-6 || (u.m.trig_level + 0.5).abs() < 1e-6 || u.m.trig_level < 0.0,
-        "{}",
-        u.m.trig_level
-    );
+    assert!((u.m.trig_level + 0.51).abs() < 1e-6 || (u.m.trig_level + 0.5).abs() < 1e-6 || u.m.trig_level < 0.0, "{}", u.m.trig_level);
 }
 
 #[test]
@@ -750,32 +617,20 @@ fn cancel_changes_nothing_and_min_max_set_the_limits_and_an_out_of_range_value_i
     let mut u = studio();
     open_trigger(&mut u);
     u.m.trig_level = 0.3;
-    {
-        let r = value_rect(&u, Item::TrigLevel);
-        tap(&mut u, r);
-    }
+    { let r = value_rect(&u, Item::TrigLevel); tap(&mut u, r); }
     press(&mut u, &[Digit(9), Digit(9), Cancel]);
     assert!(u.numpad.is_none());
     assert_eq!(u.m.trig_level, 0.3, "Cancel leaves it");
     let (lo, hi) = u.numpad_limits(Item::TrigLevel).unwrap();
     assert!(lo < 0.0 && hi > 0.0 && (hi + lo).abs() < 1e-9);
-    {
-        let r = value_rect(&u, Item::TrigLevel);
-        tap(&mut u, r);
-    }
+    { let r = value_rect(&u, Item::TrigLevel); tap(&mut u, r); }
     press(&mut u, &[Max]);
     assert!((u.m.trig_level as f64 - hi).abs() < 1e-5, "Max sets the limit");
-    {
-        let r = value_rect(&u, Item::TrigLevel);
-        tap(&mut u, r);
-    }
+    { let r = value_rect(&u, Item::TrigLevel); tap(&mut u, r); }
     press(&mut u, &[Min]);
     assert!((u.m.trig_level as f64 - lo).abs() < 1e-5, "Min sets the limit");
     // out of range: clamped, and the clamped value is said
-    {
-        let r = value_rect(&u, Item::TrigLevel);
-        tap(&mut u, r);
-    }
+    { let r = value_rect(&u, Item::TrigLevel); tap(&mut u, r); }
     press(&mut u, &[Digit(9), Digit(9), Digit(9), Enter]);
     assert!((u.m.trig_level as f64 - hi).abs() < 1e-5, "clamped to the limit: {}", u.m.trig_level);
     assert!(toast_text(&u).contains("Limited to"), "{}", toast_text(&u));
@@ -786,9 +641,7 @@ fn the_pad_works_for_a_stepper_item_without_its_own_setter() {
     use super::numpad::NumKey::*;
     let mut u = studio();
     u.open_menu(MenuId::Channel(0));
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     let r = value_rect(&u, Item::ChOffset(0));
     tap(&mut u, r);
     assert!(u.numpad.is_some());
@@ -798,9 +651,7 @@ fn the_pad_works_for_a_stepper_item_without_its_own_setter() {
     assert!((v - 0.5).abs() < 0.06, "the stepper's grid: {v}");
     // the time base goes through its own sequence
     u.open_menu(MenuId::Horizontal);
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     let r = value_rect(&u, Item::HScale);
     tap(&mut u, r);
     press(&mut u, &[Digit(1), Digit(0), Digit(0), Prefix(-6)]);
@@ -818,12 +669,8 @@ fn the_pad_is_a_studio_sheet_feature_and_the_other_layouts_keep_their_value_taps
     assert_eq!(super::numpad::split_value("Edge"), None);
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Default;
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u.open_menu(MenuId::Trigger);
     assert!(u.numpad.is_none() && !u.sheet_active());
 }
-fn toast_text(u: &Ui) -> String {
-    u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default()
-}
+fn toast_text(u: &Ui) -> String { u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default() }

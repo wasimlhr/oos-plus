@@ -13,9 +13,7 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -31,9 +29,7 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -43,32 +39,20 @@ fn shot(u: &mut Ui, name: &str) {
 }
 
 fn two_sources(u: &mut Ui) {
-    u.m.meas = vec![
-        (Meas::Vpp, WaveId::Ch(0)),
-        (Meas::Freq, WaveId::Ch(0)),
-        (Meas::Vpp, WaveId::Ch(1)),
-        (Meas::Freq, WaveId::Ch(1)),
-    ];
+    u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(1)), (Meas::Freq, WaveId::Ch(1))];
     u.ensure_meas_own();
-    for _ in 0..4 {
-        frame(u);
-    }
+    for _ in 0..4 { frame(u); }
 }
 
 fn one_source(u: &mut Ui) {
     u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vavg, WaveId::Ch(0))];
     u.ensure_meas_own();
-    for _ in 0..4 {
-        frame(u);
-    }
+    for _ in 0..4 { frame(u); }
 }
 
 /// Pixels of exactly this colour in `r` of a canvas.
 fn count(cv: &Canvas, r: Rect, col: Rgb) -> usize {
-    (r.y..r.bottom())
-        .flat_map(|y| (r.x..r.right()).map(move |x| (x, y)))
-        .filter(|&(x, y)| cv.px[(y * W + x) as usize] == col)
-        .count()
+    (r.y..r.bottom()).flat_map(|y| (r.x..r.right()).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] == col).count()
 }
 
 #[test]
@@ -76,9 +60,7 @@ fn the_detailed_table_names_the_source_in_every_row_beside_its_colour_bar() {
     let mut u = studio();
     two_sources(&mut u);
     u.studio_set_detailed(true);
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let g = u.studio_panel_geo().unwrap();
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
@@ -86,10 +68,7 @@ fn the_detailed_table_names_the_source_in_every_row_beside_its_colour_bar() {
     let c0 = u.wave_color(WaveId::Ch(0));
     let name = |k: i32| Rect::new(g.list.x + 10, g.list.y + k * pitch, 24, pitch);
     assert!(count(&cv, name(0), c0) > 5, "CH1 in the first row");
-    assert!(
-        count(&cv, name(1), c0) > 0 || count(&cv, name(1), u.wave_color(WaveId::Ch(1))) > 5,
-        "batch 22: the second row names its source too"
-    );
+    assert!(count(&cv, name(1), c0) > 0 || count(&cv, name(1), u.wave_color(WaveId::Ch(1))) > 5, "batch 22: the second row names its source too");
     // with one source the name is there as well
     one_source(&mut u);
     let mut cv = Canvas::new(W, H);
@@ -105,9 +84,7 @@ fn a_badge_has_no_chip_a_colour_bar_and_the_short_name() {
     u.studio_set_classic(false);
     two_sources(&mut u);
     u.studio_set_view(StudioView::Waveform);
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     let badges = u.studio_badges();
     assert!(!badges.is_empty());
     let mut cv = Canvas::new(W, H);
@@ -130,9 +107,7 @@ fn the_view_switch_is_drawn_where_it_is_tapped() {
     one_source(&mut u);
     let r = u.dock_rect(super::dock::VKind::Measure).expect("the panel is docked");
     for (k, view) in [PanelView::List, PanelView::Detailed, PanelView::Cards].into_iter().enumerate() {
-        let e = u
-            .dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap_or(r))
-            .expect("the switch");
+        let e = u.dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap_or(r)).expect("the switch");
         let cell = Ui::view_switch_cells(e)[k];
         assert!(cell.w >= 24, "{cell:?}");
         let (x, y) = (cell.x + cell.w / 2, cell.y + cell.h / 2);
@@ -141,28 +116,14 @@ fn the_view_switch_is_drawn_where_it_is_tapped() {
         frame(&mut u);
         assert_eq!(u.panel_view(), view, "a tap in segment {k}");
         // the first segment is the strip of cells, the second the table, the third the cards
-        assert_eq!(
-            (u.panel_is_strip(), u.studio_detailed(), u.panel_is_cards()),
-            (k == 0, k == 1, k == 2),
-            "segment {k}"
-        );
+        assert_eq!((u.panel_is_strip(), u.studio_detailed(), u.panel_is_cards()), (k == 0, k == 1, k == 2), "segment {k}");
         // the lit segment is inside the one that was tapped
-        let e =
-            u.dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap()).unwrap();
+        let e = u.dock_view_rect(super::dock::VKind::Measure, u.dock_rect(super::dock::VKind::Measure).unwrap()).unwrap();
         let cell = Ui::view_switch_cells(e)[k];
         let mut cv = Canvas::new(W, H);
         cv.au_start();
         u.draw_view_switch(&mut cv, e);
-        let lit = cv
-            .au
-            .take()
-            .unwrap()
-            .into_iter()
-            .find_map(|a| match a {
-                Au::Round { r, c, .. } if c == ACCENT => Some(r),
-                _ => None,
-            })
-            .expect("one segment is lit");
+        let lit = cv.au.take().unwrap().into_iter().find_map(|a| match a { Au::Round { r, c, .. } if c == ACCENT => Some(r), _ => None }).expect("one segment is lit");
         assert!(lit.x >= cell.x && lit.right() <= cell.right(), "segment {k}: lit {lit:?} in {cell:?}");
     }
 }
@@ -173,32 +134,12 @@ fn the_view_switch_is_drawn_where_it_is_tapped() {
 /// `bottom`, else in its place at the side.
 fn strip(n: usize, bottom: bool) -> Ui {
     let mut u = studio();
-    let kinds = [
-        Meas::Vpp,
-        Meas::Freq,
-        Meas::Vamp,
-        Meas::Vrms,
-        Meas::Vmax,
-        Meas::Vmin,
-        Meas::Vavg,
-        Meas::Period,
-        Meas::Rise,
-        Meas::Fall,
-        Meas::PWidth,
-        Meas::NWidth,
-        Meas::PDuty,
-        Meas::NDuty,
-        Meas::Vtop,
-        Meas::Vbase,
-    ];
+    let kinds = [Meas::Vpp, Meas::Freq, Meas::Vamp, Meas::Vrms, Meas::Vmax, Meas::Vmin, Meas::Vavg, Meas::Period, Meas::Rise, Meas::Fall, Meas::PWidth,
+        Meas::NWidth, Meas::PDuty, Meas::NDuty, Meas::Vtop, Meas::Vbase];
     u.m.meas = (0..2).flat_map(|c| kinds.iter().take(n).map(move |&k| (k, WaveId::Ch(c)))).collect();
     u.ensure_meas_own();
-    if bottom {
-        u.dock_apply(VKind::Measure, Drop::Split(VKind::Wave, Side::Bottom));
-    }
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    if bottom { u.dock_apply(VKind::Measure, Drop::Split(VKind::Wave, Side::Bottom)); }
+    for _ in 0..6 { frame(&mut u); }
     assert!(u.panel_is_strip() && u.panel_view() == super::measpanel::PanelView::List, "the strip is the view");
     u
 }
@@ -230,16 +171,10 @@ fn the_strip_has_columns_in_a_wide_low_panel_and_one_column_at_the_side() {
     for (k, (_, r)) in c.iter().enumerate() {
         assert_eq!(r.h, super::measpanel::CELL_H, "a cell is one line high");
         assert!(r.w >= 150, "a cell has the room of a source, a name and a value: {r:?}");
-        assert!(
-            r.x >= g.list.x && r.right() <= g.list.right() && r.y >= g.list.y && r.bottom() <= g.list.bottom(),
-            "{r:?} in {:?}",
-            g.list
-        );
+        assert!(r.x >= g.list.x && r.right() <= g.list.right() && r.y >= g.list.y && r.bottom() <= g.list.bottom(), "{r:?} in {:?}", g.list);
         // they run along the line, then on the next
         assert_eq!((r.x, r.y), (c[k % cols].1.x, c[0].1.y + (k / cols) as i32 * (c[cols].1.y - c[0].1.y)), "cell {k}");
-        if k % cols > 0 {
-            assert!(c[k - 1].1.right() < r.x, "cells beside each other do not touch");
-        }
+        if k % cols > 0 { assert!(c[k - 1].1.right() < r.x, "cells beside each other do not touch"); }
     }
     shot(&mut u, "strip-bottom");
     let mut u = strip(6, false);
@@ -247,9 +182,7 @@ fn the_strip_has_columns_in_a_wide_low_panel_and_one_column_at_the_side() {
     assert!(g.list.w < 300, "the side panel: {:?}", g.list);
     let c = cells(&u);
     assert_eq!(c.len(), 12);
-    for w in c.windows(2) {
-        assert!(w[0].1.x == w[1].1.x && w[0].1.bottom() < w[1].1.y, "one column: {:?} {:?}", w[0].1, w[1].1);
-    }
+    for w in c.windows(2) { assert!(w[0].1.x == w[1].1.x && w[0].1.bottom() < w[1].1.y, "one column: {:?} {:?}", w[0].1, w[1].1); }
     shot(&mut u, "strip-side");
 }
 
@@ -269,26 +202,17 @@ fn a_cell_of_the_strip_is_one_line_with_the_source_the_name_and_the_value() {
         for (i, r) in cells(&u) {
             let row = &rows[i];
             // (ink and clip are left, top, right, bottom)
-            let inside =
-                |ink: &(i32, i32, i32, i32)| ink.0 >= r.x && ink.2 <= r.right() && ink.1 >= r.y && ink.3 <= r.bottom();
-            let find = |want: &str| {
-                texts.iter().find_map(|e| match e {
-                    Au::Text { s, ink: Some(ink), clip, .. } if s == want && inside(ink) => Some((*ink, *clip)),
-                    _ => None,
-                })
-            };
-            let (src, _) = find(&u.wave_name(row.src))
-                .unwrap_or_else(|| panic!("bottom {bottom}: the source of {} in {r:?}", row.name));
-            let (value, _) =
-                find(&row.text()).unwrap_or_else(|| panic!("bottom {bottom}: the value of {} in {r:?}", row.name));
+            let inside = |ink: &(i32, i32, i32, i32)| ink.0 >= r.x && ink.2 <= r.right() && ink.1 >= r.y && ink.3 <= r.bottom();
+            let find = |want: &str| texts.iter().find_map(|e| match e {
+                Au::Text { s, ink: Some(ink), clip, .. } if s == want && inside(ink) => Some((*ink, *clip)),
+                _ => None,
+            });
+            let (src, _) = find(&u.wave_name(row.src)).unwrap_or_else(|| panic!("bottom {bottom}: the source of {} in {r:?}", row.name));
+            let (value, _) = find(&row.text()).unwrap_or_else(|| panic!("bottom {bottom}: the value of {} in {r:?}", row.name));
             // the long name where it fits, else the short one of the badges
-            let (name, clip) = find(&row.name)
-                .or_else(|| find(&u.studio_badge_name(keys[i], &row.name)))
+            let (name, clip) = find(&row.name).or_else(|| find(&u.studio_badge_name(keys[i], &row.name)))
                 .unwrap_or_else(|| panic!("bottom {bottom}: the name of {} in {r:?}", row.name));
-            assert!(
-                src.2 < name.0 && name.2 < value.0,
-                "bottom {bottom}: source, name, value along the line: {src:?} {name:?} {value:?}"
-            );
+            assert!(src.2 < name.0 && name.2 < value.0, "bottom {bottom}: source, name, value along the line: {src:?} {name:?} {value:?}");
             assert!(name.2 <= clip.2, "bottom {bottom}: the name {} is whole: {name:?} in {clip:?}", row.name);
         }
     }
@@ -349,9 +273,7 @@ fn the_strip_scrolls_when_there_are_more_cells_than_fit() {
     let (x, y) = (g.list.x + 60, g.list.bottom() - 10);
     let step = before[1].1.y - before[0].1.y;
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=6 {
-        touch(&mut u, Phase::Move, x, y - k * step / 2);
-    }
+    for k in 1..=6 { touch(&mut u, Phase::Move, x, y - k * step / 2); }
     touch(&mut u, Phase::Up, x, y - 3 * step);
     frame(&mut u);
     assert!(u.meas_own.dialog.is_none() && !u.menu_open, "a drag opens no settings");
@@ -362,16 +284,10 @@ fn the_strip_scrolls_when_there_are_more_cells_than_fit() {
     // to the end, and no further
     u.panel_scroll_set(i32::MAX / 2, total, &g);
     assert_eq!(u.panel_scroll_px(), u.panel_scroll_max(total, &g));
-    assert_eq!(
-        cells(&u).last().map(|c| c.0),
-        u.studio_listed(&u.meas_rows()).last().copied(),
-        "the last cell shows at the end"
-    );
+    assert_eq!(cells(&u).last().map(|c| c.0), u.studio_listed(&u.meas_rows()).last().copied(), "the last cell shows at the end");
     // and back
     touch(&mut u, Phase::Down, x, g.list.y + 10);
-    for k in 1..=8 {
-        touch(&mut u, Phase::Move, x, g.list.y + 10 + k * 200);
-    }
+    for k in 1..=8 { touch(&mut u, Phase::Move, x, g.list.y + 10 + k * 200); }
     touch(&mut u, Phase::Up, x, g.list.y + 10 + 1600);
     frame(&mut u);
     assert_eq!(u.studio.panel.first, 0, "back at the top");

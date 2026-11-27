@@ -24,12 +24,12 @@ use crate::ui::{self, Ev, Phase, Ui};
 use minifb::{Key, MouseButton, MouseMode, Scale, ScaleMode, Window, WindowOptions};
 use std::time::Instant;
 
-mod front_window;
-mod input;
 mod lan;
 mod panel;
 mod picker;
 mod shell;
+mod input;
+mod front_window;
 
 /// One wheel notch as minifb reports it on Windows (WHEEL_DELTA 120 x 0.1).
 const NOTCH: f32 = 12.0;
@@ -76,14 +76,14 @@ fn dispatch(ui: &mut Ui, command: &str) {
 
 fn open_waveform(ui: &mut Ui, win: &Window, loader: &mut picker::Loader) {
     loader.cancel();
-    let Some(slot) = ui.waveform_destination() else {
-        return;
-    };
+    let Some(slot) = ui.waveform_destination() else { return; };
     match picker::waveform(win.get_window_handle(), slot) {
-        Ok(Some(path)) => match loader.submit(path, ui.waveform_epoch(), slot) {
-            Ok(name) => ui.toast(&format!("Loading {name}…")),
-            Err(error) => ui.toast(&error),
-        },
+        Ok(Some(path)) => {
+            match loader.submit(path, ui.waveform_epoch(), slot) {
+                Ok(name) => ui.toast(&format!("Loading {name}…")),
+                Err(error) => ui.toast(&error),
+            }
+        }
         Ok(None) => ui.toast("Open canceled; the current waveform is unchanged"),
         Err(error) => ui.toast(&error),
     }
@@ -116,33 +116,18 @@ struct PointerState {
 }
 
 impl PointerState {
-    fn apply(
-        &mut self,
-        ui: &mut Ui,
-        phase: input::Pointer,
-        at: Option<(i32, i32)>,
-        panel_open: bool,
-        controls: &[panel::Control],
-    ) {
+    fn apply(&mut self, ui: &mut Ui, phase: input::Pointer, at: Option<(i32, i32)>, panel_open: bool, controls: &[panel::Control]) {
         let on_screen = at.filter(|&(x, _)| x < ui.scr.w);
         match phase {
             input::Pointer::Down => {
-                self.panel_pressed = if panel_open {
-                    at.and_then(|(x, y)| controls.iter().position(|c| c.rect.contains(x, y)))
-                } else {
-                    None
-                };
+                self.panel_pressed = if panel_open { at.and_then(|(x, y)| controls.iter().position(|c| c.rect.contains(x, y))) } else { None };
                 self.touch = on_screen;
-                if let Some((x, y)) = on_screen {
-                    ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
-                }
+                if let Some((x, y)) = on_screen { ui.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y }); }
             }
             input::Pointer::Move => {
                 if let Some(previous) = self.touch {
                     if let Some((x, y)) = on_screen {
-                        if previous != (x, y) {
-                            ui.handle(Ev::Touch { id: 0, phase: Phase::Move, x, y });
-                        }
+                        if previous != (x, y) { ui.handle(Ev::Touch { id: 0, phase: Phase::Move, x, y }); }
                         self.touch = Some((x, y));
                     } else {
                         ui.cancel_pointer();
@@ -152,22 +137,15 @@ impl PointerState {
             }
             input::Pointer::Up => {
                 if let (Some(index), Some((x, y))) = (self.panel_pressed.take(), at) {
-                    if panel_open && controls[index].rect.contains(x, y) {
-                        dispatch(ui, controls[index].command);
-                    }
+                    if panel_open && controls[index].rect.contains(x, y) { dispatch(ui, controls[index].command); }
                 }
                 if self.touch.take().is_some() {
-                    if let Some((x, y)) = on_screen {
-                        ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
-                    } else {
-                        ui.cancel_pointer();
-                    }
+                    if let Some((x, y)) = on_screen { ui.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y }); }
+                    else { ui.cancel_pointer(); }
                 }
             }
             input::Pointer::Context if self.touch.is_none() && self.panel_pressed.is_none() => {
-                if let Some((x, y)) = on_screen {
-                    ui.context_menu(x, y);
-                }
+                if let Some((x, y)) = on_screen { ui.context_menu(x, y); }
             }
             input::Pointer::Cancel => {
                 self.touch = None;
@@ -185,12 +163,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
     // SAFETY: no argument, no pointer; made before the first window is.
     unsafe { windows_sys::Win32::UI::WindowsAndMessaging::SetProcessDPIAware() };
     ui.workspace.desktop_panel = Some(true);
-    let opts = WindowOptions {
-        resize: true,
-        scale: Scale::X1,
-        scale_mode: ScaleMode::AspectRatioStretch,
-        ..WindowOptions::default()
-    };
+    let opts = WindowOptions { resize: true, scale: Scale::X1, scale_mode: ScaleMode::AspectRatioStretch, ..WindowOptions::default() };
     let mut win = match Window::new("OOS — F6: Hardware controls", ui::W as usize, ui::H as usize, opts) {
         Ok(w) => w,
         Err(e) => {
@@ -201,18 +174,13 @@ pub fn run(mut ui: Ui, args: &[String]) {
     // Poll input faster than drawing: short clicks must not disappear between 30 fps frames.
     win.set_target_fps(120);
     let input = input::Input::attach(&mut win);
-    if !input.mouse_captured() {
-        eprintln!("oos-ui: native mouse event capture unavailable; using polling");
-    }
+    if !input.mouse_captured() { eprintln!("oos-ui: native mouse event capture unavailable; using polling"); }
     let mut cv = Canvas::new(ui::W, ui::H);
     let mut front_window: Option<front_window::FrontWindow> = None;
     // the layout and the Studio view come back after a restart: the setup of the unit, in the storage folder
     let mut setup = crate::store::readers::SetupFile::new(&ui.files.dir);
     match setup.restore(&mut ui) {
-        Ok(true) => eprintln!(
-            "oos-ui: settings restored from {}",
-            ui.files.dir.join(crate::store::readers::SetupFile::NAME).display()
-        ),
+        Ok(true) => eprintln!("oos-ui: settings restored from {}", ui.files.dir.join(crate::store::readers::SetupFile::NAME).display()),
         Ok(false) => {}
         Err(e) => eprintln!("oos-ui: {}", e),
     }
@@ -243,18 +211,10 @@ pub fn run(mut ui: Ui, args: &[String]) {
         let at = win.get_unscaled_mouse_pos(MouseMode::Pass).and_then(|(x, y)| geometry.pointer(win.get_size(), x, y));
         let right = win.get_mouse_down(MouseButton::Right);
         if !input.mouse_captured() {
-            if down && !was_down {
-                pointer.apply(&mut ui, input::Pointer::Down, at, false, &controls);
-            }
-            if down && was_down {
-                pointer.apply(&mut ui, input::Pointer::Move, at, false, &controls);
-            }
-            if !down && was_down {
-                pointer.apply(&mut ui, input::Pointer::Up, at, false, &controls);
-            }
-            if right && !was_right && !down {
-                pointer.apply(&mut ui, input::Pointer::Context, at, false, &controls);
-            }
+            if down && !was_down { pointer.apply(&mut ui, input::Pointer::Down, at, false, &controls); }
+            if down && was_down { pointer.apply(&mut ui, input::Pointer::Move, at, false, &controls); }
+            if !down && was_down { pointer.apply(&mut ui, input::Pointer::Up, at, false, &controls); }
+            if right && !was_right && !down { pointer.apply(&mut ui, input::Pointer::Context, at, false, &controls); }
         }
         was_down = down;
         was_right = right;
@@ -266,10 +226,7 @@ pub fn run(mut ui: Ui, args: &[String]) {
                 }
                 input::Event::Wheel { x, y, size, delta, ctrl, shift, alt } => {
                     let modifiers = (ctrl, shift, alt);
-                    if modifiers != wheel_modifiers {
-                        wheel = 0.0;
-                        wheel_modifiers = modifiers;
-                    }
+                    if modifiers != wheel_modifiers { wheel = 0.0; wheel_modifiers = modifiers; }
                     wheel += delta as f32 / 120.0;
                     let steps = wheel.trunc() as i32;
                     wheel -= steps as f32;
@@ -280,29 +237,19 @@ pub fn run(mut ui: Ui, args: &[String]) {
                     }
                 }
                 input::Event::Key { key, ctrl, repeat } => {
-                    if key == Key::O && ctrl && !repeat {
-                        ui.request_waveform();
-                    } else if key == Key::F6 && !repeat {
-                        ui.workspace.desktop_panel = Some(!ui.workspace.desktop_panel.unwrap_or(false));
-                    } else if key == Key::Escape && !repeat {
-                        if loader.busy() {
-                            loader.cancel();
-                            ui.toast("Waveform load canceled");
-                        } else {
-                            ui.dismiss_context();
-                        }
-                    } else if !ctrl {
-                        if key == Key::M && !repeat {
-                            ui.workflow_command("measure");
-                        } else if key == Key::F12 && !repeat {
+                    if key == Key::O && ctrl && !repeat { ui.request_waveform(); }
+                    else if key == Key::F6 && !repeat { ui.workspace.desktop_panel = Some(!ui.workspace.desktop_panel.unwrap_or(false)); }
+                    else if key == Key::Escape && !repeat {
+                        if loader.busy() { loader.cancel(); ui.toast("Waveform load canceled"); }
+                        else { ui.dismiss_context(); }
+                    }
+                    else if !ctrl {
+                        if key == Key::M && !repeat { ui.workflow_command("measure"); }
+                        else if key == Key::F12 && !repeat {
                             let path = crate::store::next_name(&ui.files.dir, "shot", "png");
                             ui.asks.shot = Some(path.to_string_lossy().into_owned());
-                        } else if !repeat
-                            || matches!(key, Key::Up | Key::Down | Key::Left | Key::Right | Key::PageUp | Key::PageDown)
-                        {
-                            if let Some(command) = key_cmd(key) {
-                                cmd::run(&mut ui, command);
-                            }
+                        } else if !repeat || matches!(key, Key::Up | Key::Down | Key::Left | Key::Right | Key::PageUp | Key::PageDown) {
+                            if let Some(command) = key_cmd(key) { cmd::run(&mut ui, command); }
                         }
                     }
                 }
@@ -315,29 +262,19 @@ pub fn run(mut ui: Ui, args: &[String]) {
             let ctrl = win.is_key_down(Key::LeftCtrl) || win.is_key_down(Key::RightCtrl);
             let alt = win.is_key_down(Key::LeftAlt) || win.is_key_down(Key::RightAlt);
             let modifiers = (ctrl, shift, alt);
-            if modifiers != wheel_modifiers {
-                wheel = 0.0;
-                wheel_modifiers = modifiers;
-            }
-            if let Some((_, dy)) = win.get_scroll_wheel() {
-                wheel += dy / NOTCH;
-            }
+            if modifiers != wheel_modifiers { wheel = 0.0; wheel_modifiers = modifiers; }
+            if let Some((_, dy)) = win.get_scroll_wheel() { wheel += dy / NOTCH; }
             let steps = wheel.trunc() as i32;
             if steps != 0 {
                 wheel -= steps as f32;
-                if let Some((x, y)) = at {
-                    ui.handle(Ev::Wheel { x, y, steps, ctrl, shift, alt });
-                }
+                if let Some((x, y)) = at { ui.handle(Ev::Wheel { x, y, steps, ctrl, shift, alt }); }
             }
         }
         services.poll(&mut ui, &cv);
         setup.save(&ui, false);
         if let Some((slot, result)) = loader.poll(ui.waveform_epoch()) {
             match result {
-                Ok((traces, name, left_out)) => match ui.commit_waveform_traces_at(traces, &name, slot) {
-                    Ok(()) => ui.toast_left_out(&left_out),
-                    Err(error) => ui.toast(&error),
-                },
+                Ok((traces, name, left_out)) => match ui.commit_waveform_traces_at(traces, &name, slot) { Ok(()) => ui.toast_left_out(&left_out), Err(error) => ui.toast(&error) },
                 Err(error) => ui.toast(&error),
             }
         }
@@ -349,12 +286,8 @@ pub fn run(mut ui: Ui, args: &[String]) {
             last = Instant::now();
         }
         let (open_wave, file_ask) = (std::mem::take(&mut ui.open_wave_request), ui.take_file_request());
-        if open_wave {
-            open_waveform(&mut ui, &win, &mut loader);
-        }
-        if let Some(ask) = &file_ask {
-            choose_file(&mut ui, &win, ask);
-        }
+        if open_wave { open_waveform(&mut ui, &win, &mut loader); }
+        if let Some(ask) = &file_ask { choose_file(&mut ui, &win, ask); }
         if open_wave || file_ask.is_some() {
             // The dialog pumps Windows messages independently; discard elapsed acquisition time and mouse state.
             last = Instant::now();
@@ -379,14 +312,9 @@ pub fn run(mut ui: Ui, args: &[String]) {
         if ui.workspace.desktop_panel == Some(true) && front_window.is_none() {
             match front_window::FrontWindow::open(&win) {
                 Ok(panel) => front_window = Some(panel),
-                Err(error) => {
-                    ui.workspace.desktop_panel = Some(false);
-                    ui.toast(&error);
-                }
+                Err(error) => { ui.workspace.desktop_panel = Some(false); ui.toast(&error); }
             }
-        } else if ui.workspace.desktop_panel != Some(true) {
-            front_window = None;
-        }
+        } else if ui.workspace.desktop_panel != Some(true) { front_window = None; }
         if last.elapsed().as_secs_f64() < 1.0 / 30.0 {
             win.update();
             continue;
@@ -464,9 +392,7 @@ mod tests {
         let at = Some((single.x + single.w / 2, single.y + single.h / 2));
         let mut state = PointerState::default();
         // Both edges can arrive in one Windows message-pump iteration.
-        for phase in [input::Pointer::Down, input::Pointer::Up] {
-            state.apply(&mut ui, phase, at, true, &controls);
-        }
+        for phase in [input::Pointer::Down, input::Pointer::Up] { state.apply(&mut ui, phase, at, true, &controls); }
         assert_eq!(ui.m.run, RunState::Run);
         assert_eq!(ui.m.trig_mode, TrigMode::Single);
         ui.m.run = RunState::Stop;

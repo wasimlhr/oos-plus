@@ -11,9 +11,7 @@ fn studio() -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Studio;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u
@@ -26,9 +24,7 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 {
-        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
-    }
+    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
     touch(u, Phase::Up, b.0, b.1);
 }
 
@@ -52,16 +48,12 @@ fn the_zoom_keeps_its_factor_and_place_when_the_time_base_changes() {
 #[test]
 fn a_measurement_card_has_a_stats_page_with_mean_range_population_and_trend() {
     let mut u = studio();
-    for _ in 0..20 {
-        u.step(0.05);
-    }
+    for _ in 0..20 { u.step(0.05); }
     assert!(!u.m.meas.is_empty());
     u.open_meas_cfg(0);
     let plan = u.measrow_plan();
     let stats = plan.iter().find(|(name, _)| *name == "Stats").expect("a Stats page");
-    for f in [RF::StMean, RF::StRange, RF::StN, RF::Trend] {
-        assert!(stats.1.contains(&Item::RowF(f)), "{f:?}");
-    }
+    for f in [RF::StMean, RF::StRange, RF::StN, RF::Trend] { assert!(stats.1.contains(&Item::RowF(f)), "{f:?}"); }
     assert!(stats.1.contains(&Item::MeasPop) && stats.1.contains(&Item::MeasStatReset));
     assert!(stats.1.len() <= 7);
     let mean = u.measrow_text(Item::RowF(RF::StMean)).unwrap();
@@ -79,9 +71,7 @@ fn a_measurement_card_has_a_stats_page_with_mean_range_population_and_trend() {
 #[test]
 fn opening_the_trend_keeps_the_statistics() {
     let mut u = studio();
-    for _ in 0..20 {
-        u.step(0.05);
-    }
+    for _ in 0..20 { u.step(0.05); }
     let n0 = u.results.rows.first().map_or(0, |s| s.n);
     assert!(n0 > 0);
     u.open_meas_cfg(0);
@@ -99,9 +89,7 @@ fn trend_time_labels_never_overlap() {
             assert!(!l.is_empty());
             assert_eq!(l.last().unwrap().1, "now");
             for p in l.windows(2) {
-                if l.len() > 2 {
-                    assert!(p[0].0 + width(&p[0].1) + 4 <= p[1].0, "w {w} window {window}: {l:?}");
-                }
+                if l.len() > 2 { assert!(p[0].0 + width(&p[0].1) + 4 <= p[1].0, "w {w} window {window}: {l:?}"); }
             }
         }
     }

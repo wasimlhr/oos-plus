@@ -218,10 +218,7 @@ mod tests {
             let got = ids(*rate, option);
             assert_eq!(got.first(), Some(&(0x2a, true)), "{} bit/s", rate);
             assert!(got.len() == 2 && got[1].1, "the frame CRC of channel B passes: {:x?}", got);
-            assert_eq!(
-                FlexRay.info().bit_time(&[option, 0, 0, 0], &shared(&crate::model::Model::default())),
-                1.0 / rate
-            );
+            assert_eq!(FlexRay.info().bit_time(&[option, 0, 0, 0], &shared(&crate::model::Model::default())), 1.0 / rate);
         }
         // a cluster at 5 Mbit/s read at 10: no frame
         assert!(ids(5e6, 0).iter().all(|x| x.0 != 0x2a));
@@ -252,12 +249,9 @@ mod tests {
         let l = oos_dsp::sim::bits_logic(&bits, 1.0 / rate, spb, 0.0, 3.3);
         let dt = 1.0 / rate / spb as f64;
         let v = oos_dsp::sim::sample(|t| l.v(t), 0.0, dt, spb * (bits.len() + 60));
-        let mut m = crate::store::parse_setup(
-            "dec_on = true
+        let mut m = crate::store::parse_setup("dec_on = true
 dec_proto = FlexRay
-",
-        )
-        .unwrap();
+").unwrap();
         let sh = shared(&m);
         let lines = Lines {
             lines: [Some(&v[..]), None, None, None],

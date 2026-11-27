@@ -13,19 +13,43 @@ use crate::protocols::{Decoder, Module};
 use crate::wave::*;
 
 mod acquire;
-mod addmenu;
-mod addrail;
-mod addtiles;
 mod afg;
 mod analysers;
 mod analysis;
 mod autoset;
-mod axis;
 mod bars;
 #[cfg(test)]
-mod batch10_tests;
+mod batch1_tests;
 #[cfg(test)]
-mod batch11_tests;
+mod batch2_tests;
+#[cfg(test)]
+mod batch3a_tests;
+#[cfg(test)]
+mod batch4_tests;
+#[cfg(test)]
+mod batch5_tests;
+#[cfg(test)]
+mod batch6_tests;
+#[cfg(test)]
+mod batch7_tests;
+#[cfg(test)]
+mod batch7b_tests;
+#[cfg(test)]
+mod batch8_tests;
+#[cfg(test)]
+mod search_bus_tests;
+#[cfg(test)]
+mod search_dense_tests;
+#[cfg(test)]
+mod search_several_tests;
+#[cfg(test)]
+mod search_types_tests;
+#[cfg(test)]
+mod search_zoom_tests;
+#[cfg(test)]
+mod batch9_tests;
+#[cfg(test)]
+mod batch10_tests;
 #[cfg(test)]
 mod batch11b_tests;
 #[cfg(test)]
@@ -33,21 +57,21 @@ mod batch11c_tests;
 #[cfg(test)]
 mod batch11d_tests;
 #[cfg(test)]
-mod batch12_tests;
-#[cfg(test)]
-mod batch13_tests;
-#[cfg(test)]
-mod batch14_tests;
-#[cfg(test)]
-mod batch16_tests;
-#[cfg(test)]
-mod batch17_tests;
-#[cfg(test)]
-mod batch18_tests;
-#[cfg(test)]
-mod batch19_tests;
-#[cfg(test)]
-mod batch1_tests;
+mod batch11_tests;
+mod hotspots;
+mod measdrag;
+mod axis;
+mod measview;
+mod caticons;
+mod fullchrome;
+mod addtiles;
+mod menugrid;
+mod ranges;
+mod trigslider;
+mod sharedzoom;
+mod classicbadges;
+mod measpanel;
+mod measscroll;
 #[cfg(test)]
 mod batch21_tests;
 #[cfg(test)]
@@ -65,7 +89,7 @@ mod batch27_tests;
 #[cfg(test)]
 mod batch29_tests;
 #[cfg(test)]
-mod batch2_tests;
+mod measpanel_redesign_tests;
 #[cfg(test)]
 mod batch30_tests;
 #[cfg(test)]
@@ -73,77 +97,88 @@ mod batch31_tests;
 #[cfg(test)]
 mod batch33_tests;
 #[cfg(test)]
+mod dockwalk_tests;
+#[cfg(test)]
 mod batch34_tests;
 #[cfg(test)]
-mod batch3a_tests;
+mod scpimap;
 #[cfg(test)]
-mod batch4_tests;
+mod uiaudit_tests;
 #[cfg(test)]
-mod batch5_tests;
+mod batch12_tests;
 #[cfg(test)]
-mod batch6_tests;
+mod batch13_tests;
 #[cfg(test)]
-mod batch7_tests;
+mod batch14_tests;
 #[cfg(test)]
-mod batch7b_tests;
+mod batch16_tests;
 #[cfg(test)]
-mod batch8_tests;
+mod batch17_tests;
 #[cfg(test)]
-mod batch9_tests;
+mod batch18_tests;
+#[cfg(test)]
+mod batch19_tests;
 pub mod bode;
 mod bt;
 mod bus;
 mod busview;
-mod callout;
-mod caticons;
-mod classicbadges;
 mod decband;
 mod decrows;
 mod deskew;
-mod dock;
-#[cfg(test)]
-mod dockwalk_tests;
 mod dpt;
-mod extgen;
 mod eyepage;
 pub(crate) mod facts;
-mod feedback;
-mod files;
+mod studio;
+mod dock;
+mod studio_views;
+mod studiolayout;
+mod sheet;
+mod addrail;
+mod addmenu;
+mod studioctx;
+mod scpiext;
+mod scpi_layout;
+mod scpiext_a;
+mod scpiext_b;
+mod scpiext_c;
 #[cfg(test)]
-mod fix_tests;
-mod fullchrome;
-mod greeting;
+#[path = "scpi_coverage_tests.rs"]
+mod scpi_coverage_tests;
+#[cfg(test)]
+mod sheet_tests;
+#[cfg(test)]
+mod studio_parity_tests;
+#[cfg(test)]
+mod studio_trace_tests;
+mod walk_tests;
+mod callout;
+#[cfg(test)]
+mod meas_known_tests;
 #[cfg(test)]
 mod hdmi_tests;
-mod hotspots;
+#[cfg(test)]
+mod layout_tests;
+#[cfg(test)]
+mod fix_tests;
+mod feedback;
+mod files;
+mod greeting;
 mod hwmask;
 mod hwzone;
 mod init;
 mod input;
 mod item;
-#[cfg(test)]
-mod layout_tests;
 mod logger;
 mod magnetic;
-#[cfg(test)]
-mod meas_known_tests;
 mod meascatalog;
-mod measdrag;
 mod measlabels;
-mod measpanel;
-#[cfg(test)]
-mod measpanel_redesign_tests;
-mod measrow;
-mod measscroll;
 mod measure_page;
 mod measure_pairs;
 mod measurement_nav;
-mod measview;
 mod menu_actions;
 mod menu_dialog;
 mod menu_items;
 mod menu_text;
-mod menugrid;
 mod motor;
 mod numpad;
 mod offline;
@@ -152,68 +187,33 @@ mod pages;
 mod panes;
 mod plot_layout;
 pub mod pointer;
-mod ranges;
 mod records;
 mod reflook;
 mod render;
 mod render_derived;
 mod render_marks;
 mod save_recall;
-#[cfg(test)]
-#[path = "scpi_coverage_tests.rs"]
-mod scpi_coverage_tests;
-mod scpi_layout;
 mod scpi_operations;
-mod scpiext;
-mod scpiext_a;
-mod scpiext_b;
-mod scpiext_c;
-#[cfg(test)]
-mod scpimap;
 mod scroll;
-#[cfg(test)]
-mod search_bus_tests;
-#[cfg(test)]
-mod search_dense_tests;
-#[cfg(test)]
-mod search_several_tests;
-#[cfg(test)]
-mod search_types_tests;
-#[cfg(test)]
-mod search_zoom_tests;
 mod selfcal;
 mod sertrig;
 mod service;
-mod sharedzoom;
-mod sheet;
-#[cfg(test)]
-mod sheet_tests;
 mod sim;
-pub(crate) mod slots;
 pub mod startup;
 mod strip;
-mod studio;
-#[cfg(test)]
-mod studio_parity_tests;
-#[cfg(test)]
-mod studio_trace_tests;
-mod studio_views;
-mod studioctx;
-mod studiolayout;
+mod extgen;
 mod sysinfo;
 pub mod tabledata;
 mod tables;
 mod tools;
 mod trigger_controls;
-mod trigslider;
-#[cfg(test)]
-mod uiaudit_tests;
 mod update;
 mod viewmore;
-mod walk_tests;
 mod windows;
 mod wlan;
 mod worker;
+mod measrow;
+pub(crate) mod slots;
 mod workflow;
 mod workspace;
 pub(crate) use scpi_operations::{OperationState, OperationToken, Operations};
@@ -222,15 +222,15 @@ mod bus_candidate;
 mod capture_memory;
 mod capture_rate;
 mod features;
-mod filterplot;
 mod graphics;
-mod handles;
 #[cfg(test)]
 mod interplay_tests;
+mod filterplot;
 mod livelines;
-mod mathwave;
-mod measchip;
 mod nodata;
+mod mathwave;
+mod handles;
+mod measchip;
 use mathwave::FILT_PRESETS;
 mod monitor;
 mod reference_decode;
@@ -536,9 +536,9 @@ pub use files::{FileAsk, FileKind};
 // the limits that the model, the settings and the setup files count with too (model/limits.rs)
 pub use crate::model::{CNT_MODES, DVM_MODES, PANE_HARMS, SEG_HW_MAX, SEG_IVL_MAX, VIEWS_MAX};
 pub(crate) use crate::protocols::PROTOS;
+pub(crate) use records::copy_page;
 use bars::draw_slope;
 use menu_dialog::fitted_text;
-pub(crate) use records::copy_page;
 
 /// What Clear eye / Clear counter / Reset counts / Clear limit / Delete (zone) say when there was nothing to clear.
 pub(super) const NOTHING_TO_CLEAR: &str = "Nothing to clear";
@@ -719,13 +719,8 @@ struct MStat {
 impl MStat {
     /// Adds one acquisition's value. With the current population only the latest acquisition is kept.
     fn push(&mut self, v: f64, current: bool) {
-        if current {
-            *self = MStat::default();
-        }
-        if self.n == 0 {
-            self.min = v;
-            self.max = v;
-        }
+        if current { *self = MStat::default(); }
+        if self.n == 0 { self.min = v; self.max = v; }
         self.n += 1;
         self.sum += v;
         self.sumsq += v * v;
@@ -850,10 +845,7 @@ impl Ui {
             return false;
         }
         self.power.action = Some(action);
-        self.toast(match action {
-            PowerAction::Off => "Powering off ...",
-            PowerAction::Restart => "Restarting ...",
-        });
+        self.toast(match action { PowerAction::Off => "Powering off ...", PowerAction::Restart => "Restarting ..." });
         true
     }
 
@@ -881,6 +873,7 @@ impl Ui {
         self.toast(&format!("History {}/{}", frame, n));
         true
     }
+
 }
 
 /// Samples of one channel for the measurements in the background: a window of the hardware frame (shared, not
@@ -1291,10 +1284,7 @@ impl Ui {
     /// QUICK key and the Quick button of the top bar: the action chosen in System > Quick key.
     fn quick(&mut self) {
         match self.m.quick {
-            Quick::Screenshot => {
-                self.rec_action(":SAVE:IMAGe");
-                self.asks.shot = Some(String::new())
-            }
+            Quick::Screenshot => { self.rec_action(":SAVE:IMAGe"); self.asks.shot = Some(String::new()) }
             Quick::SavePng => self.file_save_auto(FileKind::Shot),
             Quick::SaveSetup => self.activate(Item::StoreSaveSetup),
             Quick::SaveCsv => self.file_save_auto(FileKind::WaveCsv),
@@ -1325,11 +1315,7 @@ impl Ui {
     /// which is assumed to be near what the trigger's filter settles on.
     pub(crate) fn trig_level_base(&self) -> f32 {
         let s = self.measured.stats[self.m.trig_src.min(NCH - 1)];
-        if matches!(self.m.trig_coupling(), TrigCoup::Ac | TrigCoup::LfReject) && s.valid && s.vavg.is_finite() {
-            s.vavg
-        } else {
-            0.0
-        }
+        if matches!(self.m.trig_coupling(), TrigCoup::Ac | TrigCoup::LfReject) && s.valid && s.vavg.is_finite() { s.vavg } else { 0.0 }
     }
 
     fn level_50(&mut self) {
@@ -1586,9 +1572,7 @@ fn packet_tag(m: &Model, p: &oos_dsp::decode::Packet) -> Option<&'static str> {
 
 /// The largest 1-2-5 step that is not above `x`.
 fn nice_step_below(x: f64) -> f64 {
-    if !(x.is_finite() && x > 0.0) {
-        return 1.0;
-    }
+    if !(x.is_finite() && x > 0.0) { return 1.0; }
     let base = 10f64.powf(x.log10().floor());
     [5.0, 2.0, 1.0].into_iter().map(|m| m * base).find(|&s| s <= x * 1.000001).unwrap_or(base)
 }
@@ -1696,12 +1680,12 @@ mod aux_out_tests {
 }
 
 #[cfg(test)]
-mod cursor_arrangement_tests;
-#[cfg(test)]
-mod display_rows_tests;
+mod zoom_tests;
 #[cfg(test)]
 mod funccheck_tests;
 #[cfg(test)]
 mod monitor_rows_tests;
 #[cfg(test)]
-mod zoom_tests;
+mod display_rows_tests;
+#[cfg(test)]
+mod cursor_arrangement_tests;

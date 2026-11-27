@@ -318,20 +318,7 @@ fn mcp_read_only_and_off() {
     let r = parse(&crate::site::mcp(body, &mut Ctx::new(&mut ui, &cv, &mut scpi)).unwrap().text()).unwrap();
     let tools = items(r.get("result").and_then(|x| x.get("tools")));
     let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
-    assert_eq!(
-        names,
-        [
-            "scpi",
-            "screenshot",
-            "scope_state",
-            "measure",
-            "waveform",
-            "decode_results",
-            "table",
-            "errors",
-            "scpi_reference"
-        ]
-    );
+    assert_eq!(names, ["scpi", "screenshot", "scope_state", "measure", "waveform", "decode_results", "table", "errors", "scpi_reference"]);
     assert!(tools.iter().all(|t| t.get("annotations").and_then(|a| a.get("readOnlyHint")) == Some(&J::Bool(true))));
     let scale = ui.m.time_per_div();
     for (name, args) in [
@@ -438,20 +425,14 @@ fn mcp_initialize_gives_short_rules_that_name_only_real_tools() {
     let init = ask(&mut ui, &mut scpi, r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#);
     let rules = init.get("result").and_then(|r| r.get("instructions")).and_then(J::str).unwrap().to_string();
     assert!(rules.len() < 1300, "{} characters", rules.len());
-    assert!(
-        rules.contains(
-            "scpi_reference with no
-arguments"
-        ) || rules.contains("scpi_reference with no "),
-        "the rules point to the task list"
-    );
+    assert!(rules.contains("scpi_reference with no
+arguments") || rules.contains("scpi_reference with no "), "the rules point to the task list");
     assert!(rules.lines().filter(|l| l.starts_with(|c: char| c.is_ascii_digit())).count() >= 5, "{rules}");
     let list = ask(&mut ui, &mut scpi, r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
     let tools = items(list.get("result").and_then(|r| r.get("tools")));
     let names: Vec<&str> = tools.iter().filter_map(|t| t.get("name").and_then(J::str)).collect();
     let words = rules.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'));
-    for word in words.filter(|w| w.contains('_') || ["configure", "acquire", "measure", "waveform", "scpi"].contains(w))
-    {
+    for word in words.filter(|w| w.contains('_') || ["configure", "acquire", "measure", "waveform", "scpi"].contains(w)) {
         assert!(names.contains(&word), "the rules name `{word}`, which is no tool");
     }
 }

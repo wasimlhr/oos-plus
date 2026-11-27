@@ -71,9 +71,7 @@ impl ZoomBox {
 impl Ui {
     /// Measurement results in a panel on the right instead of the strip under the grid.
     pub(super) fn results_panel(&self) -> bool {
-        self.results.on
-            && !self.studio_owns_measurements()
-            && !(self.m.meas.is_empty() && self.m.meas2.is_empty() && self.m.cat.is_empty())
+        self.results.on && !self.studio_owns_measurements() && !(self.m.meas.is_empty() && self.m.meas2.is_empty() && self.m.cat.is_empty())
     }
 
     /// Channels with measurements, in the order of their first measurement (one strip row each).
@@ -108,14 +106,10 @@ impl Ui {
     }
 
     pub(super) fn strip_rows(&self) -> i32 {
-        if self.m.strip_dock == StripDock::Hidden {
-            return 0;
-        }
+        if self.m.strip_dock == StripDock::Hidden { return 0; }
         let dvm = (self.m.dvm_on || self.m.cnt_on) as i32;
         // Studio shows measurements and cursor read-outs as badges and in its panel
-        if self.studio_owns_measurements() {
-            return dvm;
-        }
+        if self.studio_owns_measurements() { return dvm; }
         if self.results_pane_on() {
             return dvm;
         }
@@ -185,9 +179,7 @@ impl Ui {
 
     /// Height taken under the trace when the eye is stacked there.
     pub(super) fn eye_below(&self) -> i32 {
-        if self.dock_on() {
-            return 0;
-        }
+        if self.dock_on() { return 0; }
         if self.workspace.eye_float.is_some() || !(self.eye_open() && self.m.eye_place == EyePlace::Under) {
             return 0;
         }
@@ -205,12 +197,7 @@ impl Ui {
             // in the dock: the eye's own place, or the waveform's when it fills the plot
             return self.dock_content(dock::VKind::Eye).unwrap_or_else(|| {
                 // the eye on the whole plot has the waveform's place; one that is a tab behind another has none on the screen
-                let w = if self.m.eye_place == EyePlace::Full {
-                    self.dock_wave_rect()
-                } else {
-                    let r = self.dock_region();
-                    Rect::new(r.x - r.w - 100, r.y, r.w, r.h)
-                };
+                let w = if self.m.eye_place == EyePlace::Full { self.dock_wave_rect() } else { let r = self.dock_region(); Rect::new(r.x - r.w - 100, r.y, r.w, r.h) };
                 Rect::new(w.x, w.y + dock::STRIP_H, w.w, (w.h - dock::STRIP_H).max(1))
             });
         }
@@ -314,13 +301,7 @@ impl Ui {
         const GAP: i32 = 6;
         if self.stacked() {
             let n = self.n_wins() as i32;
-            let gap = if n > 8 {
-                2
-            } else if self.m.layout == Layout::Studio && self.studio.compact {
-                1
-            } else {
-                4
-            };
+            let gap = if n > 8 { 2 } else if self.m.layout == Layout::Studio && self.studio.compact { 1 } else { 4 };
             let h = ((g.h - (n - 1) * gap) / n).max(1);
             return (0..n).map(|row| Rect::new(g.x, g.y + row * (h + gap), g.w, h)).collect();
         }
@@ -538,51 +519,33 @@ impl Ui {
 
     /// Studio: the trigger tag and its value move left of the corner buttons when its level is as high as they are.
     pub(super) fn trigger_tag_x(&self, x1: i32, y: i32) -> i32 {
-        if self.m.layout != Layout::Studio {
-            return x1;
-        }
+        if self.m.layout != Layout::Studio { return x1; }
         let mut x1 = x1;
         // the corner buttons carry a word at their left ("Zoom CH1"): the tag keeps clear of that too
         let word = self.fonts().s.width("Zoom CH4") + 10;
         for b in [self.full_btn().1, self.zoom_btn().1] {
-            if y + 10 > b.y && y - 10 < b.bottom() && x1 + 26 > b.x - word + 34 {
-                x1 = x1.min(b.x - word - MARK_W);
-            }
+            if y + 10 > b.y && y - 10 < b.bottom() && x1 + 26 > b.x - word + 34 { x1 = x1.min(b.x - word - MARK_W); }
         }
         // the Windows button has no word, but it covers the tag just the same (on a unit, 2026-11-20, "163 mV" ran
         // under it)
         if self.plot_btns_shown() {
             let b = self.win_btn().1;
-            if y + 10 > b.y && y - 10 < b.bottom() && x1 + MARK_W > b.x {
-                x1 = x1.min(b.x - MARK_W - 4);
-            }
+            if y + 10 > b.y && y - 10 < b.bottom() && x1 + MARK_W > b.x { x1 = x1.min(b.x - MARK_W - 4); }
         }
         // a divider handle of the dock lies over the right edge of the waveform: the tag stays left of it
         for h in self.dock_handles() {
-            if y + 10 > h.y && y - 10 < h.bottom() && x1 + MARK_W > h.x && x1 < h.right() {
-                x1 = h.x - MARK_W - 2;
-            }
+            if y + 10 > h.y && y - 10 < h.bottom() && x1 + MARK_W > h.x && x1 < h.right() { x1 = h.x - MARK_W - 2; }
         }
         x1
     }
 
     /// The grips of the dock's dividers, where they lie over the views beside them; none without the dock.
     pub(super) fn dock_handles(&self) -> Vec<Rect> {
-        if !self.dock_on() {
-            return Vec::new();
-        }
-        self.dock_layout()
-            .dividers
-            .iter()
-            .map(|d| {
-                let (cx, cy) = (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2);
-                if d.dir == dock::Dir::H {
-                    Rect::new(cx - 12, cy - 22, 24, 44)
-                } else {
-                    Rect::new(cx - 22, cy - 12, 44, 24)
-                }
-            })
-            .collect()
+        if !self.dock_on() { return Vec::new(); }
+        self.dock_layout().dividers.iter().map(|d| {
+            let (cx, cy) = (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2);
+            if d.dir == dock::Dir::H { Rect::new(cx - 12, cy - 22, 24, 44) } else { Rect::new(cx - 22, cy - 12, 44, 24) }
+        }).collect()
     }
 
     pub(super) fn draw_zoom_btn(&self, cv: &mut Canvas) {
@@ -591,18 +554,8 @@ impl Ui {
         // Studio: a word beside each corner icon, so full screen and zoom are not taken for each other
         if self.m.layout == Layout::Studio {
             let f = self.fonts();
-            let word = match self.studio_zoom_lane().filter(|_| armed) {
-                Some(t) => format!("Zoom {}", sharedzoom::trace_name(t)),
-                None => "Zoom".to_string(),
-            };
-            backed_text(
-                cv,
-                &f.s,
-                r.x - f.s.width(&word) - 6,
-                r.y + r.h / 2 + 4,
-                &word,
-                if armed { AMBER } else { DIM },
-            );
+            let word = match self.studio_zoom_lane().filter(|_| armed) { Some(t) => format!("Zoom {}", sharedzoom::trace_name(t)), None => "Zoom".to_string() };
+            backed_text(cv, &f.s, r.x - f.s.width(&word) - 6, r.y + r.h / 2 + 4, &word, if armed { AMBER } else { DIM });
         }
         cv.round(r, 5, PANEL_BG, 220);
         cv.round_outline(r, 5, if armed { AMBER } else { BTN_BORDER });
@@ -680,12 +633,7 @@ impl Ui {
 
     pub(super) fn zoom_vertical_transform(&self, area: Rect) -> (f32, f32) {
         let detail = self.split_zoom(self.plot.grid).1;
-        if self.m.zoom
-            && !self.view_on()
-            && area.y >= detail.y
-            && area.y < detail.y + detail.h
-            && self.studio_vzoom_covers(area)
-        {
+        if self.m.zoom && !self.view_on() && area.y >= detail.y && area.y < detail.y + detail.h && self.studio_vzoom_covers(area) {
             (self.zoom_view.vfactor, self.zoom_view.vcenter)
         } else {
             (1.0, 0.0)
@@ -940,8 +888,11 @@ impl Ui {
 
     /// Time base of the main waveform area: (s/div, delay).
     pub(super) fn view(&self) -> (f32, f32) {
-        let base =
-            if self.m.zoom { (tscales()[self.m.zscale], self.m.zdelay) } else { (self.m.time_per_div(), self.m.delay) };
+        let base = if self.m.zoom {
+            (tscales()[self.m.zscale], self.m.zdelay)
+        } else {
+            (self.m.time_per_div(), self.m.delay)
+        };
         self.studio_lane_view(base)
     }
 
@@ -969,9 +920,7 @@ impl Ui {
     /// The zoom asks for more resolution than the record has: a sample is more than 3 px from the next. Studio then marks each sample with a dot
     /// and keeps the draw mode (lines join the samples; Display > Dots stays dots only).
     pub(super) fn zoom_sparse(&self, dt: f64) -> bool {
-        self.m.layout == Layout::Studio
-            && self.m.zoom
-            && dt > 0.0
+        self.m.layout == Layout::Studio && self.m.zoom && dt > 0.0
             && (self.phz.w.max(1) as f64 / HDIV as f64) * dt / tscales()[self.m.zscale] as f64 > 3.0
     }
 

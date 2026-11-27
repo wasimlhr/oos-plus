@@ -13,9 +13,7 @@ fn studio() -> Ui {
     u.m.ch[1].on = true;
     u.studio.enter = true;
     u.files.dir = std::env::temp_dir().join("oos-batch23");
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Waveform);
@@ -30,9 +28,7 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -55,39 +51,20 @@ fn tap(u: &mut Ui, r: Rect) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 {
-        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
-    }
+    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
     touch(u, Phase::Up, b.0, b.1);
     frame(u);
 }
 
-fn centre(r: Rect) -> (i32, i32) {
-    (r.x + r.w / 2, r.y + r.h / 2)
-}
+fn centre(r: Rect) -> (i32, i32) { (r.x + r.w / 2, r.y + r.h / 2) }
 
-fn toast_text(u: &Ui) -> String {
-    u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default()
-}
+fn toast_text(u: &Ui) -> String { u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default() }
 
 /// Every button of the top bar, left to right as they are drawn.
 fn top_rects(u: &Ui) -> Vec<(&'static str, Rect)> {
     let t = u.studio_top();
-    let mut v = vec![
-        ("run", t.run),
-        ("single", t.single),
-        ("live", t.badge),
-        ("preset", t.sim),
-        ("autoset", t.autoset),
-        ("clear", t.clear),
-        ("force", t.force),
-        ("add", t.add),
-        ("measure", t.measure),
-        ("cursors", t.cursors),
-        ("display", t.display),
-        ("storage", t.storage),
-        ("gear", t.gear),
-    ];
+    let mut v = vec![("run", t.run), ("single", t.single), ("live", t.badge), ("preset", t.sim), ("autoset", t.autoset), ("clear", t.clear), ("force", t.force),
+        ("add", t.add), ("measure", t.measure), ("cursors", t.cursors), ("display", t.display), ("storage", t.storage), ("gear", t.gear)];
     v.retain(|(_, r)| r.w > 0);
     v
 }
@@ -98,15 +75,8 @@ fn check_top(u: &Ui) {
     let top = u.frame().top;
     let f = u.fonts();
     let rects = top_rects(u);
-    for (name, r) in &rects {
-        assert!(
-            r.x >= top.x && r.right() <= top.right() && r.y >= top.y && r.bottom() <= top.bottom(),
-            "{name} {r:?} in {top:?}"
-        );
-    }
-    for p in rects.windows(2) {
-        assert!(p[0].1.right() <= p[1].1.x, "{} {:?} overlaps {} {:?}", p[0].0, p[0].1, p[1].0, p[1].1);
-    }
+    for (name, r) in &rects { assert!(r.x >= top.x && r.right() <= top.right() && r.y >= top.y && r.bottom() <= top.bottom(), "{name} {r:?} in {top:?}"); }
+    for p in rects.windows(2) { assert!(p[0].1.right() <= p[1].1.x, "{} {:?} overlaps {} {:?}", p[0].0, p[0].1, p[1].0, p[1].1); }
     let labels = &super::studio::TOP_LABELS[t.tier];
     for (r, label) in [(t.add, labels[3]), (t.display, labels[6]), (t.storage, labels[7])] {
         assert!(r.w > 0 && f.mb.width(label) <= r.w - 4, "{label:?} in {r:?}");
@@ -121,10 +91,7 @@ fn autoset_clear_and_force_are_front_panel_keys_and_not_in_the_top_bar() {
     let mut u = studio();
     check_top(&u);
     let t = u.studio_top();
-    assert!(
-        t.autoset.w == 0 && t.clear.w == 0 && t.force.w == 0,
-        "the bar does not repeat the keys of the front panel"
-    );
+    assert!(t.autoset.w == 0 && t.clear.w == 0 && t.force.w == 0, "the bar does not repeat the keys of the front panel");
     shot(&mut u, "topbar");
     // a tap where they were opens the acquisition page, like the rest of the read-out
     let (x, y) = centre(t.acq);
@@ -142,34 +109,21 @@ fn autoset_clear_and_force_are_front_panel_keys_and_not_in_the_top_bar() {
     u.toast = None;
     u.key(key::FORCE);
     assert!(toast_text(&u).contains("Force trigger"), "{}", toast_text(&u));
-    let menu: Vec<String> =
-        u.main_groups().into_iter().flat_map(|(_, items)| items).map(|it| u.item_label(it).to_string()).collect();
-    for name in ["Autoset", "Clear", "Force"] {
-        assert!(menu.iter().any(|l| l == name), "{name} in {menu:?}");
-    }
+    let menu: Vec<String> = u.main_groups().into_iter().flat_map(|(_, items)| items).map(|it| u.item_label(it).to_string()).collect();
+    for name in ["Autoset", "Clear", "Force"] { assert!(menu.iter().any(|l| l == name), "{name} in {menu:?}"); }
 }
 
 #[test]
 fn display_and_storage_open_their_sheets() {
     let mut u = studio();
     let t = u.studio_top();
-    assert!(
-        t.display.w > 0
-            && t.storage.w > 0
-            && t.cursors.right() <= t.display.x
-            && t.display.right() <= t.storage.x
-            && t.storage.right() <= t.gear.x
-    );
+    assert!(t.display.w > 0 && t.storage.w > 0 && t.cursors.right() <= t.display.x && t.display.right() <= t.storage.x && t.storage.right() <= t.gear.x);
     tap(&mut u, t.display);
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     assert!(u.menu_open && u.menu == MenuId::Display && u.sheet_active());
     let t = u.studio_top();
     tap(&mut u, t.storage);
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     assert!(u.menu_open && u.menu == MenuId::Storage && u.sheet_active());
     let t = u.studio_top();
     tap(&mut u, t.storage);
@@ -185,33 +139,23 @@ fn a_narrow_top_bar_shortens_labels_and_drops_nothing() {
         for scr in [Screen::PANEL, Screen { w: 1280, h: 800 }] {
             u.scr = scr;
             u.m.text_size = ts;
-            for _ in 0..3 {
-                frame(&mut u);
-            }
+            for _ in 0..3 { frame(&mut u); }
             check_top(&u);
-            for (name, r) in top_rects(&u) {
-                assert!(r.w > 0, "{name} at {ts:?} {scr:?}");
-            }
+            for (name, r) in top_rects(&u) { assert!(r.w > 0, "{name} at {ts:?} {scr:?}"); }
         }
     }
     u.scr = Screen::PANEL;
     u.m.text_size = crate::model::TextSize::Larger;
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     let t = u.studio_top();
     assert!(t.tier >= normal, "larger text: labels as short or shorter (tier {} against {normal})", t.tier);
     u.m.text_size = crate::model::TextSize::Normal;
     u.scr = Screen { w: 1920, h: 1080 };
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     assert_eq!(u.studio_top().tier, 0, "full labels when there is room");
     u.scr = Screen::PANEL;
     u.m.text_size = crate::model::TextSize::Larger;
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     shot(&mut u, "topbar-narrow");
     // the shortened buttons still act
     tap(&mut u, t.display);
@@ -223,9 +167,7 @@ fn a_narrow_top_bar_shortens_labels_and_drops_nothing() {
     assert!(u.menu_open && u.menu == MenuId::Sim, "the SIM sheet");
     u.activate(Item::SimPlay);
     u.wait_sim_generation();
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     check_top(&u);
     assert!(u.studio_top().badge.w > 0);
 }
@@ -234,9 +176,7 @@ fn a_narrow_top_bar_shortens_labels_and_drops_nothing() {
 
 fn open_sim_sheet(u: &mut Ui) {
     u.open_menu(MenuId::Sim);
-    for _ in 0..4 {
-        frame(u);
-    }
+    for _ in 0..4 { frame(u); }
     assert!(u.menu_open && u.menu == MenuId::Sim && u.sheet_active());
 }
 
@@ -247,10 +187,7 @@ fn the_sim_sheet_adds_a_signal_to_a_ref_without_entering_the_sim_mode() {
     // the sheet names the two things apart: Add to R<n> and Run simulation mode
     let g = u.sheet_geo().expect("the sheet");
     let labels: Vec<String> = g.foot.iter().map(|(it, _)| u.sheet_label(*it)).collect();
-    assert!(
-        labels.contains(&"Add to R1".to_string()) && labels.contains(&"Run simulation mode".to_string()),
-        "{labels:?}"
-    );
+    assert!(labels.contains(&"Add to R1".to_string()) && labels.contains(&"Run simulation mode".to_string()), "{labels:?}");
     assert!(!labels.iter().any(|l| l.contains("Start") || l == "Play"));
     u.sim_preset_set("SATA I");
     assert!(u.sim_slot_set(0));
@@ -265,9 +202,7 @@ fn the_sim_sheet_adds_a_signal_to_a_ref_without_entering_the_sim_mode() {
     let add = g.foot.iter().find(|(it, _)| *it == Item::SimAddRef).unwrap().1;
     tap(&mut u, add);
     u.wait_sim_generation();
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let r1 = u.refs[0].as_ref().expect("R1 holds the signal");
     assert_eq!(r1.label, "SATA I");
     assert!(r1.on);
@@ -279,9 +214,7 @@ fn the_sim_sheet_adds_a_signal_to_a_ref_without_entering_the_sim_mode() {
     assert!(u.sim_slot_set(1));
     u.activate(Item::SimAddRef);
     u.wait_sim_generation();
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert_eq!(u.refs[1].as_ref().expect("R2").label, "SATA II");
     let r1 = u.refs[0].as_ref().expect("R1 is still there");
     assert_eq!(r1.label, "SATA I");
@@ -309,9 +242,7 @@ fn the_sim_sheet_s_play_runs_the_simulation_and_live_returns() {
     assert!(u.menu_open && u.menu == MenuId::Sim, "the SIM sheet");
     u.activate(Item::SimPlay);
     u.wait_sim_generation();
-    for _ in 0..8 {
-        frame(&mut u);
-    }
+    for _ in 0..8 { frame(&mut u); }
     assert!(u.record_mode() && u.session_is_sim, "Play enters the simulation mode");
     let t = u.studio_top();
     assert!(t.badge.w > 0, "Live is highlighted in the bar");
@@ -336,15 +267,10 @@ fn adding_while_the_simulation_runs_goes_to_live_and_adds_one_more_ref() {
     u.wait_sim_generation();
     u.activate(Item::SimAddRef);
     u.wait_sim_generation();
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     assert!(!u.sim_mode(), "Live while the new ref is made");
     assert_eq!(u.refs.iter().filter(|r| r.is_some()).count(), before + 1, "{}", toast_text(&u));
-    assert!(
-        u.refs[1].as_ref().is_some_and(|r| r.label == "USB 2.0 HS" && r.on),
-        "the first free slot has the new signal"
-    );
+    assert!(u.refs[1].as_ref().is_some_and(|r| r.label == "USB 2.0 HS" && r.on), "the first free slot has the new signal");
     assert!(u.refs[0].as_ref().is_some_and(|r| r.on), "the first signal stays shown");
     // Play references runs both
     assert!(u.items(MenuId::Sim).contains(&Item::SimPlayRefs), "the two shown signals can be played");
@@ -363,9 +289,7 @@ fn the_channel_pills_have_a_detail_line_with_coupling_probe_and_offset() {
     u.m.ch[1].coupling = Coupling::Ac;
     u.m.ch[1].probe = 10.0;
     u.m.ch[1].offset = -0.5;
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     assert_eq!(u.studio_ch_detail(0, 400), "DC \u{b7} 1\u{d7} \u{b7} 4.75 V");
     assert_eq!(u.studio_ch_detail(1, 400), "AC \u{b7} 10\u{d7} \u{b7} -500 mV");
     // short of room the offset goes first, then the probe: never wider than the pill
@@ -377,10 +301,7 @@ fn the_channel_pills_have_a_detail_line_with_coupling_probe_and_offset() {
     let bottom = u.frame().bottom;
     for c in 0..2 {
         let r = b.ch[c];
-        assert!(
-            r.h == bottom.h - 6 && r.bottom() <= bottom.bottom() && r.y >= bottom.y,
-            "the pill stays in the bar: {r:?} in {bottom:?}"
-        );
+        assert!(r.h == bottom.h - 6 && r.bottom() <= bottom.bottom() && r.y >= bottom.y, "the pill stays in the bar: {r:?} in {bottom:?}");
         let text = u.studio_ch_detail(c, r.w - 14);
         assert!(f.s.width(&text) <= r.w - 14, "{text:?} fits the pill {r:?}");
     }
@@ -389,9 +310,7 @@ fn the_channel_pills_have_a_detail_line_with_coupling_probe_and_offset() {
     u.wait_sim_generation();
     u.m.math = MathOp::Add;
     u.relayout();
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let b = u.studio_bottom();
     assert!(b.refs[0].w > 0 && b.math[0].w > 0);
     assert!(b.refs[0].h == b.ch[0].h && b.math[0].h == b.ch[0].h);
@@ -402,9 +321,7 @@ fn the_channel_pills_have_a_detail_line_with_coupling_probe_and_offset() {
 
 // ------------------------------------------------------------------------------------------------ swipe down
 
-fn undo_button(u: &Ui) -> Rect {
-    u.md_undo_bar().expect("the Undo bar").1
-}
+fn undo_button(u: &Ui) -> Rect { u.md_undo_bar().expect("the Undo bar").1 }
 
 #[test]
 fn a_swipe_down_on_a_channel_pill_turns_it_off_and_undo_brings_it_back() {
@@ -447,9 +364,7 @@ fn a_swipe_down_on_ref_and_math_pills_turns_them_off_and_undo_restores() {
     u.wait_sim_generation();
     u.m.math = MathOp::Add;
     u.relayout();
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let b = u.studio_bottom();
     let (x, y) = centre(b.refs[2]);
     drag(&mut u, (x, y), (x, H - 2));
@@ -471,9 +386,7 @@ fn swipe_badge(style_classic: bool) {
     u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vamp, WaveId::Ch(1))];
     u.ensure_meas_own();
     u.studio_set_classic(style_classic);
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     assert!(u.studio_badges_visible(), "the badge row");
     let n = u.studio_keys().len();
     let (key, r) = u.studio_badges().first().copied().expect("a badge");
@@ -486,9 +399,7 @@ fn swipe_badge(style_classic: bool) {
     assert_eq!(u.studio_keys().len(), n - 1, "the badge is removed");
     assert!(u.studio_index(key).is_none());
     assert!(u.md_undo_bar().is_some());
-    if !style_classic {
-        shot(&mut u, "swipe-badge");
-    }
+    if !style_classic { shot(&mut u, "swipe-badge"); }
     let b = undo_button(&u);
     tap(&mut u, b);
     assert_eq!(u.studio_keys().len(), n, "Undo brings it back");

@@ -2,10 +2,7 @@
 //! The emulated physical controls live outside the oscilloscope display.
 
 use super::{dispatch, input, key_cmd, panel, PointerState};
-use crate::{
-    gfx::Canvas,
-    ui::{self, Ui},
-};
+use crate::{gfx::Canvas, ui::{self, Ui}};
 use minifb::{Key, MouseMode, ScaleMode, Window, WindowOptions};
 
 pub struct FrontWindow {
@@ -25,13 +22,13 @@ fn control_point(size: (usize, usize), x: f32, y: f32) -> Option<(i32, i32)> {
     let scale = (width / panel::WIDTH as f32).min(height / ui::H as f32);
     let (left, top) = ((width - panel::WIDTH as f32 * scale) * 0.5, (height - ui::H as f32 * scale) * 0.5);
     let (x, y) = ((x - left) / scale, (y - top) / scale);
-    (x >= 0.0 && y >= 0.0 && x < panel::WIDTH as f32 && y < ui::H as f32).then_some((ui::W + x as i32, y as i32))
+    (x >= 0.0 && y >= 0.0 && x < panel::WIDTH as f32 && y < ui::H as f32)
+        .then_some((ui::W + x as i32, y as i32))
 }
 
 impl FrontWindow {
     pub fn open(scope: &Window) -> Result<Self, String> {
-        let options =
-            WindowOptions { resize: true, scale_mode: ScaleMode::AspectRatioStretch, ..WindowOptions::default() };
+        let options = WindowOptions { resize: true, scale_mode: ScaleMode::AspectRatioStretch, ..WindowOptions::default() };
         let mut window = Window::new("OOS Hardware Front Panel", panel::WIDTH as usize, ui::H as usize, options)
             .map_err(|error| format!("Cannot open hardware controls: {error}"))?;
         let (x, y) = scope.get_position();
@@ -39,20 +36,12 @@ impl FrontWindow {
         window.set_position(x + width as isize + 12, y);
         window.set_target_fps(0);
         let input = input::Input::attach(&mut window);
-        Ok(Self {
-            input,
-            window,
-            pointer: PointerState::default(),
-            controls: panel::controls(),
-            stage: Canvas::new(ui::W + panel::WIDTH, ui::H),
-            pixels: vec![0; (panel::WIDTH * ui::H) as usize],
-        })
+        Ok(Self { input, window, pointer: PointerState::default(), controls: panel::controls(),
+            stage: Canvas::new(ui::W + panel::WIDTH, ui::H), pixels: vec![0; (panel::WIDTH * ui::H) as usize] })
     }
 
     pub fn poll(&mut self, ui: &mut Ui) -> bool {
-        if !self.window.is_open() {
-            return false;
-        }
+        if !self.window.is_open() { return false; }
         self.window.update();
         for event in self.input.events() {
             match event {
@@ -62,9 +51,7 @@ impl FrontWindow {
                 input::Event::Key { key: Key::F6, repeat: false, .. } => return false,
                 input::Event::Key { key: Key::O, ctrl: true, repeat: false } => ui.request_waveform(),
                 input::Event::Key { key, ctrl: false, repeat: false } => {
-                    if let Some(command) = key_cmd(key) {
-                        dispatch(ui, command);
-                    }
+                    if let Some(command) = key_cmd(key) { dispatch(ui, command); }
                 }
                 _ => {}
             }
@@ -73,9 +60,7 @@ impl FrontWindow {
     }
 
     pub fn draw(&mut self, ui: &Ui) -> bool {
-        let hover = self
-            .window
-            .get_unscaled_mouse_pos(MouseMode::Pass)
+        let hover = self.window.get_unscaled_mouse_pos(MouseMode::Pass)
             .and_then(|(x, y)| control_point(self.window.get_size(), x, y));
         panel::draw(&mut self.stage, ui, hover);
         for y in 0..ui::H as usize {

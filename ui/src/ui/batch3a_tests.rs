@@ -11,35 +11,27 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u
 }
 
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..6 {
-        u.step(0.05);
-    }
+    for _ in 0..6 { u.step(0.05); }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         std::fs::write(std::path::Path::new(&dir).join(format!("{name}.png")), crate::store::png_of(&cv)).unwrap();
     }
 }
 
-fn tap_in(u: &mut Ui, r: Rect) {
-    u.tap(r.x + r.w / 2, r.y + r.h / 2);
-}
+fn tap_in(u: &mut Ui, r: Rect) { u.tap(r.x + r.w / 2, r.y + r.h / 2); }
 
 #[test]
 fn shots_top_bar_vs_default() {
     let mut d = Ui::new(Source::Demo { t: 0.0 });
     d.m.layout = Layout::Default;
-    for _ in 0..8 {
-        d.step(0.05);
-    }
+    for _ in 0..8 { d.step(0.05); }
     shot(&mut d, "topbar-default");
     let mut s = studio();
     shot(&mut s, "topbar-studio");
@@ -49,9 +41,7 @@ fn sim_ui() -> Ui {
     let mut u = studio();
     u.files.dir = std::env::temp_dir().join("oos-batch3a-sim");
     u.studio_set_view(StudioView::Sim);
-    for _ in 0..3 {
-        u.step(0.05);
-    }
+    for _ in 0..3 { u.step(0.05); }
     u
 }
 
@@ -77,9 +67,7 @@ fn top_bar_is_one_status_pill_a_single_button_plain_acquisition_and_the_default_
     assert_ne!(u.m.run, run);
     // nothing hangs under the bar: the Meas tab is in the badge row at the bottom
     u.studio_set_pin_all_for_test();
-    if let Some(tab) = u.studio_tab() {
-        assert!(tab.y >= u.plot.grid.bottom(), "the Meas tab is under the lanes");
-    }
+    if let Some(tab) = u.studio_tab() { assert!(tab.y >= u.plot.grid.bottom(), "the Meas tab is under the lanes"); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     assert!(u.plot.grid.y - u.frame().top.bottom() <= 40, "only the strip sits under the bar; T is inside the scale");
@@ -93,9 +81,7 @@ fn run_stop_and_single_play_hold_and_capture_the_sim() {
     // Run on the open SIM panel plays the SIM source
     tap_in(&mut u, t.run);
     u.wait_sim_generation();
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     assert!(u.session_is_sim && u.sim_playing() && u.m.run == RunState::Run);
     // the bar now has the mini SIM control with the preset, and Live
     let t = u.studio_top();
@@ -105,26 +91,19 @@ fn run_stop_and_single_play_hold_and_capture_the_sim() {
     // Stop holds the current frame
     let held = u.refs[u.m.sim_slot].as_ref().unwrap().v.clone();
     tap_in(&mut u, t.run);
-    for _ in 0..20 {
-        u.step(0.05);
-    }
+    for _ in 0..20 { u.step(0.05); }
     u.wait_sim_generation();
     assert!(!u.sim_playing() && u.m.run == RunState::Stop);
     assert_eq!(u.refs[u.m.sim_slot].as_ref().unwrap().v.len(), held.len());
     assert_eq!(u.run_caption().0, "STOP");
     // Run plays again
     tap_in(&mut u, t.run);
-    for _ in 0..4 {
-        u.step(0.05);
-    }
+    for _ in 0..4 { u.step(0.05); }
     assert!(u.sim_playing() && u.m.run == RunState::Run);
     // Single (the key) captures one frame and holds
     u.studio_single();
     u.wait_sim_generation();
-    for _ in 0..40 {
-        u.step(0.05);
-        u.wait_sim_generation();
-    }
+    for _ in 0..40 { u.step(0.05); u.wait_sim_generation(); }
     assert_eq!(u.m.trig_mode, TrigMode::Single);
     assert!(!u.sim_playing() || u.m.run == RunState::Stop || u.m.status != TrigStatus::Auto, "one frame, then held");
     // a SIM started elsewhere (the SIM menu) shows the chip too; a tap opens the SIM panel
@@ -132,9 +111,7 @@ fn run_stop_and_single_play_hold_and_capture_the_sim() {
     u.files.dir = std::env::temp_dir().join("oos-batch3a-sim2");
     u.sim_activate(Item::SimPlay);
     u.wait_sim_generation();
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     assert!(u.session_is_sim && u.studio.view != StudioView::Sim);
     let t = u.studio_top();
     assert!(t.sim.w > 0);
@@ -149,21 +126,14 @@ fn sim_eye(preset: &str) -> Ui {
     u.studio_set_view(StudioView::Sim);
     u.sim_activate(Item::SimPlay);
     u.wait_sim_generation();
-    for _ in 0..10 {
-        u.step(0.05);
-        u.wait_sim_generation();
-    }
+    for _ in 0..10 { u.step(0.05); u.wait_sim_generation(); }
     u
 }
 
 fn wait_eye(u: &mut Ui) -> bool {
     for _ in 0..600 {
-        u.step(0.05);
-        u.wait_sim_generation();
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        if u.azr.eye.is_some() {
-            return true;
-        }
+        u.step(0.05); u.wait_sim_generation(); std::thread::sleep(std::time::Duration::from_millis(50));
+        if u.azr.eye.is_some() { return true; }
     }
     false
 }
@@ -174,9 +144,7 @@ fn eye_on_a_stopped_sim_ref_computes_instead_of_waiting_for_edges() {
     let mut u = sim_eye("PCIe 5.0");
     assert_eq!(u.m.eye_src, WaveId::Ref(u.m.sim_slot));
     u.key(key::RUNSTOP);
-    for _ in 0..5 {
-        u.step(0.05);
-    }
+    for _ in 0..5 { u.step(0.05); }
     assert!(!u.sim_playing());
     u.m.view = AView::Eye;
     u.step(0.05);
@@ -190,33 +158,24 @@ fn studio_eye_opens_beside_the_plot_and_full_is_an_explicit_choice() {
     u.key(key::RUNSTOP);
     u.m.eye_place = EyePlace::Full;
     u.m.view = AView::Eye;
-    for _ in 0..3 {
-        u.step(0.05);
-    }
+    for _ in 0..3 { u.step(0.05); }
     assert_eq!(u.m.eye_place, EyePlace::Side, "Studio opens the eye next to the plot");
     let pane = u.eye_pane_rect();
     assert!(!u.plot.wins.is_empty() && u.plot.wins[0].w > 200, "the waveform lane stays: {:?}", u.plot.wins);
-    assert!(
-        u.plot.wins[0].right() <= pane.x + 1 || u.plot.wins[0].bottom() <= pane.y + 1,
-        "beside or under, not over it"
-    );
+    assert!(u.plot.wins[0].right() <= pane.x + 1 || u.plot.wins[0].bottom() <= pane.y + 1, "beside or under, not over it");
     shot(&mut u, "eye-side");
     // Full by choice stays Full, also when the eye is opened again
     u.eye_set_place(EyePlace::Full);
     assert_eq!(u.m.eye_place, EyePlace::Full);
-    u.m.view = AView::Scope;
-    u.step(0.05);
-    u.m.view = AView::Eye;
-    u.step(0.05);
+    u.m.view = AView::Scope; u.step(0.05);
+    u.m.view = AView::Eye; u.step(0.05);
     assert_eq!(u.m.eye_place, EyePlace::Full);
     // Default and Minimal are not touched
     let mut d = Ui::new(Source::Demo { t: 0.0 });
     d.m.layout = Layout::Default;
     d.m.eye_place = EyePlace::Full;
     d.m.view = AView::Eye;
-    for _ in 0..3 {
-        d.step(0.05);
-    }
+    for _ in 0..3 { d.step(0.05); }
     assert_eq!(d.m.eye_place, EyePlace::Full);
 }
 
@@ -225,9 +184,7 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_display_shee
     let mut u = studio();
     u.studio_set_pin_all_for_test();
     u.studio_set_view(StudioView::Docked);
-    for _ in 0..3 {
-        u.step(0.05);
-    }
+    for _ in 0..3 { u.step(0.05); }
     let (gap0, row0, panel0) = (u.plot.wins[1].y - u.plot.wins[0].bottom(), u.studio_row_px(), u.studio_panel_w());
     let plot0 = u.plot.wins[0].w;
     shot(&mut u, "compact-off");
@@ -235,9 +192,7 @@ fn compact_view_shrinks_lanes_badges_and_panel_and_toggles_from_the_display_shee
     u.tap_sheet_item(MenuId::Display, Item::StudioCompact);
     assert!(u.studio.compact);
     u.close_menu();
-    for _ in 0..3 {
-        u.step(0.05);
-    }
+    for _ in 0..3 { u.step(0.05); }
     assert!(u.plot.wins[1].y - u.plot.wins[0].bottom() < gap0, "smaller lane gap");
     assert!(u.studio_row_px() < row0, "smaller badge row");
     assert!(u.studio_panel_w() < panel0, "narrower panel");
@@ -265,27 +220,12 @@ fn bottom_bar_shows_the_sources_that_are_on_and_one_plus_ch_chip_for_the_rest() 
     assert!(b.add.w > 0);
     shot(&mut u, "bottom-sources");
     // a ref and a math channel that are shown get chips
-    u.refs[0] = Some(RefWave {
-        src: 0,
-        color: 0,
-        label: "R1".into(),
-        t0: 0.0,
-        dt: 1e-6,
-        v: vec![0.0f32; 100].into(),
-        vpd: 1.0,
-        offset: 0.0,
-        on: true,
-    });
-    u.m.math_select(0);
-    u.m.math = MathOp::Add;
+    u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-6, v: vec![0.0f32; 100].into(), vpd: 1.0, offset: 0.0, on: true });
+    u.m.math_select(0); u.m.math = MathOp::Add;
     let b = u.studio_bottom();
     assert!(b.refs[0].w > 0 && b.math[0].w > 0 && b.math[1].w == 0, "refs and math that are on");
     let all = [b.ch[0], b.ch[1], b.refs[0], b.math[0], b.add, b.time, b.trig];
-    for (i, a) in all.iter().enumerate() {
-        for c in &all[i + 1..] {
-            assert!(!overlaps(*a, *c), "{a:?} {c:?}");
-        }
-    }
+    for (i, a) in all.iter().enumerate() { for c in &all[i + 1..] { assert!(!overlaps(*a, *c), "{a:?} {c:?}"); } }
     shot(&mut u, "bottom-sources-ref-math");
     // the chip opens a picker of the channels that are off; a row turns one on
     tap_in(&mut u, b.add);
@@ -297,36 +237,16 @@ fn bottom_bar_shows_the_sources_that_are_on_and_one_plus_ch_chip_for_the_rest() 
     assert!(u.m.ch[2].on && u.studio.ch_picker == false);
     assert!(u.studio_bottom().ch[2].w > 0, "CH3 now has its chip");
     // all channels on: the chip stays, as "Add source" (math, ref and bus are behind it)
-    for c in 0..n_ch() {
-        u.m.ch[c].on = true;
-    }
+    for c in 0..n_ch() { u.m.ch[c].on = true; }
     assert!(u.studio_bottom().add.w > 0);
 }
 
 #[test]
 fn pinned_badges_follow_the_live_source_and_a_hidden_ref_leaves_no_rows() {
     let mut u = studio();
-    u.refs[0] = Some(RefWave {
-        src: 0,
-        color: 0,
-        label: "R1".into(),
-        t0: 0.0,
-        dt: 1e-6,
-        v: (0..1000).map(|i| (i as f32 * 0.05).sin()).collect::<Vec<_>>().into(),
-        vpd: 1.0,
-        offset: 0.0,
-        on: true,
-    });
+    u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-6, v: (0..1000).map(|i| (i as f32 * 0.05).sin()).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true });
     u.m.meas.push((Meas::Vpp, WaveId::Ref(0)));
-    let badge_sources = |u: &Ui| {
-        u.studio_pinned()
-            .into_iter()
-            .map(|k| match k {
-                super::studio::MeasKey::One(_, id) => id,
-                _ => unreachable!(),
-            })
-            .collect::<Vec<_>>()
-    };
+    let badge_sources = |u: &Ui| u.studio_pinned().into_iter().map(|k| match k { super::studio::MeasKey::One(_, id) => id, _ => unreachable!() }).collect::<Vec<_>>();
     assert!(badge_sources(&u).contains(&WaveId::Ch(0)));
     // CH1 off, the ref is the signal: no CH1 badges
     u.m.ch[0].on = false;
@@ -348,9 +268,7 @@ fn trigger_chip_shows_the_real_trigger_source_in_sim() {
     let mut u = sim_ui();
     u.sim_activate(Item::SimPlay);
     u.wait_sim_generation();
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     assert!(u.session_is_sim);
     assert_eq!(u.m.trigger_wave(), WaveId::Ref(u.m.sim_slot));
     assert_eq!(u.trigger_source_label(), format!("R{}", u.m.sim_slot + 1));
@@ -380,24 +298,16 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     assert_eq!(again.m.layout, Layout::Studio);
     assert_eq!(again.studio.view, StudioView::Docked);
     assert_eq!(again.m.tscale, 12);
-    for _ in 0..6 {
-        again.step(0.05);
-    }
+    for _ in 0..6 { again.step(0.05); }
     again.render(&mut Canvas::new(W, H));
     assert!(again.stacked() && again.studio.view == StudioView::Docked);
     // an unchanged setup writes nothing; a change is written by the next save
     let before = std::fs::metadata(dir.join(crate::store::readers::SetupFile::NAME)).unwrap().modified().unwrap();
     file2.save(&again, true);
-    assert_eq!(
-        std::fs::metadata(dir.join(crate::store::readers::SetupFile::NAME)).unwrap().modified().unwrap(),
-        before
-    );
+    assert_eq!(std::fs::metadata(dir.join(crate::store::readers::SetupFile::NAME)).unwrap().modified().unwrap(), before);
     again.m.tscale = 10;
     file2.save(&again, true);
-    assert_eq!(
-        std::fs::read_to_string(dir.join(crate::store::readers::SetupFile::NAME)).unwrap(),
-        crate::store::setup_text(&again.m)
-    );
+    assert_eq!(std::fs::read_to_string(dir.join(crate::store::readers::SetupFile::NAME)).unwrap(), crate::store::setup_text(&again.m));
     // a damaged file is reported, not applied
     std::fs::write(dir.join(crate::store::readers::SetupFile::NAME), "layout = wide\n").unwrap();
     let mut third = Ui::new(Source::Demo { t: 0.0 });
@@ -406,9 +316,7 @@ fn the_desktop_setup_file_brings_back_the_layout_and_the_studio_view() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
-fn scale_index(t: f32) -> usize {
-    tscales().iter().position(|&s| (s / t - 1.0).abs() < 1e-3).expect("a time scale")
-}
+fn scale_index(t: f32) -> usize { tscales().iter().position(|&s| (s / t - 1.0).abs() < 1e-3).expect("a time scale") }
 
 /// The owner's two cases on the demo source: main 500 us/div with zoom 2.5x, main 50 ms/div with zoom 250x.
 fn zoomed_demo(main: f32, zoom: f32, zdelay: f32) -> Ui {
@@ -416,17 +324,13 @@ fn zoomed_demo(main: f32, zoom: f32, zdelay: f32) -> Ui {
     u.m.dots = false; // vectors: the zoom joins the samples
     u.m.tscale = scale_index(main);
     u.m.delay = 0.0;
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u.set_zoom(true);
     u.m.zscale = scale_index(zoom);
     u.m.zdelay = zdelay;
     u.clamp_zoom();
     u.relayout();
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u
 }
 
@@ -443,17 +347,9 @@ fn zoom_axis_labels_are_round_at_any_delay() {
     // the owner's case: 200 us/div in a window put at 0.439 ms
     let ticks = studio_time_ticks(200e-6, 0.439e-3, 1);
     assert_eq!(ticks.first().map(|t| t.0), Some(-2), "first label -0.4 ms, not -0.561 ms");
-    for (k, t) in &ticks {
-        assert!((t - *k as f64 * 200e-6).abs() < 1e-9, "{k} {t}");
-    }
-    let labels: Vec<String> = ticks
-        .iter()
-        .map(|&(k, t)| if k == 0 { "0 s".into() } else { axis_label(t as f32, 200e-6, 0.0, 1.439e-3, "s") })
-        .collect();
-    assert_eq!(
-        labels,
-        ["-0.4 ms", "-0.2 ms", "0 s", "0.2 ms", "0.4 ms", "0.6 ms", "0.8 ms", "1.0 ms", "1.2 ms", "1.4 ms"]
-    );
+    for (k, t) in &ticks { assert!((t - *k as f64 * 200e-6).abs() < 1e-9, "{k} {t}"); }
+    let labels: Vec<String> = ticks.iter().map(|&(k, t)| if k == 0 { "0 s".into() } else { axis_label(t as f32, 200e-6, 0.0, 1.439e-3, "s") }).collect();
+    assert_eq!(labels, ["-0.4 ms", "-0.2 ms", "0 s", "0.2 ms", "0.4 ms", "0.6 ms", "0.8 ms", "1.0 ms", "1.2 ms", "1.4 ms"]);
     // a window with the trigger in the middle has the labels the main axis has
     let c = studio_time_ticks(200e-6, 0.0, 1);
     assert_eq!(c.len(), 11);
@@ -575,9 +471,7 @@ fn panning_the_zoom_never_changes_the_main_time_base() {
 #[test]
 fn drawing_a_box_turns_the_zoom_on_framed_to_it() {
     let mut u = studio();
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     assert!(!u.m.zoom);
     let g = u.plot.grid;
     u.arm_zoom_area();
@@ -592,7 +486,5 @@ fn drawing_a_box_turns_the_zoom_on_framed_to_it() {
 
 fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
     u.handle(Ev::Touch { id: 0, phase, x, y });
-    for _ in 0..1 {
-        u.step(0.01);
-    }
+    for _ in 0..1 { u.step(0.01); }
 }

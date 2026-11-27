@@ -38,11 +38,7 @@ const IN_SWEEP: &str = "The Bode sweep is using the generator";
 impl Ui {
     /// The model of the external generator: an external entry of the table, whatever a setup file said.
     pub(super) fn ext_model(&self) -> usize {
-        if extgen::external(self.m.ext_model) {
-            self.m.ext_model
-        } else {
-            extgen::FIRST_EXTERNAL
-        }
+        if extgen::external(self.m.ext_model) { self.m.ext_model } else { extgen::FIRST_EXTERNAL }
     }
 
     /// What the templates of the model are filled with, for `f` Hz and `a` Vpp.
@@ -64,8 +60,7 @@ impl Ui {
     pub(super) fn ext_connect(&mut self, identify: bool) {
         let shared = Arc::new(Mutex::new(extgen::Shared::default()));
         let target = extgen::Target { usb: self.m.bode_usb, addr: self.m.bode_addr.clone(), identify };
-        self.ext =
-            ExtUi { tx: Some(extgen::spawn(target, shared.clone())), shared, pick: identify, ..Default::default() };
+        self.ext = ExtUi { tx: Some(extgen::spawn(target, shared.clone())), shared, pick: identify, ..Default::default() };
     }
 
     /// Closes the connection: the thread ends with its sender.
@@ -186,11 +181,7 @@ impl Ui {
 
     /// Whether the settings of the page may change now: not while a sweep steps the generator.
     pub(super) fn ext_free(&self) -> Result<(), &'static str> {
-        if self.ext_in_sweep() {
-            Err(IN_SWEEP)
-        } else {
-            Ok(())
-        }
+        if self.ext_in_sweep() { Err(IN_SWEEP) } else { Ok(()) }
     }
 
     /// The state of the connection in one word (`:EXTGen:STATe?`).
@@ -303,13 +294,7 @@ impl Ui {
         let bare = |s: &str| s.strip_prefix("generator ").unwrap_or(s).to_string();
         Some(match it {
             Item::ExtModel => GENERATORS[self.ext_model()].name.into(),
-            Item::ExtLink => {
-                if m.bode_usb {
-                    "USB".into()
-                } else {
-                    "LAN".into()
-                }
-            }
+            Item::ExtLink => if m.bode_usb { "USB".into() } else { "LAN".into() },
             Item::ExtAddr => m.bode_addr.clone(),
             Item::ExtState => match self.ext_conn() {
                 Conn::Off => "Not connected".into(),
@@ -322,22 +307,10 @@ impl Ui {
                 idn => extgen::idn_short(&idn),
             },
             Item::ExtCh => (m.ext_ch.min(1) + 1).to_string(),
-            Item::ExtLoad => {
-                if m.ext_hiz {
-                    "High-Z".into()
-                } else {
-                    "50 \u{3a9}".into()
-                }
-            }
+            Item::ExtLoad => if m.ext_hiz { "High-Z".into() } else { "50 \u{3a9}".into() },
             Item::ExtFreq => si_short(m.ext_freq, "Hz"),
             Item::ExtAmpl => si_short(m.ext_ampl, "Vpp"),
-            Item::ExtOut => {
-                if self.ext.out {
-                    "On".into()
-                } else {
-                    "Off".into()
-                }
-            }
+            Item::ExtOut => if self.ext.out { "On".into() } else { "Off".into() },
             Item::ExtConnect => String::new(),
             _ => return None,
         })
@@ -356,17 +329,7 @@ impl Ui {
     }
 
     pub(super) fn ext_adjust(&mut self, it: Item, d: i32) -> bool {
-        if !matches!(
-            it,
-            Item::ExtModel
-                | Item::ExtLink
-                | Item::ExtAddr
-                | Item::ExtCh
-                | Item::ExtLoad
-                | Item::ExtFreq
-                | Item::ExtAmpl
-                | Item::ExtOut
-        ) {
+        if !matches!(it, Item::ExtModel | Item::ExtLink | Item::ExtAddr | Item::ExtCh | Item::ExtLoad | Item::ExtFreq | Item::ExtAmpl | Item::ExtOut) {
             return false;
         }
         // a running sweep keeps the generator it started with
@@ -378,10 +341,7 @@ impl Ui {
             return true;
         }
         let ladder = |x: f64, lo: f64, hi: f64| {
-            let l: Vec<f64> = (-3..9)
-                .flat_map(|e| [1.0, 2.0, 5.0].map(|k| k * 10f64.powi(e)))
-                .filter(|&v| v >= lo * 0.999 && v <= hi * 1.001)
-                .collect();
+            let l: Vec<f64> = (-3..9).flat_map(|e| [1.0, 2.0, 5.0].map(|k| k * 10f64.powi(e))).filter(|&v| v >= lo * 0.999 && v <= hi * 1.001).collect();
             let i = l.iter().position(|&v| v >= x * 0.999).unwrap_or(l.len() - 1);
             l[(i as i32 + d).clamp(0, l.len() as i32 - 1) as usize]
         };
@@ -469,12 +429,7 @@ mod tests {
 
     /// What the generator got, without the error queries and the mark of a closed connection.
     fn lines_of(got: &Arc<Mutex<Vec<String>>>) -> Vec<String> {
-        got.lock()
-            .unwrap()
-            .iter()
-            .filter(|l| *l != "SYSTem:ERRor?" && *l != crate::extgen::tests::CLOSED)
-            .cloned()
-            .collect()
+        got.lock().unwrap().iter().filter(|l| *l != "SYSTem:ERRor?" && *l != crate::extgen::tests::CLOSED).cloned().collect()
     }
 
     #[test]
@@ -485,25 +440,8 @@ mod tests {
         ui.open_menu(MenuId::ExtGen);
         // the first external model, on the LAN with its address: no channel or load row it would not use
         let items = ui.items(MenuId::ExtGen);
-        assert_eq!(
-            items,
-            [
-                Item::ExtModel,
-                Item::ExtLink,
-                Item::ExtAddr,
-                Item::ExtState,
-                Item::ExtIdn,
-                Item::ExtCh,
-                Item::ExtFreq,
-                Item::ExtAmpl,
-                Item::ExtOut,
-                Item::ExtConnect
-            ]
-        );
-        assert_eq!(
-            (ui.value(Item::ExtModel), ui.value(Item::ExtLink), ui.value(Item::ExtState), ui.value(Item::ExtIdn)),
-            ("APPL".into(), "LAN".into(), "Not connected".into(), "-".into())
-        );
+        assert_eq!(items, [Item::ExtModel, Item::ExtLink, Item::ExtAddr, Item::ExtState, Item::ExtIdn, Item::ExtCh, Item::ExtFreq, Item::ExtAmpl, Item::ExtOut, Item::ExtConnect]);
+        assert_eq!((ui.value(Item::ExtModel), ui.value(Item::ExtLink), ui.value(Item::ExtState), ui.value(Item::ExtIdn)), ("APPL".into(), "LAN".into(), "Not connected".into(), "-".into()));
         assert_eq!(ui.options(Item::ExtModel), ["APPL", "BSWV", "SCPI", "CHANnel", "OWON DGE"]);
         // USB: no address. The OWON DGE: channel and load
         ui.adjust(Item::ExtLink, 1);
@@ -532,16 +470,8 @@ mod tests {
         ui.activate(Item::ExtConnect);
         assert!(ui.toast.as_ref().unwrap().0.contains("USB port"));
         // no USB device in the tests: the message says so, and the State row keeps the reason
-        assert!(
-            until(&mut ui, |u| u.toast.as_ref().is_some_and(|t| t.0.starts_with("generator USB: no USB device found"))),
-            "{:?}",
-            ui.toast
-        );
-        assert!(
-            !ui.ext_linked() && ui.value(Item::ExtState).starts_with("USB: no USB device found"),
-            "{}",
-            ui.value(Item::ExtState)
-        );
+        assert!(until(&mut ui, |u| u.toast.as_ref().is_some_and(|t| t.0.starts_with("generator USB: no USB device found"))), "{:?}", ui.toast);
+        assert!(!ui.ext_linked() && ui.value(Item::ExtState).starts_with("USB: no USB device found"), "{}", ui.value(Item::ExtState));
         // Connect again tries again
         ui.activate(Item::ExtConnect);
         assert!(ui.ext.tx.is_some());
@@ -557,11 +487,7 @@ mod tests {
         assert!(until(&mut ui, |u| u.value(Item::ExtState).starts_with("Connected")), "{}", ui.value(Item::ExtState));
         assert_eq!(ui.value(Item::ExtState), format!("Connected: {}", addr));
         // the model from the answer; the serial number and the firmware are not shown
-        assert!(
-            until(&mut ui, |u| u.toast.as_ref().is_some_and(|t| t.0.ends_with(": OWON DGE2070"))),
-            "{:?}",
-            ui.toast
-        );
+        assert!(until(&mut ui, |u| u.toast.as_ref().is_some_and(|t| t.0.ends_with(": OWON DGE2070"))), "{:?}", ui.toast);
         assert_eq!((ui.value(Item::ExtModel), ui.value(Item::ExtIdn)), ("OWON DGE".into(), "OWON DGE2070".into()));
         // output on: load, sine, offset, amplitude, then the frequency, then the switch
         (ui.m.ext_freq, ui.m.ext_ampl) = (1e3, 0.5);
@@ -570,14 +496,7 @@ mod tests {
         assert!(until(&mut ui, |u| u.ext.shared.lock().unwrap().done == u.ext.sent));
         assert_eq!(
             lines_of(&got)[1..],
-            [
-                "OUTPut1:IMPedance INFinity",
-                "SOURce1:FUNCtion:SHAPe SIN",
-                "SOURce1:VOLTage:LEVel:IMMediate:OFFSet 0mV",
-                "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude 0.5Vpp",
-                "SOURce1:FREQuency:FIXed 1000Hz",
-                "OUTPut1:STATe ON"
-            ]
+            ["OUTPut1:IMPedance INFinity", "SOURce1:FUNCtion:SHAPe SIN", "SOURce1:VOLTage:LEVel:IMMediate:OFFSet 0mV", "SOURce1:VOLTage:LEVel:IMMediate:AMPLitude 0.5Vpp", "SOURce1:FREQuency:FIXed 1000Hz", "OUTPut1:STATe ON"]
         );
         // a new frequency goes out alone, with the switch as it is
         got.lock().unwrap().clear();
@@ -587,14 +506,7 @@ mod tests {
         assert_eq!(lines_of(&got), ["SOURce1:FREQuency:FIXed 2000Hz", "OUTPut1:STATe ON"]);
         // what the generator refuses is said on the screen, and the connection stays
         ui.ext_set(Some(90e6), None);
-        assert!(
-            until(&mut ui, |u| u
-                .toast
-                .as_ref()
-                .is_some_and(|t| t.0.starts_with("The generator refused SOURce1:FREQuency:FIXed 90000000Hz"))),
-            "{:?}",
-            ui.toast
-        );
+        assert!(until(&mut ui, |u| u.toast.as_ref().is_some_and(|t| t.0.starts_with("The generator refused SOURce1:FREQuency:FIXed 90000000Hz"))), "{:?}", ui.toast);
         assert!(ui.ext_linked());
         // the second channel at 50 ohms
         got.lock().unwrap().clear();
@@ -624,21 +536,14 @@ mod tests {
         let text = crate::store::setup_text(&ui.m);
         assert!(text.contains("extgen = 6 2 50 25000 0.2\n"), "{}", text);
         let m = crate::store::parse_setup(&text).unwrap();
-        assert_eq!(
-            (m.ext_model, m.ext_ch, m.ext_hiz, m.ext_freq, m.ext_ampl, m.bode_usb),
-            (6, 1, false, 25e3, 0.2, true)
-        );
+        assert_eq!((m.ext_model, m.ext_ch, m.ext_hiz, m.ext_freq, m.ext_ampl, m.bode_usb), (6, 1, false, 25e3, 0.2, true));
         // the Bode sweep on External is the model of the page, in the file too
         ui.adjust(Item::BodeGen, 1);
         assert_eq!((ui.value(Item::BodeGen), ui.m.bode_gen), ("External".into(), 6));
         ui.adjust(Item::ExtModel, 1);
         assert_eq!((ui.m.ext_model, ui.m.bode_gen), (1, 1));
         // a file from before the page: the generator of its Bode line
-        let old: String = crate::store::setup_text(&ui.m)
-            .lines()
-            .filter(|l| !l.starts_with("extgen"))
-            .map(|l| format!("{}\n", l.replace(" 1 192.168.1.100:5555", " 5 192.168.1.100:5555")))
-            .collect();
+        let old: String = crate::store::setup_text(&ui.m).lines().filter(|l| !l.starts_with("extgen")).map(|l| format!("{}\n", l.replace(" 1 192.168.1.100:5555", " 5 192.168.1.100:5555"))).collect();
         let m = crate::store::parse_setup(&old).unwrap();
         assert_eq!((m.bode_gen, m.ext_model, m.ext_hiz), (5, 5, true));
         // the built-in generator leaves the model of the page alone

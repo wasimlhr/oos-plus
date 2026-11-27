@@ -117,21 +117,13 @@ impl Ui {
         let ref_t0 = self.source_time_origin(WaveId::Ref(self.ref_page.sel), r.t0);
         // A mask is compared point by point with the record on screen, and a reference keeps the samples of its whole
         // acquisition, longer and finer than the screen: the reference is read at the times of the screen's points.
-        let on_screen =
-            self.last[0].as_ref().filter(|rec| rec.dt > 0.0 && r.dt > 0.0 && !rec.ch[src].is_empty()).map(|rec| {
-                (0..rec.ch[src].len())
-                    .map(|i| {
-                        let k = ((rec.t0 + i as f64 * rec.dt - ref_t0) / r.dt).round();
-                        if k >= 0.0 && k < r.v.len() as f64 {
-                            r.v[k as usize]
-                        } else {
-                            f32::NAN
-                        }
-                    })
-                    .collect::<Vec<f32>>()
-            });
-        self.mask_sw.reference =
-            Some(on_screen.filter(|v| v.iter().any(|x| x.is_finite())).unwrap_or_else(|| r.v.as_ref().clone()));
+        let on_screen = self.last[0].as_ref().filter(|rec| rec.dt > 0.0 && r.dt > 0.0 && !rec.ch[src].is_empty()).map(|rec| {
+            (0..rec.ch[src].len()).map(|i| {
+                let k = ((rec.t0 + i as f64 * rec.dt - ref_t0) / r.dt).round();
+                if k >= 0.0 && k < r.v.len() as f64 { r.v[k as usize] } else { f32::NAN }
+            }).collect::<Vec<f32>>()
+        });
+        self.mask_sw.reference = Some(on_screen.filter(|v| v.iter().any(|x| x.is_finite())).unwrap_or_else(|| r.v.as_ref().clone()));
         self.m.mask_src = src;
         self.build_mask();
         self.m.mask_on = true;
@@ -306,40 +298,26 @@ impl Ui {
     /// Studio: the views that are not the waveform (histogram, XY, analysers) each draw in the rectangle of their own
     /// view. What they draw is the same as in the other layouts, only in another rectangle.
     pub(super) fn draw_view_tiles(&mut self, cv: &mut Canvas) {
-        if !self.dock_on() {
-            return;
-        }
+        if !self.dock_on() { return; }
         use dock::VKind;
         let saved = self.plot.area;
         for k in [VKind::Hist, VKind::Xy, VKind::View] {
-            if !self.dock_shown(k) {
-                continue;
-            }
+            if !self.dock_shown(k) { continue; }
             let Some(r) = self.dock_content(k) else { continue };
             // whatever the view draws stays in its own rectangle, also where its code lifts the clip
             cv.set_view_clip(Some(r));
             cv.fill(r, BG);
             match k {
                 VKind::Hist => self.draw_hist_in(cv, r, true),
-                VKind::Xy => {
-                    self.plot.area = r;
-                    self.draw_xy(cv);
-                    self.draw_view_btn(cv);
-                }
-                _ => {
-                    self.plot.area = r;
-                    self.draw_analyzer(cv);
-                    self.draw_view_btn(cv);
-                }
+                VKind::Xy => { self.plot.area = r; self.draw_xy(cv); self.draw_view_btn(cv); }
+                _ => { self.plot.area = r; self.draw_analyzer(cv); self.draw_view_btn(cv); }
             }
             cv.set_view_clip(None);
         }
         self.plot.area = saved;
     }
 
-    pub(super) fn draw_hist(&self, cv: &mut Canvas) {
-        self.draw_hist_in(cv, self.plot.area, false)
-    }
+    pub(super) fn draw_hist(&self, cv: &mut Canvas) { self.draw_hist_in(cv, self.plot.area, false) }
 
     /// The axes of the histogram view: volts at the left on the division lines of the lane, a count scale along the top.
     pub(super) fn draw_hist_axes(&self, cv: &mut Canvas, a: Rect, (ax, ly, lh): (i32, i32, i32), c: usize, peak: u64) {
@@ -358,9 +336,7 @@ impl Ui {
             let v = (VDIV / 2.0 - j as f32) * vpd - offset;
             let s = axis_label(v, vpd, offset, span, self.m.unit(c));
             let ty = (y + 4).clamp(a.y + 12, a.bottom() - 2);
-            if ty < free + f.s.size {
-                continue;
-            }
+            if ty < free + f.s.size { continue; }
             free = ty;
             // beside the axis line, not at the edge of the view: the handle of the divider sits on that edge
             cv.text(&f.s, (a.x + ax - 7 - f.s.width(&s)).max(a.x + 2), ty, &s, AXIS_TEXT);
@@ -380,9 +356,7 @@ impl Ui {
         let Some((bins, mean, sd)) = self.hist_bins() else { return };
         // over the waveform it belongs to the lane of its source; as a view of its own it is drawn once, after the
         // lanes, and has only to ask whether the source is hidden (with the second lane as its source it stayed empty)
-        let Some(c) = self.hist_src().filter(|&c| if tile { !self.m.ch_hidden[c] } else { self.shows(c) }) else {
-            return;
-        };
+        let Some(c) = self.hist_src().filter(|&c| if tile { !self.m.ch_hidden[c] } else { self.shows(c) }) else { return };
         let col = CH_COLORS[c];
         let peak = bins.iter().copied().max().unwrap_or(0).max(1) as f64;
         // as a view of its own: a volts axis at the left, on the lines of the lane it reads, and a count scale
@@ -430,8 +404,7 @@ impl Ui {
                 let mv = (h / 2.0 - mean) * vpp + center as f64 * ch.volts_per_div() as f64 - ch.offset as f64;
                 // the figures come from the samples where there are any: the bars are rows of the picture, bright in
                 // proportion to what was drawn there, and a lane of 150 rows moved the mean by 0.16 V of 1.25 V
-                let (sm, ss) =
-                    (self.meas_number(WaveId::Ch(c), Meas::Vavg), self.meas_number(WaveId::Ch(c), Meas::StdDev));
+                let (sm, ss) = (self.meas_number(WaveId::Ch(c), Meas::Vavg), self.meas_number(WaveId::Ch(c), Meas::StdDev));
                 let (mv, sv) = if sm.is_finite() && ss.is_finite() { (sm, ss) } else { (mv, sd * vpp) };
                 format!("Hist CH{}  mean {}  \u{3c3} {}", c + 1, si(mv, self.m.unit(c)), si(sv, self.m.unit(c)))
             }
@@ -454,11 +427,7 @@ impl Ui {
         let f = self.fonts();
         // above the decoder band and the time labels, right of the volt labels
         // as a view of its own the header starts right of the volts axis, so the two never meet
-        let r = if tile {
-            Self::hist_head_rect(a, ax, f.s.width(&txt) + 16)
-        } else {
-            Rect::new(a.x + 14 + f.s.width("-0.00 mV"), a.y + a.h - 76, f.s.width(&txt) + 16, 20)
-        };
+        let r = if tile { Self::hist_head_rect(a, ax, f.s.width(&txt) + 16) } else { Rect::new(a.x + 14 + f.s.width("-0.00 mV"), a.y + a.h - 76, f.s.width(&txt) + 16, 20) };
         cv.round(r, 4, PANEL_BG, 230);
         cv.text_in(&f.s, r, 1, &txt, col);
     }
@@ -580,8 +549,7 @@ impl Ui {
         self.m.math = MathOp::Lpf;
         // the active channel when it is on, else the first channel that is
         let active = self.m.active.min(NCH - 1);
-        self.m.math_a =
-            if self.m.ch[active].on { active } else { (0..NCH).find(|&c| self.m.ch[c].on).unwrap_or(active) };
+        self.m.math_a = if self.m.ch[active].on { active } else { (0..NCH).find(|&c| self.m.ch[c].on).unwrap_or(active) };
         self.m.math_filt.resp = crate::math::FiltResp::Butterworth;
         self.m.math_fc = (2.0 / self.m.time_per_div() as f64) as f32;
         self.m.math_offset = 0.0;
@@ -627,8 +595,9 @@ impl Ui {
 
     pub(super) fn draw_math(&self, cv: &mut Canvas) {
         // all traces first, then the labels on top of them
-        let on: Vec<usize> =
-            (0..NMATH).filter(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.plot.cur_win).collect();
+        let on: Vec<usize> = (0..NMATH)
+            .filter(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.plot.cur_win)
+            .collect();
         let labels: Vec<Option<String>> =
             on.iter().enumerate().map(|(row, &k)| self.draw_math_ch(cv, k, row as i32)).collect();
         let f = self.fonts();
@@ -642,9 +611,7 @@ impl Ui {
                 } else {
                     // left of the corner buttons (and of the word "Full" that Studio writes beside the first), so no
                     // caption is hidden behind them
-                    let edge = self.full_btn().0.x
-                        - 10
-                        - if self.m.layout == Layout::Studio { f.s.width("Full") + 8 } else { 0 };
+                    let edge = self.full_btn().0.x - 10 - if self.m.layout == Layout::Studio { f.s.width("Full") + 8 } else { 0 };
                     Rect::new(
                         edge - f.s.width(label) - 16,
                         self.plot.area.y + 22 + 26 * row as i32,
@@ -848,17 +815,12 @@ impl Ui {
     /// an error). At most `DEC_NATIVE_RUN` points per line while running and `DEC_NATIVE_STOP` when stopped, every
     /// n-th sample beyond that; the result is kept per frame, so moving a stopped record decodes nothing again.
     /// `None`: the screen record is the answer (min/max pairs, no kept samples, or none finer than the screen's).
-    fn decode_native(
-        &self,
-        m: &Model,
-        rec: &Record,
-    ) -> Option<Result<std::sync::Arc<Vec<oos_dsp::decode::Packet>>, &'static str>> {
+    fn decode_native(&self, m: &Model, rec: &Record) -> Option<Result<std::sync::Arc<Vec<oos_dsp::decode::Packet>>, &'static str>> {
         use std::hash::{Hash, Hasher};
         // of the record shown, the memory a RAW read takes: after a STOP the whole record, not the view read again
         let shown = self.last[0].as_ref().is_some_and(|r| std::ptr::eq(r, rec));
         let raw = if shown { self.memory_raw() } else { rec.raw.as_ref() };
-        let raw =
-            raw.filter(|r| !r.frame.envelope && r.frame.dt.is_finite() && r.frame.dt > 0.0 && r.t0.is_finite())?;
+        let raw = raw.filter(|r| !r.frame.envelope && r.frame.dt.is_finite() && r.frame.dt > 0.0 && r.t0.is_finite())?;
         // the record of another source is conditioned (coupling, invert) after its frame: the frame is not what it shows
         if !self.src.is_hw() && !raw.conditioned {
             return None;
@@ -883,13 +845,7 @@ impl Ui {
         if let Some(e) = self.decoded.get(key) {
             return Some(Ok(std::sync::Arc::new(e)));
         }
-        let thin: [Vec<f32>; NCH] = std::array::from_fn(|c| {
-            if stride > 1 {
-                f.ch[c].iter().step_by(stride).copied().collect()
-            } else {
-                Vec::new()
-            }
-        });
+        let thin: [Vec<f32>; NCH] = std::array::from_fn(|c| if stride > 1 { f.ch[c].iter().step_by(stride).copied().collect() } else { Vec::new() });
         let ch: [&[f32]; NCH] = std::array::from_fn(|c| if stride > 1 { &thin[c][..] } else { &f.ch[c][..] });
         let mut p = match crate::trig::decode(m, ch, dt) {
             Ok(p) => p,

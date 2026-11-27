@@ -10,17 +10,13 @@ use super::*;
 impl Ui {
     /// The rows the Display menu has in Studio alone, after its other rows.
     pub(super) fn studio_display_rows(&self) -> Vec<Item> {
-        if self.m.layout != Layout::Studio {
-            return Vec::new();
-        }
+        if self.m.layout != Layout::Studio { return Vec::new(); }
         vec![Item::StudioBadges, Item::StudioCompact, Item::StudioReset]
     }
 
     /// The row the Storage menu has in Studio alone, after its other rows.
     pub(super) fn studio_storage_rows(&self) -> Vec<Item> {
-        if self.m.layout != Layout::Studio {
-            return Vec::new();
-        }
+        if self.m.layout != Layout::Studio { return Vec::new(); }
         vec![Item::StudioOffline]
     }
 
@@ -129,11 +125,7 @@ impl Ui {
         }
         assert!(self.menu_open && self.menu == menu && self.sheet_active(), "{menu:?} is open as a sheet");
         let spec = self.sheet_spec(menu).expect("a sheet");
-        let tab = spec
-            .tabs
-            .iter()
-            .position(|t| t.rows.contains(&it) || t.foot.contains(&it))
-            .unwrap_or_else(|| panic!("{it:?} is on no tab"));
+        let tab = spec.tabs.iter().position(|t| t.rows.contains(&it) || t.foot.contains(&it)).unwrap_or_else(|| panic!("{it:?} is on no tab"));
         let (x, y) = mid(self.sheet_geo().expect("its geometry").tabs[tab]);
         self.tap(x, y);
         let g = self.sheet_geo().expect("its geometry");
@@ -160,9 +152,7 @@ mod tests {
         u.m.layout = l;
         u.m.ch[1].on = true;
         u.studio.enter = l == Layout::Studio;
-        for _ in 0..8 {
-            u.step(0.05);
-        }
+        for _ in 0..8 { u.step(0.05); }
         u
     }
 
@@ -172,27 +162,16 @@ mod tests {
         let mut cv = Canvas::new(u.scr.w, u.scr.h);
         cv.au_start();
         u.render(&mut cv);
-        cv.au
-            .take()
-            .unwrap()
-            .into_iter()
-            .filter_map(|e| match e {
-                Au::Text { s, .. } => Some(s),
-                _ => None,
-            })
-            .collect()
+        cv.au.take().unwrap().into_iter().filter_map(|e| match e { Au::Text { s, .. } => Some(s), _ => None }).collect()
     }
 
     /// With OOS_SHOTS set, the screen as a picture in that folder.
     fn shot(u: &mut Ui, name: &str) {
         let mut cv = Canvas::new(u.scr.w, u.scr.h);
-        for _ in 0..3 {
-            u.step(0.05);
-        }
+        for _ in 0..3 { u.step(0.05); }
         u.render(&mut cv);
         if let Some(dir) = std::env::var_os("OOS_SHOTS") {
-            std::fs::write(std::path::Path::new(&dir).join(format!("studio-{name}.png")), crate::store::png_of(&cv))
-                .unwrap();
+            std::fs::write(std::path::Path::new(&dir).join(format!("studio-{name}.png")), crate::store::png_of(&cv)).unwrap();
         }
     }
 
@@ -202,12 +181,7 @@ mod tests {
     fn the_top_bar_has_no_view_button() {
         let mut u = layout(Layout::Studio);
         let t = u.studio_top();
-        assert!(
-            t.storage.w > 0 && t.gear.x - t.storage.right() <= 6,
-            "Storage stands beside the Menu: {:?} {:?}",
-            t.storage,
-            t.gear
-        );
+        assert!(t.storage.w > 0 && t.gear.x - t.storage.right() <= 6, "Storage stands beside the Menu: {:?} {:?}", t.storage, t.gear);
         assert!(super::super::studio::TOP_LABELS.iter().all(|tier| !tier.contains(&"View")));
         assert!(!texts(&mut u).iter().any(|s| s == "View"), "no View on the screen");
         shot(&mut u, "no-view-top-bar");
@@ -221,23 +195,14 @@ mod tests {
         let screen = spec.tabs.iter().find(|t| t.name == "Screen").expect("the Screen tab");
         assert!(screen.rows.ends_with(&[Item::StudioBadges, Item::StudioCompact]), "{:?}", screen.rows);
         assert_eq!(screen.foot, [Item::StudioReset]);
-        assert!(spec.tabs.iter().filter(|t| t.name != "Screen").all(|t| !t
-            .rows
-            .iter()
-            .chain(&t.foot)
-            .any(|it| OWN.contains(it))));
-        assert_eq!(
-            (u.sheet_row_kind(Item::StudioBadges), u.sheet_row_kind(Item::StudioCompact)),
-            (super::super::sheet::RowKind::Toggle, super::super::sheet::RowKind::Toggle)
-        );
+        assert!(spec.tabs.iter().filter(|t| t.name != "Screen").all(|t| !t.rows.iter().chain(&t.foot).any(|it| OWN.contains(it))));
+        assert_eq!((u.sheet_row_kind(Item::StudioBadges), u.sheet_row_kind(Item::StudioCompact)), (super::super::sheet::RowKind::Toggle, super::super::sheet::RowKind::Toggle));
         // drawn with their names, the action whole on its button
         let button = u.tap_sheet_item(MenuId::Display, Item::StudioBadges);
         assert!(button.w >= 40 && button.h >= 36, "a half of the switch is a finger wide: {button:?}");
         u.tap_sheet_item(MenuId::Display, Item::StudioBadges);
         let seen = texts(&mut u);
-        for name in ["Pinned badges", "Compact view", "Reset layout"] {
-            assert!(seen.iter().any(|s| s == name), "{name} in {seen:?}");
-        }
+        for name in ["Pinned badges", "Compact view", "Reset layout"] { assert!(seen.iter().any(|s| s == name), "{name} in {seen:?}"); }
         shot(&mut u, "no-view-display-screen");
         let reset = u.sheet_geo().unwrap().foot[0].1;
         assert!(u.fonts().mb.width("Reset layout") <= reset.w - 8 && reset.h >= 40, "{reset:?}");
@@ -247,10 +212,7 @@ mod tests {
             for menu in [MenuId::Display, MenuId::Storage] {
                 assert!(!d.items(menu).iter().any(|it| OWN.contains(it)), "{l:?} {menu:?}");
                 if let Some(spec) = d.sheet_spec(menu) {
-                    assert!(
-                        !spec.tabs.iter().any(|t| t.rows.iter().chain(&t.foot).any(|it| OWN.contains(it))),
-                        "{l:?} {menu:?}"
-                    );
+                    assert!(!spec.tabs.iter().any(|t| t.rows.iter().chain(&t.foot).any(|it| OWN.contains(it))), "{l:?} {menu:?}");
                 }
             }
         }
@@ -292,10 +254,7 @@ mod tests {
         u.studio.pinned = Some(Vec::new());
         u.studio_set_compact(true);
         u.tap_sheet_item(MenuId::Display, Item::StudioReset);
-        assert_eq!(
-            (u.studio.view, u.studio.hide_badges, u.studio.pinned.is_none(), u.studio.compact),
-            (StudioView::Waveform, false, true, false)
-        );
+        assert_eq!((u.studio.view, u.studio.hide_badges, u.studio.pinned.is_none(), u.studio.compact), (StudioView::Waveform, false, true, false));
         assert!(!u.menu_open);
     }
 
@@ -310,16 +269,10 @@ mod tests {
         let tab = u.sheet_geo().unwrap().tabs[1];
         u.tap(tab.x + tab.w / 2, tab.y + tab.h / 2);
         shot(&mut u, "no-view-storage-files");
-        assert!(
-            spec.tabs.iter().all(|t| !t.rows.contains(&Item::StudioOffline))
-                && spec.tabs.iter().filter(|t| t.name != "Files").all(|t| t.foot.is_empty())
-        );
+        assert!(spec.tabs.iter().all(|t| !t.rows.contains(&Item::StudioOffline)) && spec.tabs.iter().filter(|t| t.name != "Files").all(|t| t.foot.is_empty()));
         let button = u.tap_sheet_item(MenuId::Storage, Item::StudioOffline);
         assert!(u.fonts().mb.width("Offline waveform analysis") <= button.w - 8 && button.h >= 40, "{button:?}");
-        assert!(
-            u.studio.view == StudioView::Offline && u.record_mode() && !u.menu_open,
-            "the view is up, the sheet is closed"
-        );
+        assert!(u.studio.view == StudioView::Offline && u.record_mode() && !u.menu_open, "the view is up, the sheet is closed");
         assert!(u.studio_offline_empty().is_some(), "no file yet: the card that offers Load file");
         let live = u.studio_top().badge;
         u.tap(live.x + live.w / 2, live.y + live.h / 2);
@@ -336,14 +289,10 @@ mod tests {
             let (x, y) = (r.x + r.w / 2, r.y + r.h / 2);
             u.handle(Ev::Touch { id: 0, phase: Phase::Down, x, y });
             u.handle(Ev::Touch { id: 0, phase: Phase::Up, x, y });
-            for _ in 0..3 {
-                u.step(0.05);
-            }
+            for _ in 0..3 { u.step(0.05); }
         };
         u.studio_apply_panel(super::super::sheet::PanelKind::Measurements);
-        for _ in 0..3 {
-            u.step(0.05);
-        }
+        for _ in 0..3 { u.step(0.05); }
         assert_eq!(u.studio.view, StudioView::Docked);
         let strip = u.dock_leaf(VKind::Measure).expect("the docked panel");
         let expand = u.dock_extra_rect(VKind::Measure, strip).expect("the expand button");

@@ -11,9 +11,7 @@ fn studio() -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -24,9 +22,7 @@ fn studio() -> Ui {
 fn render(u: &mut Ui) -> Canvas {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..4 {
-        u.step(0.05);
-    }
+    for _ in 0..4 { u.step(0.05); }
     cv = Canvas::new(W, H);
     u.render(&mut cv);
     cv
@@ -56,9 +52,7 @@ fn a_narrow_spectrum_keeps_the_plot_wide_and_draws_only_in_its_view() {
     let mut u = studio();
     u.m.view = AView::Spectrum;
     u.m.hist = Hist::Vertical;
-    for _ in 0..6 {
-        render(&mut u);
-    }
+    for _ in 0..6 { render(&mut u); }
     let r = u.dock_rect(VKind::View).expect("the analyser view");
     assert!(r.w < panes::SPEC_NARROW_W, "a narrow view: {}", r.w);
     // no column of peaks: the plot has the width
@@ -76,9 +70,7 @@ fn a_narrow_spectrum_keeps_the_plot_wide_and_draws_only_in_its_view() {
     assert_eq!(tiles.len(), 2);
     for y in 0..H {
         for x in 0..W {
-            if !tiles.iter().any(|t| t.contains(x, y)) {
-                assert_eq!(cv.px[(y * W + x) as usize], 0x123456, "drawn outside the views at {x},{y}");
-            }
+            if !tiles.iter().any(|t| t.contains(x, y)) { assert_eq!(cv.px[(y * W + x) as usize], 0x123456, "drawn outside the views at {x},{y}"); }
         }
     }
     shot(&mut u, "spectrum-narrow");
@@ -88,9 +80,7 @@ fn a_narrow_spectrum_keeps_the_plot_wide_and_draws_only_in_its_view() {
 fn a_narrow_search_table_has_its_controls_on_a_row_of_their_own() {
     let mut u = studio();
     u.table.kind = Some(tables::TableKind::Search);
-    for _ in 0..4 {
-        render(&mut u);
-    }
+    for _ in 0..4 { render(&mut u); }
     let r = u.dock_content(VKind::Table).expect("the table view");
     // wide: one row
     let wide = Rect::new(0, 0, 500, 300);
@@ -100,9 +90,7 @@ fn a_narrow_search_table_has_its_controls_on_a_row_of_their_own() {
     if let Some(d) = d {
         let (x, y) = (d.line.x + d.line.w / 2, d.line.y + d.line.h / 2);
         touch(&mut u, Phase::Down, x, y);
-        for k in 1..=8 {
-            touch(&mut u, Phase::Move, x + k * 30, y);
-        }
+        for k in 1..=8 { touch(&mut u, Phase::Move, x + k * 30, y); }
         touch(&mut u, Phase::Up, x + 240, y);
     }
     render(&mut u);
@@ -121,9 +109,7 @@ fn a_narrow_search_table_has_its_controls_on_a_row_of_their_own() {
 #[test]
 fn the_source_chip_stays_with_every_channel_on() {
     let mut u = studio();
-    for c in 0..n_ch() {
-        u.m.ch[c].on = true;
-    }
+    for c in 0..n_ch() { u.m.ch[c].on = true; }
     render(&mut u);
     let b = u.studio_bottom();
     assert!(b.add.w >= 40, "the chip stays");
@@ -139,9 +125,7 @@ fn the_source_chip_stays_with_every_channel_on() {
     for layout in [Layout::Default, Layout::Minimal] {
         let mut v = Ui::new(Source::Demo { t: 0.0 });
         v.m.layout = layout;
-        for _ in 0..4 {
-            render(&mut v);
-        }
+        for _ in 0..4 { render(&mut v); }
         assert!(v.studio.ch_picker == false);
     }
 }

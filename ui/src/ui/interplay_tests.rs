@@ -5,9 +5,9 @@
 //! Each test steps one setting through all its values and back, with steps of the screen in between, and checks that
 //! the setup (every saved setting) is what it was.
 
-use super::sim::{nearest_tscale, nearest_vdiv};
 use super::*;
 use crate::wave::Source;
+use super::sim::{nearest_tscale, nearest_vdiv};
 
 /// A wanted scale of NaN: the nearest scale was chosen with `partial_cmp(..).unwrap()`, which panicked; every
 /// distance is NaN now and the first scale is taken.

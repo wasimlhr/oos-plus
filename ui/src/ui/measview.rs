@@ -2,8 +2,8 @@
 //! Studio: the table of the measurements panel (source, name, value, mean, min, max, sigma, count), which drops the
 //! columns that do not fit a narrow panel, and the switch that chooses the view: the strip of cells, this table, or
 //! the cards (measpanel.rs).
-use super::studio::{chip, MeasKey, StudioView};
 use super::*;
+use super::studio::{chip, MeasKey, StudioView};
 
 /// The columns of the detailed table: name and width. Sigma and Count go first when the room is short.
 /// Widths when the panel is narrow: the source is a colour bar, so Name, Value and Mean fit.
@@ -15,16 +15,7 @@ pub(super) const DETAIL_BAR_ONLY_BELOW: i32 = 240;
 pub(super) const DETAIL_NAME_MAX: i32 = 152;
 /// Below this width the table uses them.
 pub(super) const DETAIL_NARROW_BELOW: i32 = 330;
-pub(super) const DETAIL_COLS: [(&str, i32); 8] = [
-    ("Source", 44),
-    ("Name", 104),
-    ("Value", 90),
-    ("Mean", 84),
-    ("Min", 84),
-    ("Max", 84),
-    ("\u{3c3}", 76),
-    ("Count", 64),
-];
+pub(super) const DETAIL_COLS: [(&str, i32); 8] = [("Source", 44), ("Name", 104), ("Value", 90), ("Mean", 84), ("Min", 84), ("Max", 84), ("\u{3c3}", 76), ("Count", 64)];
 /// Row height of the detailed table in a low panel (docked under the plot): five rows show in 230 px.
 pub(super) const DETAIL_ROW: i32 = 28;
 /// The same in a tall panel (docked at the side, or floating tall): a finger's height.
@@ -37,9 +28,7 @@ pub(super) const COL_HEAD: i32 = 24;
 impl Ui {
     /// The panel shows the table: the mode is set, and a panel (not the SIM list) is there.
     pub(super) fn studio_detailed(&self) -> bool {
-        self.m.layout == Layout::Studio
-            && self.m.studio_detail
-            && matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline)
+        self.m.layout == Layout::Studio && self.m.studio_detail && matches!(self.studio.view, StudioView::Docked | StudioView::Floating | StudioView::Offline)
     }
 
     pub(super) fn studio_set_detailed(&mut self, on: bool) {
@@ -60,22 +49,14 @@ impl Ui {
     /// The columns that are shown for a table `w` wide: (index in `DETAIL_COLS`, x, width), and the total width.
     pub(super) fn detail_cols(w: i32) -> (Vec<(usize, i32, i32)>, i32) {
         let narrow = w < DETAIL_NARROW_BELOW;
-        let mut ws: Vec<i32> =
-            (0..DETAIL_COLS.len()).map(|i| if narrow { DETAIL_NARROW_W[i] } else { DETAIL_COLS[i].1 }).collect();
-        if w < DETAIL_BAR_ONLY_BELOW {
-            ws[0] = 12;
-            ws[1] = 54;
-            ws[2] = 74;
-            ws[3] = 74;
-        }
+        let mut ws: Vec<i32> = (0..DETAIL_COLS.len()).map(|i| if narrow { DETAIL_NARROW_W[i] } else { DETAIL_COLS[i].1 }).collect();
+        if w < DETAIL_BAR_ONLY_BELOW { ws[0] = 12; ws[1] = 54; ws[2] = 74; ws[3] = 74; }
         // the columns that fit, whole: source, name and value always; then by priority mean, min, max, sigma, count
         // (no half-drawn column, and nothing to scroll to)
         let mut keep: Vec<usize> = Vec::new();
         let mut sum = 0;
         for c in DETAIL_PRIORITY {
-            if sum + ws[c] > w && c > 2 {
-                break;
-            }
+            if sum + ws[c] > w && c > 2 { break; }
             sum += ws[c];
             keep.push(c);
         }
@@ -88,26 +69,15 @@ impl Ui {
             ws[1] += to_name;
             let values: Vec<usize> = keep.iter().copied().filter(|c| *c >= 2).collect();
             let rest = extra - to_name;
-            if values.is_empty() {
-                ws[1] += rest;
-            } else {
+            if values.is_empty() { ws[1] += rest; } else {
                 let each = rest / values.len() as i32;
-                for c in &values {
-                    ws[*c] += each;
-                }
+                for c in &values { ws[*c] += each; }
                 ws[*values.last().unwrap()] += rest - each * values.len() as i32;
             }
             sum = w;
         }
         let mut x = 0;
-        let cols = keep
-            .iter()
-            .map(|&i| {
-                let c = (i, x, ws[i]);
-                x += ws[i];
-                c
-            })
-            .collect();
+        let cols = keep.iter().map(|&i| { let c = (i, x, ws[i]); x += ws[i]; c }).collect();
         (cols, sum.max(x))
     }
 
@@ -121,16 +91,10 @@ impl Ui {
     /// (Eye Height and Eye Height@BER stay apart).
     pub(super) fn detail_name(&self, key: Option<MeasKey>, long: &str, room: i32) -> (String, bool) {
         let f = self.fonts();
-        if f.m.width(long) <= room {
-            return (long.to_string(), false);
-        }
+        if f.m.width(long) <= room { return (long.to_string(), false); }
         let short = key.map_or_else(|| long.to_string(), |k| self.studio_badge_name(k, long));
-        if f.m.width(&short) <= room {
-            return (short, false);
-        }
-        if f.s.width(&short) <= room {
-            return (short, true);
-        }
+        if f.m.width(&short) <= room { return (short, false); }
+        if f.s.width(&short) <= room { return (short, true); }
         (fit_middle(&f.s, &short, room), true)
     }
 
@@ -138,13 +102,7 @@ impl Ui {
     pub(super) fn detail_head(&self, c: usize, w: i32) -> &'static str {
         let f = self.fonts();
         let full = DETAIL_COLS[c].0;
-        if f.sb.width(full) <= w {
-            full
-        } else if c == 0 && f.sb.width("Src") <= w {
-            "Src"
-        } else {
-            ""
-        }
+        if f.sb.width(full) <= w { full } else if c == 0 && f.sb.width("Src") <= w { "Src" } else { "" }
     }
 
     /// How far the table can scroll sideways.
@@ -155,31 +113,18 @@ impl Ui {
     /// The rows of the table that are on the page, partly visible ones too: (index in `listed`, rectangle). The rows move by
     /// pixels: `sub` is how far the first one is scrolled up.
     pub(super) fn detail_row_h(&self) -> i32 {
-        match self.studio_panel_rect() {
-            Some(p) if p.h >= DETAIL_TALL_FROM => DETAIL_ROW_TALL,
-            _ => DETAIL_ROW,
-        }
+        match self.studio_panel_rect() { Some(p) if p.h >= DETAIL_TALL_FROM => DETAIL_ROW_TALL, _ => DETAIL_ROW }
     }
 
     pub(super) fn detail_layout(&self, g: &studio::PanelGeo, total: usize, first: usize) -> Vec<(usize, Rect)> {
         let row = self.detail_row_h();
         let sub = self.studio.panel.sub.clamp(0, row - 1);
-        (first..total)
-            .map(|pos| (pos, Rect::new(g.list.x, g.list.y + (pos - first) as i32 * row - sub, g.list.w, row)))
-            .take_while(|(_, r)| r.y < g.list.bottom())
-            .collect()
+        (first..total).map(|pos| (pos, Rect::new(g.list.x, g.list.y + (pos - first) as i32 * row - sub, g.list.w, row)))
+            .take_while(|(_, r)| r.y < g.list.bottom()).collect()
     }
 
     /// The detailed table in the panel: the column heads in its head row and one row per measurement.
-    pub(super) fn draw_panel_detail(
-        &self,
-        cv: &mut Canvas,
-        g: &studio::PanelGeo,
-        rows: &[tools::MeasRow],
-        keys: &[MeasKey],
-        listed: &[usize],
-        first: usize,
-    ) {
+    pub(super) fn draw_panel_detail(&self, cv: &mut Canvas, g: &studio::PanelGeo, rows: &[tools::MeasRow], keys: &[MeasKey], listed: &[usize], first: usize) {
         let f = self.fonts();
         let (cols, total) = Self::detail_cols(g.list.w);
         let hx = self.studio.panel.hx.clamp(0, (total - g.list.w).max(0));
@@ -262,11 +207,7 @@ impl Ui {
         chip(cv, Rect::new(t.x - 2, e.y + 2, k.right() - t.x + 4, 22), BTN, BTN_BORDER);
         let view = self.panel_view();
         // the strip of cells is the first view, the table of rows the second
-        let at = match view {
-            super::measpanel::PanelView::List => t,
-            super::measpanel::PanelView::Detailed => l,
-            super::measpanel::PanelView::Cards => k,
-        };
+        let at = match view { super::measpanel::PanelView::List => t, super::measpanel::PanelView::Detailed => l, super::measpanel::PanelView::Cards => k };
         cv.round(at, 4, ACCENT, 255);
         let ink = |on: bool| if on { DARK_TEXT } else { TEXT };
         let (cl, ck, ct) = (ink(at == l), ink(at == k), ink(at == t));
@@ -275,12 +216,8 @@ impl Ui {
         cv.rect(Rect::new(tx, t.y + 3, 12, 12), ct);
         cv.hline(tx, tx + 11, t.y + 9, ct);
         cv.vline(tx + 6, t.y + 3, t.y + 14, ct);
-        for i in 0..3 {
-            cv.hline(lx, lx + 12, l.y + 4 + i * 5, cl);
-        }
-        for (dx, dy) in [(0, 0), (7, 0), (0, 7), (7, 7)] {
-            cv.rect(Rect::new(kx + dx, k.y + 3 + dy, 6, 6), ck);
-        }
+        for i in 0..3 { cv.hline(lx, lx + 12, l.y + 4 + i * 5, cl); }
+        for (dx, dy) in [(0, 0), (7, 0), (0, 7), (7, 7)] { cv.rect(Rect::new(kx + dx, k.y + 3 + dy, 6, 6), ck); }
     }
 
     /// The three segments of the view switch `e`, the height of its strip: the strip of cells, the table, the cards.
@@ -296,21 +233,13 @@ const DETAIL_PRIORITY: [usize; 8] = [0, 1, 2, 3, 4, 5, 6, 7];
 
 /// `s` cut to `room` pixels with "..." in the middle, so that the start and the end of the name show.
 pub(super) fn fit_middle(f: &crate::font::Font, s: &str, room: i32) -> String {
-    if f.width(s) <= room {
-        return s.to_string();
-    }
+    if f.width(s) <= room { return s.to_string(); }
     let c: Vec<char> = s.chars().collect();
     for keep in (2..c.len()).rev() {
         let tail = (keep * 2 / 5).max(1);
         let head = keep - tail;
-        let t: String = c[..head]
-            .iter()
-            .chain("...".chars().collect::<Vec<_>>().iter())
-            .chain(c[c.len() - tail..].iter())
-            .collect();
-        if f.width(&t) <= room {
-            return t;
-        }
+        let t: String = c[..head].iter().chain("...".chars().collect::<Vec<_>>().iter()).chain(c[c.len() - tail..].iter()).collect();
+        if f.width(&t) <= room { return t; }
     }
     "...".to_string()
 }

@@ -384,12 +384,11 @@ impl Ui {
     /// The analyser view of `Model::view` is a tab behind another one in Studio's dock: nothing of it is drawn.
     pub(crate) fn analyser_tabbed_out(&self) -> bool {
         use super::dock::VKind;
-        self.dock_on()
-            && match self.m.view {
-                AView::Scope => false,
-                AView::Eye => self.dock_tabbed_out(VKind::Eye),
-                _ => self.dock_tabbed_out(VKind::View),
-            }
+        self.dock_on() && match self.m.view {
+            AView::Scope => false,
+            AView::Eye => self.dock_tabbed_out(VKind::Eye),
+            _ => self.dock_tabbed_out(VKind::View),
+        }
     }
 
     pub(in crate::ui) fn analyzer_update(&mut self) {
@@ -424,9 +423,7 @@ impl Ui {
             None => return,
         };
         // Studio: the eye and the spectrum pane run side by side
-        if view == AView::Eye && self.dock_on() && self.m.pane == tables::PANE_SPECTRUM && self.pane_h() > 0 {
-            self.spectrum_update(&rec, true);
-        }
+        if view == AView::Eye && self.dock_on() && self.m.pane == tables::PANE_SPECTRUM && self.pane_h() > 0 { self.spectrum_update(&rec, true); }
         if let Some(a) = super::analysers::of(view) {
             a.update(self, &rec, beside);
         }

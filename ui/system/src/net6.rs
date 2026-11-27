@@ -36,9 +36,7 @@ pub fn bind_any<T>(v6: bool, port: u16, bind: impl Fn(SocketAddr) -> std::io::Re
 /// A listening TCP socket for a service on all addresses of the families in use; on this PC only while the services
 /// are loopback-only (the Windows desktop without `--lan`).
 pub fn tcp(port: u16) -> Option<TcpListener> {
-    if crate::net::loopback_only() {
-        return TcpListener::bind((Ipv4Addr::LOCALHOST, port)).ok();
-    }
+    if crate::net::loopback_only() { return TcpListener::bind((Ipv4Addr::LOCALHOST, port)).ok(); }
     bind_any(enabled(), port, TcpListener::bind)
 }
 
@@ -53,9 +51,7 @@ pub fn tcp_service(port: u16, what: &str) -> Option<TcpListener> {
 }
 
 pub fn udp(port: u16) -> Option<UdpSocket> {
-    if crate::net::loopback_only() {
-        return UdpSocket::bind((Ipv4Addr::LOCALHOST, port)).ok();
-    }
+    if crate::net::loopback_only() { return UdpSocket::bind((Ipv4Addr::LOCALHOST, port)).ok(); }
     bind_any(enabled(), port, UdpSocket::bind)
 }
 

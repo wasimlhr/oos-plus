@@ -140,14 +140,7 @@ fn native_cache_rejects_conditioning_changes_and_new_acceptance_without_mutating
 fn a_row_writes_ratios_and_counts_without_a_prefix() {
     // breaks when a row formats a value without an SI unit with SI prefixes again: "498 m", "1.00", "1.50 krpm" (#198)
     let row = |v: f64, unit: &'static str| {
-        let row = tools::MeasRow {
-            name: String::new(),
-            src: WaveId::Ch(0),
-            v,
-            unit,
-            computing: false,
-            reason: String::new(),
-        };
+        let row = tools::MeasRow { name: String::new(), src: WaveId::Ch(0), v, unit, computing: false, reason: String::new() };
         (row.fmt(v), row.fmt4(v))
     };
     assert_eq!(row(0.498, ""), ("0.498".into(), "0.4980".into()));
@@ -185,26 +178,14 @@ fn measurement_values_without_an_si_unit_take_no_prefix() {
 /// A 40 Hz sine as min/max pairs of a roll stream (as the dsp test `min_max_pairs_give_the_frequency_of_the_signal`):
 /// 1800 pairs over 2 s, each the extremes of the two spans around it.
 fn sine_pairs_record(pairs: bool) -> Record {
-    let (span, dt) = (40i64, 2.0 / 1800.0 / 40.0);
-    let x = |i: i64| (2.0 * std::f64::consts::PI * 40.0 * i as f64 * dt + 0.3).sin() as f32;
-    let v: Vec<f32> = (0..1800i64)
-        .flat_map(|j| {
-            let mid = j * span + span / 4;
-            let (lo, hi) = (mid - span..mid + span).map(x).fold((f32::MAX, f32::MIN), |(l, h), y| (l.min(y), h.max(y)));
-            [hi, lo]
-        })
-        .collect();
-    Record {
-        t0: -1.0,
-        dt: span as f64 * dt / 2.0,
-        ch: [v, Vec::new(), Vec::new(), Vec::new()],
-        triggered: true,
-        partial: false,
-        raw: None,
-        la: None,
-        pairs,
-        peak: false,
-    }
+    let (span,dt)=(40i64,2.0/1800.0/40.0);
+    let x=|i:i64|(2.0*std::f64::consts::PI*40.0*i as f64*dt+0.3).sin() as f32;
+    let v:Vec<f32>=(0..1800i64).flat_map(|j| {
+        let mid=j*span+span/4;
+        let (lo,hi)=(mid-span..mid+span).map(x).fold((f32::MAX,f32::MIN),|(l,h),y|(l.min(y),h.max(y)));
+        [hi,lo]
+    }).collect();
+    Record{t0:-1.0,dt:span as f64*dt/2.0,ch:[v,Vec::new(),Vec::new(),Vec::new()],triggered:true,partial:false,raw:None,la:None,pairs,peak:false}
 }
 
 // Break it catches: a channel of min/max pairs (roll, scan, compressed deep records) measured in time on the pairs
@@ -212,47 +193,27 @@ fn sine_pairs_record(pairs: bool) -> Record {
 // left out of the cache key, so a cached analysis of pairs answered after high res was switched on while stopped.
 #[test]
 fn min_max_pairs_are_measured_in_time_on_the_mean_of_neighbours_on_every_path() {
-    let mut ui = Ui::new(Source::Demo { t: 0.0 });
-    ui.m.run = RunState::Stop;
-    ui.m.ch.iter_mut().enumerate().for_each(|(c, ch)| ch.on = c == 0);
-    ui.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0))];
-    ui.m.meas2.clear();
-    ui.m.meas_full_record = true;
+    let mut ui=Ui::new(Source::Demo{t:0.0});
+    ui.m.run=RunState::Stop;ui.m.ch.iter_mut().enumerate().for_each(|(c,ch)|ch.on=c==0);
+    ui.m.meas=vec![(Meas::Freq,WaveId::Ch(0)),(Meas::Vpp,WaveId::Ch(0))];ui.m.meas2.clear();ui.m.meas_full_record=true;
     // the frame loop's path (measure_channels) and the one of SCPI and the screen numbers (channel_measurement)
-    let record = sine_pairs_record(true);
+    let record=sine_pairs_record(true);
     ui.measure_rec(&record);
-    assert!(
-        (ui.measured.ch[0].get(Meas::Freq) - 40.0).abs() < 0.05,
-        "measure_channels: {}",
-        ui.measured.ch[0].get(Meas::Freq)
-    );
-    ui.last[0] = Some(record);
-    ui.measure_last();
-    let key = ui.channel_measurement_key(0, false).unwrap().0;
-    assert!(key.pairs);
-    assert!(
-        (ui.meas_at(WaveId::Ch(0), Meas::Freq) - 40.0).abs() < 0.05,
-        "channel_measurement: {}",
-        ui.meas_at(WaveId::Ch(0), Meas::Freq)
-    );
-    let vpp = ui.meas_at(WaveId::Ch(0), Meas::Vpp);
-    assert!(vpp > 1.998, "Pk-pk from the pairs: {}", vpp);
+    assert!((ui.measured.ch[0].get(Meas::Freq)-40.0).abs()<0.05,"measure_channels: {}",ui.measured.ch[0].get(Meas::Freq));
+    ui.last[0]=Some(record);ui.measure_last();
+    let key=ui.channel_measurement_key(0,false).unwrap().0;assert!(key.pairs);
+    assert!((ui.meas_at(WaveId::Ch(0),Meas::Freq)-40.0).abs()<0.05,"channel_measurement: {}",ui.meas_at(WaveId::Ch(0),Meas::Freq));
+    let vpp=ui.meas_at(WaveId::Ch(0),Meas::Vpp);assert!(vpp>1.998,"Pk-pk from the pairs: {}",vpp);
     // the same points not flagged as pairs: the zigzag shows, so the flag is what the test above measures
-    let mut ui2 = Ui::new(Source::Demo { t: 0.0 });
-    ui2.m.run = RunState::Stop;
-    ui2.m.ch.iter_mut().enumerate().for_each(|(c, ch)| ch.on = c == 0);
-    ui2.m.meas = ui.m.meas.clone();
-    ui2.m.meas2.clear();
-    ui2.m.meas_full_record = true;
-    ui2.last[0] = Some(sine_pairs_record(false));
-    ui2.measure_last();
-    assert!((ui2.meas_at(WaveId::Ch(0), Meas::Freq) - 40.0).abs() > 5.0, "the zigzag must be a test here");
+    let mut ui2=Ui::new(Source::Demo{t:0.0});
+    ui2.m.run=RunState::Stop;ui2.m.ch.iter_mut().enumerate().for_each(|(c,ch)|ch.on=c==0);
+    ui2.m.meas=ui.m.meas.clone();ui2.m.meas2.clear();ui2.m.meas_full_record=true;
+    ui2.last[0]=Some(sine_pairs_record(false));ui2.measure_last();
+    assert!((ui2.meas_at(WaveId::Ch(0),Meas::Freq)-40.0).abs()>5.0,"the zigzag must be a test here");
     // high res averages the pairs: another key, measured again on the points
-    ui.m.acq = AcqMode::HiRes;
-    let hires = ui.channel_measurement_key(0, false).unwrap().0;
-    assert!(!hires.pairs);
-    assert!(hires != key);
-    assert!(ui.channel_measurement(0, true).is_some_and(|(a, _)| (a.get(Meas::Freq) - 40.0).abs() > 5.0));
+    ui.m.acq=AcqMode::HiRes;
+    let hires=ui.channel_measurement_key(0,false).unwrap().0;assert!(!hires.pairs);assert!(hires!=key);
+    assert!(ui.channel_measurement(0,true).is_some_and(|(a,_)|(a.get(Meas::Freq)-40.0).abs()>5.0));
 }
 
 // A record that is replaced before the worker has measured it (seen on a unit 2026-11-20: a 40 MHz square in 1 Mpts at

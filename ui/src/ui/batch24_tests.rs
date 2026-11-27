@@ -17,9 +17,7 @@ fn studio() -> Ui {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     u.files.dir = dir;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Waveform);
@@ -34,9 +32,7 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..4 {
-        frame(u);
-    }
+    for _ in 0..4 { frame(u); }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -48,23 +44,15 @@ fn shot(u: &mut Ui, name: &str) {
 /// A CSV file in the store folder, loaded through the Reference import.
 fn load_csv(u: &mut Ui, slot: usize, name: &str) {
     let mut csv = String::from("Time (s),Voltage (V)\n");
-    for i in 0..20_000 {
-        csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-7, (i as f64 * 0.02).sin() + 0.2 * (i as f64 * 0.31).sin()));
-    }
+    for i in 0..20_000 { csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-7, (i as f64 * 0.02).sin() + 0.2 * (i as f64 * 0.31).sin())); }
     std::fs::write(u.files.dir.join(name), &csv).unwrap();
     let data = std::fs::read(u.files.dir.join(name)).unwrap();
     u.load_waveform_bytes_at(&data, name, slot).expect("the CSV loads");
 }
 
-fn stat_n(u: &Ui, row: usize) -> u64 {
-    u.measurement_statistics_snapshot_for_test()[row].0
-}
+fn stat_n(u: &Ui, row: usize) -> u64 { u.measurement_statistics_snapshot_for_test()[row].0 }
 
-fn play(u: &mut Ui, frames: usize) {
-    for _ in 0..frames {
-        frame(u);
-    }
-}
+fn play(u: &mut Ui, frames: usize) { for _ in 0..frames { frame(u); } }
 
 #[test]
 fn sim_mode_plays_a_file_ref_through_the_acquisition_path() {
@@ -105,9 +93,7 @@ fn sim_mode_plays_a_file_ref_and_an_added_ref_together() {
     assert!(u.sim_slot_set(1));
     u.activate(Item::SimAddRef);
     u.wait_sim_generation();
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     let added = u.refs[1].as_ref().expect("R2 holds the added signal").v.clone();
     let file = u.refs[0].as_ref().unwrap().v.clone();
     assert_eq!(u.refs[1].as_ref().unwrap().label, "SATA I");

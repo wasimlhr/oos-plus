@@ -93,8 +93,7 @@ impl oos_remote::http::Site for Ctx<'_> {
                 true
             }
             "/websockify" if header("upgrade").is_some_and(|u| u.eq_ignore_ascii_case("websocket")) => {
-                let binary =
-                    header("sec-websocket-protocol").is_some_and(|p| p.split(',').any(|p| p.trim() == "binary"));
+                let binary = header("sec-websocket-protocol").is_some_and(|p| p.split(',').any(|p| p.trim() == "binary"));
                 let size = (self.cv.w as usize, self.cv.h as usize);
                 let adopted = match (header("sec-websocket-key"), s.try_clone()) {
                     (Some(key), Ok(c)) => live.vnc.adopt(c, key, binary, rest, size),

@@ -21,12 +21,12 @@ mod board;
 mod cmd;
 mod compress;
 mod deepmeas;
+mod drawpipe;
 #[cfg(windows)]
 mod desktop;
-mod drawpipe;
+mod extgen;
 #[cfg(target_os = "linux")]
 mod drm;
-mod extgen;
 mod fastdraw;
 mod font;
 mod framestats;
@@ -60,10 +60,10 @@ mod wave;
 #[cfg(target_os = "linux")]
 use oos_system::hostname;
 // the transports (ADR 0064), generic over the program they carry: here always `scpi::Program`
+use oos_remote::{announce, hislip, http, vxi11};
 #[cfg_attr(not(unix), allow(unused_imports))] // `system` serves the Unix start-up only
 // the model and the settings table (ADR 0064): their paths in this crate stay `crate::model` and the like
 use oos_model::{decode, logic, math, model, settings, words, zone};
-use oos_remote::{announce, hislip, http, vxi11};
 use oos_system::{
     base64, clock, clockfloor, ethlink, gadget, json, mdns, net, net6, netacl, placement, remote, sntp, ssh, sysconf,
     system, usbtmc,
@@ -319,7 +319,8 @@ fn lan(
     let (web, scpi, vxi, hislip) = lan_servers(scope, args, acl);
     let services = announce::listening(web.port(), scpi.port(), vxi.service_port(), hislip.port());
     // mDNS would bind 5353 on every interface; on loopback there is nobody to announce to
-    let ann = if net::loopback_only() { announce::Announcer::closed() } else { announce::Announcer::open(&services) };
+    let ann =
+        if net::loopback_only() { announce::Announcer::closed() } else { announce::Announcer::open(&services) };
     (web, scpi, vxi, hislip, ann)
 }
 
@@ -577,8 +578,8 @@ fn run_script(ui: &mut Ui, path: &str, mut gpu: Option<gpu::Gpu>) {
                 println!("shot {}", p);
                 if let (Some(g), Some(hc)) = (gpu.as_mut(), hdmi_cv.as_mut()) {
                     let (w, h) = (hc.w, hc.h);
-                    if let Err(e) =
-                        hdmi_gpu_frame(ui, g, &gl, &mut gl_view, (w, h), (2, true)).and_then(|t| g.collect(t, Some(hc)))
+                    if let Err(e) = hdmi_gpu_frame(ui, g, &gl, &mut gl_view, (w, h), (2, true))
+                        .and_then(|t| g.collect(t, Some(hc)))
                     {
                         eprintln!("oos-ui: GPU HDMI: {}", e);
                         std::process::exit(3);

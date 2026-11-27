@@ -25,26 +25,19 @@ fn header_of(c: &str) -> Option<&'static str> {
 
 impl T {
     fn new() -> T {
-        let mut t =
-            T { s: Scpi::open(0), ui: Ui::new(Source::Demo { t: 0.0 }), cv: Canvas::new(W, H), used: BTreeSet::new() };
+        let mut t = T { s: Scpi::open(0), ui: Ui::new(Source::Demo { t: 0.0 }), cv: Canvas::new(W, H), used: BTreeSet::new() };
         t.ui.files.dir = std::env::temp_dir().join(format!("oos-scpiext-{}", std::process::id()));
         let _ = std::fs::create_dir_all(&t.ui.files.dir);
-        for _ in 0..40 {
-            t.ui.step(0.05);
-        }
+        for _ in 0..40 { t.ui.step(0.05); }
         assert!(t.ui.last[0].is_some(), "the demo source gave a record");
         t.ui.m.run = RunState::Stop;
         t
     }
     fn raw(&mut self, c: &str) -> String {
-        if let Some(h) = header_of(c) {
-            self.used.insert(h);
-        }
+        if let Some(h) = header_of(c) { self.used.insert(h); }
         String::from_utf8_lossy(&self.s.exec_line(&mut self.ui, &self.cv, c)).into_owned()
     }
-    fn err(&mut self) -> String {
-        String::from_utf8_lossy(&self.s.exec_line(&mut self.ui, &self.cv, ":SYST:ERR?")).into_owned()
-    }
+    fn err(&mut self) -> String { String::from_utf8_lossy(&self.s.exec_line(&mut self.ui, &self.cv, ":SYST:ERR?")).into_owned() }
     /// runs a command that must be accepted
     fn go(&mut self, c: &str) -> String {
         let _ = self.err();
@@ -72,9 +65,7 @@ impl T {
         let got: f64 = self.go(query).parse().unwrap_or_else(|_| panic!("{query}"));
         assert!((got - want).abs() <= want.abs() * 1e-5 + 1e-30, "{set} then {query}: {got} want {want}");
     }
-    fn shows(&self, it: Item, want: impl AsRef<str>) {
-        assert_eq!(self.ui.value(it), want.as_ref(), "{it:?}");
-    }
+    fn shows(&self, it: Item, want: impl AsRef<str>) { assert_eq!(self.ui.value(it), want.as_ref(), "{it:?}"); }
 }
 
 fn trigger(t: &mut T) {
@@ -190,12 +181,7 @@ fn trigger(t: &mut T) {
     t.rn(":TRIG:LEV2 -0.7", ":TRIG:LEV2?", -0.7);
     t.go(":TRIG:EDGE:SOUR CHAN1;:TRIG:EDGE:LEV 5");
     t.ui.measured.stats[0].valid = true;
-    (
-        t.ui.measured.stats[0].vmax,
-        t.ui.measured.stats[0].vmin,
-        t.ui.measured.stats[0].top,
-        t.ui.measured.stats[0].base,
-    ) = (2.0, 0.0, 2.0, 0.0);
+    (t.ui.measured.stats[0].vmax, t.ui.measured.stats[0].vmin, t.ui.measured.stats[0].top, t.ui.measured.stats[0].base) = (2.0, 0.0, 2.0, 0.0);
     t.go(":TRIG:LEV:AUTO");
     assert_eq!(t.ui.m.trig_level, 1.0, "level 50 % is the middle of the signal, as the Trig50 action");
     // the typed commands do not change the trigger type
@@ -206,9 +192,7 @@ fn history_search(t: &mut T) {
     // history: stored records of the acquisition
     let rec = t.ui.last[0].clone().expect("a record");
     t.ui.history.recs.clear();
-    for _ in 0..4 {
-        t.ui.history.recs.push_back(rec.clone());
-    }
+    for _ in 0..4 { t.ui.history.recs.push_back(rec.clone()); }
     t.rt(":ACQ:HIST:COUN?", ":ACQ:HIST:COUN?", "4");
     t.rt(":ACQ:HIST:ENAB ON", ":ACQ:HIST:ENAB?", "1");
     assert_eq!(t.ui.history.pos, Some(3), "the newest record");
@@ -312,10 +296,7 @@ fn history_search(t: &mut T) {
     t.rn(":SEAR:RUNT:BLEV 0.25", ":SEAR:RUNT:BLEV?", 0.25);
     t.rt(":SEAR:RUNT:SOUR CHAN1", ":SEAR:RUNT:SOUR?", "CHAN1");
     let sp = t.ui.studio.searches[0].unwrap();
-    assert_eq!(
-        (sp.kind, sp.slope, sp.when, sp.t1, sp.t2, sp.level, sp.level2),
-        (TrigType::Runt, 0, WhenKind::Out, 0.001, 0.004, 0.75, 0.25)
-    );
+    assert_eq!((sp.kind, sp.slope, sp.when, sp.t1, sp.t2, sp.level, sp.level2), (TrigType::Runt, 0, WhenKind::Out, 0.001, 0.004, 0.75, 0.25));
     assert_eq!(t.go(":SEAR2:MODE?"), "PULS", "Search 2 is as it was");
     // Equal and Not equal, the Window type, and the marks of a search hidden
     t.rt(":SEAR:PULS:WHEN EQU", ":SEAR:PULS:WHEN?", "EQU");
@@ -393,17 +374,7 @@ fn measure_channel_math(t: &mut T) {
 }
 
 fn reference_mask_sim(t: &mut T) {
-    t.ui.refs[0] = Some(RefWave {
-        src: 0,
-        color: 0,
-        label: "r".into(),
-        t0: 0.0,
-        dt: 1e-9,
-        v: (0..200).map(|i| if i % 20 < 10 { -1.0 } else { 1.0 }).collect::<Vec<f32>>().into(),
-        vpd: 1.0,
-        offset: 0.0,
-        on: true,
-    });
+    t.ui.refs[0] = Some(RefWave { src: 0, color: 0, label: "r".into(), t0: 0.0, dt: 1e-9, v: (0..200).map(|i| if i % 20 < 10 { -1.0 } else { 1.0 }).collect::<Vec<f32>>().into(), vpd: 1.0, offset: 0.0, on: true });
     t.ui.ref_page.sel = 0;
     // export: to a named file and to the slot's own file
     let dir = t.ui.files.dir.clone();
@@ -452,13 +423,7 @@ fn reference_mask_sim(t: &mut T) {
     t.go(":SIM:ADDR");
     t.go(":SIM:LIVE");
     let load = dir.join("sim-load.csv");
-    std::fs::write(
-        &load,
-        (0..64).fold(String::from("Time (s),Volts\n"), |s, i| {
-            s + &format!("{},{}\n", i as f64 * 1e-9, (i % 8) as f64 * 0.1)
-        }),
-    )
-    .unwrap();
+    std::fs::write(&load, (0..64).fold(String::from("Time (s),Volts\n"), |s, i| s + &format!("{},{}\n", i as f64 * 1e-9, (i % 8) as f64 * 0.1))).unwrap();
     t.go(":SIM:SLOT R4");
     t.go(&format!(":SIM:LOAD \"{}\"", load.display()));
     assert!(t.ui.refs[3].is_some(), "the file went into the SIM slot");
@@ -484,19 +449,7 @@ fn reference_mask_sim(t: &mut T) {
     t.go(":REF:CLE 4");
     assert!(t.ui.refs[3].is_none());
     t.no(":REF:CLE R11", "-224");
-    t.ui.refs[5] = t.ui.refs[2].clone().or_else(|| {
-        Some(RefWave {
-            src: 0,
-            color: 0,
-            label: String::new(),
-            t0: 0.0,
-            dt: 1e-9,
-            v: vec![0.0f32; 16].into(),
-            vpd: 1.0,
-            offset: 0.0,
-            on: true,
-        })
-    });
+    t.ui.refs[5] = t.ui.refs[2].clone().or_else(|| Some(RefWave { src: 0, color: 0, label: String::new(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 16].into(), vpd: 1.0, offset: 0.0, on: true }));
     t.go(":REF:CLE");
     assert!(t.ui.refs.iter().all(|r| r.is_none()), "Clear all");
 }
@@ -540,10 +493,7 @@ fn storage_zoom(t: &mut T) {
     let reply = t.raw(&msg);
     let e = t.err();
     assert!(e.starts_with("0,"), "{e}");
-    assert!(
-        reply.ends_with("STOP") || reply.ends_with("WAIT") || reply.ends_with("AUTO") || reply.ends_with("TD"),
-        "{reply:?}"
-    );
+    assert!(reply.ends_with("STOP") || reply.ends_with("WAIT") || reply.ends_with("AUTO") || reply.ends_with("TD"), "{reply:?}");
     assert_eq!(t.go(":TIM:SCAL?").parse::<f64>().unwrap(), 1e-4, "the setup block was applied");
     let again = t.go(":SYST:SETup?");
     t.go(&format!(":SYST:SETup {again}"));
@@ -555,9 +505,7 @@ fn storage_zoom(t: &mut T) {
     assert!(t.ui.m.trig_nrej);
     // waveform, image, fast frame (a new record first: a changed time base dropped the old one)
     t.ui.m.run = RunState::Run;
-    for _ in 0..40 {
-        t.ui.step(0.05);
-    }
+    for _ in 0..40 { t.ui.step(0.05); }
     t.ui.m.run = RunState::Stop;
     let wp = dir.join("wave-out.csv");
     t.go(&format!(":SAVE:WAV \"{}\"", wp.display()));
@@ -783,14 +731,8 @@ fn bandwidth_logger_analysers(t: &mut T) {
     t.rt(":EXTG:LOAD HIZ", ":EXTG:LOAD?", "HIZ");
     t.rn(":EXTG:FREQ 12500", ":EXTG:FREQ?", 12500.0);
     t.rn(":EXTG:AMPL 0.25", ":EXTG:AMPL?", 0.25);
-    assert_eq!(
-        (t.ui.m.ext_model, t.ui.m.ext_ch, t.ui.m.ext_hiz, t.ui.m.ext_freq, t.ui.m.ext_ampl),
-        (6, 1, true, 12500.0, 0.25)
-    );
-    assert_eq!(
-        (t.go(":EXTG:CONN?"), t.go(":EXTG:STAT?"), t.go(":EXTG:IDN?"), t.go(":EXTG:OUTP?")),
-        ("0".into(), "OFF".into(), String::new(), "0".into())
-    );
+    assert_eq!((t.ui.m.ext_model, t.ui.m.ext_ch, t.ui.m.ext_hiz, t.ui.m.ext_freq, t.ui.m.ext_ampl), (6, 1, true, 12500.0, 0.25));
+    assert_eq!((t.go(":EXTG:CONN?"), t.go(":EXTG:STAT?"), t.go(":EXTG:IDN?"), t.go(":EXTG:OUTP?")), ("0".into(), "OFF".into(), String::new(), "0".into()));
     // no output without a connection, and nothing outside the ranges
     t.no(":EXTG:OUTP ON", "-221");
     t.go(":EXTG:OUTP OFF");
@@ -873,10 +815,7 @@ fn system(t: &mut T) {
     t.go(":SESS LIVE");
     t.no(":SESS SIM", "-224");
     let info = t.go(":SYST:INFO?");
-    assert!(
-        info.contains("\"Model,") && !info.contains('\n') && info.starts_with('"'),
-        "one line of quoted strings: {info}"
-    );
+    assert!(info.contains("\"Model,") && !info.contains('\n') && info.starts_with('"'), "one line of quoted strings: {info}");
     // the commands that need CONFIRM
     t.no(":SYST:POW:OFF", "-221");
     t.no(":SYST:POW:REST", "-221");
@@ -904,6 +843,7 @@ fn system(t: &mut T) {
     assert_eq!(t.go(":SYST:OVER?").parse::<f64>().unwrap(), hz, "refused, unchanged");
     t.no(":SYST:STOC", "-221");
 }
+
 
 fn extras(t: &mut T) {
     // decoder parameters: another decoder than the selected one, which stays selected
@@ -942,17 +882,14 @@ fn extras(t: &mut T) {
         t.rt(&format!(":BUS1:FLEX:BAUD \"{fr}\""), ":BUS1:FLEX:BAUD?", &norm(&fr));
     } else {
         // without the modules the headers still answer: asked, not set
-        for h in
-            [":BUS3:CAN:FD:BAUD?", ":BUS3:CAN:FD:ABAU?", ":BUS4:SENT:TICK?", ":BUS4:SENT:NIBB?", ":BUS1:FLEX:BAUD?"]
-        {
+        for h in [":BUS3:CAN:FD:BAUD?", ":BUS3:CAN:FD:ABAU?", ":BUS4:SENT:TICK?", ":BUS4:SENT:NIBB?", ":BUS1:FLEX:BAUD?"] {
             let _ = t.raw(h);
         }
     }
     let sp = opt(t, Item::DecUsbSpeed, 1);
     t.rt(&format!(":BUS1:USB:SPE \"{sp}\""), ":BUS1:USB:SPE?", &norm(&sp));
     t.no(":BUS9:SPI:MODE 1", "-113");
-    let with_options =
-        PROTOS.iter().copied().find(|p| p.module().is_some_and(|m| m.options().iter().any(|o| o.choices.len() > 1)));
+    let with_options = PROTOS.iter().copied().find(|p| p.module().is_some_and(|m| m.options().iter().any(|o| o.choices.len() > 1)));
     if let Some(p) = with_options {
         t.ui.set_dec_proto(p);
         let n = p.module().unwrap().options().iter().take_while(|o| o.choices.len() > 1).count().min(4);
@@ -962,9 +899,7 @@ fn extras(t: &mut T) {
             t.rt(&format!("{h} \"{o}\""), &format!("{h}?"), &norm(&o));
         }
     }
-    for k in 1..=4 {
-        let _ = t.raw(&format!(":BUS1:OPT{k}?"));
-    }
+    for k in 1..=4 { let _ = t.raw(&format!(":BUS1:OPT{k}?")); }
     // plot bus lane
     t.rt(":BUS:LANE:STAT ON", ":BUS:LANE:STAT?", "1");
     assert!(t.ui.m.bus.on);
@@ -1054,39 +989,27 @@ fn every_new_header_is_set_and_queried_and_changes_what_the_menu_changes() {
 /// Every page of the SCPI reference (`docs/scpi/*.md`), as (file name, text), in name order.
 fn scpi_docs() -> Vec<(String, String)> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi");
-    let mut files: Vec<_> = std::fs::read_dir(&dir)
-        .unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
-        .filter_map(|e| e.ok())
-        .map(|e| e.path())
-        .filter(|p| p.extension().is_some_and(|x| x == "md"))
-        .collect();
+    let mut files: Vec<_> = std::fs::read_dir(&dir).unwrap_or_else(|e| panic!("{}: {e}", dir.display()))
+        .filter_map(|e| e.ok()).map(|e| e.path()).filter(|p| p.extension().is_some_and(|x| x == "md")).collect();
     files.sort();
     assert!(files.iter().any(|p| p.file_name().is_some_and(|n| n == "README.md")), "docs/scpi/README.md is the index");
-    files
-        .into_iter()
-        .map(|p| (p.file_name().unwrap().to_string_lossy().into_owned(), std::fs::read_to_string(&p).unwrap()))
-        .collect()
+    files.into_iter().map(|p| (p.file_name().unwrap().to_string_lossy().into_owned(), std::fs::read_to_string(&p).unwrap())).collect()
 }
 
 /// The text of the first cell of every table row of a page (`| `:HEADER` | ... |`), unescaped.
 fn first_cells(text: &str) -> Vec<String> {
-    text.lines()
-        .filter(|l| l.starts_with('|'))
-        .filter_map(|l| {
-            let b = l.as_bytes();
-            let end = (1..b.len()).find(|&i| b[i] == b'|' && b[i - 1] != b'\\')?;
-            Some(l[1..end].trim().replace("\\|", "|"))
-        })
-        .collect()
+    text.lines().filter(|l| l.starts_with('|')).filter_map(|l| {
+        let b = l.as_bytes();
+        let end = (1..b.len()).find(|&i| b[i] == b'|' && b[i - 1] != b'\\')?;
+        Some(l[1..end].trim().replace("\\|", "|"))
+    }).collect()
 }
 
 #[test]
 fn every_new_header_is_documented() {
     let docs = scpi_docs();
     let all: String = docs.iter().map(|(_, t)| t.as_str()).collect::<Vec<_>>().join("\n");
-    let missing: Vec<&str> = all_headers()
-        .filter(|h| !all.contains(&format!("`{}{}", if h.starts_with('*') { "" } else { ":" }, h)))
-        .collect();
+    let missing: Vec<&str> = all_headers().filter(|h| !all.contains(&format!("`{}{}", if h.starts_with('*') { "" } else { ":" }, h))).collect();
     assert!(missing.is_empty(), "headers missing from docs/scpi/: {missing:?}");
 }
 
@@ -1098,9 +1021,7 @@ fn every_header_is_in_exactly_one_group_table() {
     for h in all_headers() {
         let cell = format!("`{}{}`", if h.starts_with('*') { "" } else { ":" }, h);
         let pages: Vec<&str> = cells.iter().filter(|(_, c)| c.iter().any(|x| *x == cell)).map(|(n, _)| *n).collect();
-        if pages.len() != 1 {
-            wrong.push(format!("{h}: {pages:?}"));
-        }
+        if pages.len() != 1 { wrong.push(format!("{h}: {pages:?}")); }
     }
     assert!(wrong.is_empty(), "a header must be the command of exactly one group table row page: {wrong:?}");
     // and no page lists the same header in two rows
@@ -1124,9 +1045,7 @@ fn the_command_cell_of_a_row_is_one_header_or_one_brace_form() {
             let one_span = cell.len() > 2 && cell.ends_with('`') && !cell[1..cell.len() - 1].contains('`');
             let header = cell.trim_matches('`');
             let well_formed = header.chars().all(|c| c.is_ascii_alphanumeric() || ":*<>[]{}|?".contains(c));
-            if !one_span || !well_formed {
-                wrong.push(format!("{name}: {cell}"));
-            }
+            if !one_span || !well_formed { wrong.push(format!("{name}: {cell}")); }
         }
     }
     assert!(wrong.is_empty(), "command cells that are not one header or brace form: {wrong:#?}");
@@ -1142,12 +1061,7 @@ fn the_setup_keys_are_documented() {
         let key = line.split('=').next().unwrap().trim();
         // the keys of a channel, a math channel, a decoder, a zone, a window slot carry their number: `ch1.vdiv` is `chN.vdiv`
         let generic: String = key.chars().map(|c| if c.is_ascii_digit() { 'N' } else { c }).collect();
-        if !(doc.contains(&format!("`{key}`"))
-            || doc.contains(&format!("`{generic}`"))
-            || doc.contains(&format!("`{}`", generic.replace('N', "<n>"))))
-        {
-            missing.push(key.to_string());
-        }
+        if !(doc.contains(&format!("`{key}`")) || doc.contains(&format!("`{generic}`")) || doc.contains(&format!("`{}`", generic.replace('N', "<n>")))) { missing.push(key.to_string()); }
     }
     assert!(missing.is_empty(), "setup keys missing from docs/scpi/: {missing:?}");
 }
@@ -1159,10 +1073,7 @@ fn a_block_argument_is_not_split_at_its_newlines_or_semicolons() {
     let mut cmds = 0;
     let mut p = p;
     let mut out = Vec::new();
-    p.immediate(&mut |c| {
-        out.push(c.to_string());
-        Vec::new()
-    });
+    p.immediate(&mut |c| { out.push(c.to_string()); Vec::new() });
     cmds += out.len();
     assert_eq!(cmds, 4, "{out:?}");
     assert!(out[0].ends_with("a=1;b\nc=2\n") || out[0].contains("a=1;b\nc=2"), "{:?}", out[0]);
@@ -1176,33 +1087,20 @@ fn a_block_argument_is_not_split_at_its_newlines_or_semicolons() {
     assert_eq!(crate::scpi::message_end(b":RUN"), None);
 }
 
+
 #[test]
 fn no_header_is_shadowed_by_another_one() {
     // a header written with the short form of every keyword must find itself, not a neighbour with the same short form
     for h in all_headers() {
-        let nodes: Vec<String> = h
-            .split(':')
-            .map(|p| {
-                let base = p.strip_suffix("<n>");
-                let short: String = base
-                    .unwrap_or(p)
-                    .chars()
-                    .filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '*')
-                    .collect();
-                if base.is_some() {
-                    format!("{short}1")
-                } else {
-                    short
-                }
-            })
-            .collect();
+        let nodes: Vec<String> = h.split(':').map(|p| {
+            let base = p.strip_suffix("<n>");
+            let short: String = base.unwrap_or(p).chars().filter(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || *c == '*').collect();
+            if base.is_some() { format!("{short}1") } else { short }
+        }).collect();
         let refs: Vec<&str> = nodes.iter().map(String::as_str).collect();
         let found = resolve(&refs).map(|r| r.0);
         // the one long-form-only header keeps the older :SYSTem:SET for its short form
-        if h == "SYSTem:SETup" {
-            assert_eq!(found, None);
-            continue;
-        }
+        if h == "SYSTem:SETup" { assert_eq!(found, None); continue; }
         assert_eq!(found, Some(h), "{nodes:?}");
     }
 }
@@ -1229,17 +1127,13 @@ fn catalogue_and_inverter_index(t: &mut T) {
 // ------------------------------------------------------------------------------------------------ the menu to SCPI map
 
 /// A header of the map as it is sent: 1 for `<n>`, the optional brackets dropped.
-fn sendable(h: &str) -> String {
-    h.replace("<n>", "1").replace(['[', ']'], "")
-}
+fn sendable(h: &str) -> String { h.replace("<n>", "1").replace(['[', ']'], "") }
 
 fn scpi_reply(s: &mut Scpi, ui: &mut Ui, cv: &Canvas, line: &str) -> String {
     String::from_utf8_lossy(&s.exec_line(ui, cv, line)).trim().to_string()
 }
 
-fn scpi_error(s: &mut Scpi, ui: &mut Ui, cv: &Canvas) -> String {
-    scpi_reply(s, ui, cv, ":SYST:ERR?")
-}
+fn scpi_error(s: &mut Scpi, ui: &mut Ui, cv: &Canvas) -> String { scpi_reply(s, ui, cv, ":SYST:ERR?") }
 
 /// The pieces of a table row of a reference page: (byte range of the cells, text), split at the `|` that is not escaped.
 fn row_cells(line: &str) -> Vec<(std::ops::Range<usize>, String)> {
@@ -1253,9 +1147,7 @@ fn the_map_has_one_row_per_header_and_every_header_exists() {
     let rows = super::scpimap::map();
     assert!(rows.len() >= 200, "{} rows", rows.len());
     let mut seen = BTreeSet::new();
-    for r in &rows {
-        assert!(seen.insert(r.header), "{} is in the map twice", r.header);
-    }
+    for r in &rows { assert!(seen.insert(r.header), "{} is in the map twice", r.header); }
     // the headers resolve: the query is not "undefined header"
     let mut s = Scpi::open(0);
     let cv = Canvas::new(W, H);
@@ -1266,9 +1158,7 @@ fn the_map_has_one_row_per_header_and_every_header_exists() {
         let _ = scpi_error(&mut s, &mut ui, &cv);
         let _ = scpi_reply(&mut s, &mut ui, &cv, &q);
         let e = scpi_error(&mut s, &mut ui, &cv);
-        if e.starts_with("-113") || e.starts_with("-100") {
-            undefined.push(format!("{} -> {e}", r.header));
-        }
+        if e.starts_with("-113") || e.starts_with("-100") { undefined.push(format!("{} -> {e}", r.header)); }
     }
     assert!(undefined.is_empty(), "headers of the map the interpreter does not know: {undefined:?}");
 }
@@ -1284,56 +1174,26 @@ fn every_menu_item_of_the_map_follows_its_scpi_header_and_the_header_its_item() 
         u.m.layout = Layout::Default;
         u.files.dir = std::env::temp_dir().join(format!("oos-scpimap-{}", std::process::id()));
         // the scope of a bench: every input on, a reference in R1
-        for c in 0..n_ch() {
-            u.m.ch[c].on = true;
-        }
-        u.refs[0] = Some(RefWave {
-            src: 0,
-            color: 0,
-            label: "R1".into(),
-            t0: 0.0,
-            dt: 1e-9,
-            v: vec![0.0f32; 128].into(),
-            vpd: 0.5,
-            offset: 0.0,
-            on: true,
-        });
-        for _ in 0..6 {
-            u.step(0.05);
-        }
+        for c in 0..n_ch() { u.m.ch[c].on = true; }
+        u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 128].into(), vpd: 0.5, offset: 0.0, on: true });
+        for _ in 0..6 { u.step(0.05); }
         (r.pre)(&mut u);
-        for _ in 0..2 {
-            u.step(0.05);
-        }
+        for _ in 0..2 { u.step(0.05); }
         let h = sendable(r.header);
         let _ = scpi_error(&mut s, &mut u, &cv);
         let ask = if r.index.is_empty() { format!("{h}?") } else { format!("{h}? {}", r.index) };
         let (t0, q0) = (u.value(r.item), scpi_reply(&mut s, &mut u, &cv, &ask));
-        if q0.is_empty() {
-            bad.push(format!("{}: the query is empty", r.header));
-            continue;
-        }
+        if q0.is_empty() { bad.push(format!("{}: the query is empty", r.header)); continue; }
         // a press in the menu
         let mut moved = false;
         for d in [1, -1] {
             u.adjust(r.item, d);
-            for _ in 0..2 {
-                u.step(0.02);
-            }
-            if u.value(r.item) != t0 {
-                moved = true;
-                break;
-            }
+            for _ in 0..2 { u.step(0.02); }
+            if u.value(r.item) != t0 { moved = true; break; }
         }
         let (t1, q1) = (u.value(r.item), scpi_reply(&mut s, &mut u, &cv, &ask));
-        if !moved {
-            stuck.push(format!("{} ({:?}): the menu does not move it from {t0:?}", r.header, r.item));
-            continue;
-        }
-        if q1 == q0 {
-            bad.push(format!("{}: {:?} went {t0:?} -> {t1:?} in the menu, the query stays {q0:?}", r.header, r.item));
-            continue;
-        }
+        if !moved { stuck.push(format!("{} ({:?}): the menu does not move it from {t0:?}", r.header, r.item)); continue; }
+        if q1 == q0 { bad.push(format!("{}: {:?} went {t0:?} -> {t1:?} in the menu, the query stays {q0:?}", r.header, r.item)); continue; }
         // SCPI back to the first value, then to the second: the item shows each
         let mut why = String::new();
         for (q, t) in [(&q0, &t0), (&q1, &t1)] {
@@ -1341,55 +1201,26 @@ fn every_menu_item_of_the_map_follows_its_scpi_header_and_the_header_its_item() 
             let set = if r.index.is_empty() { format!("{h} {q}") } else { format!("{h} {},{q}", r.index) };
             let _ = scpi_reply(&mut s, &mut u, &cv, &set);
             let e = scpi_error(&mut s, &mut u, &cv);
-            for _ in 0..2 {
-                u.step(0.02);
-            }
+            for _ in 0..2 { u.step(0.02); }
             let shown = u.value(r.item);
-            if !e.starts_with("0,") {
-                why = format!("{h} {q} -> {e}");
-                break;
-            }
-            if &shown != t {
-                why = format!("{h} {q} shows {shown:?}, the menu had {t:?}");
-                break;
-            }
+            if !e.starts_with("0,") { why = format!("{h} {q} -> {e}"); break; }
+            if &shown != t { why = format!("{h} {q} shows {shown:?}, the menu had {t:?}"); break; }
         }
-        if why.is_empty() {
-            ok += 1
-        } else {
-            bad.push(format!("{}: {:?}: {why}", r.header, r.item))
-        }
+        if why.is_empty() { ok += 1 } else { bad.push(format!("{}: {:?}: {why}", r.header, r.item)) }
     }
     let _ = std::fs::remove_dir_all(std::env::temp_dir().join(format!("oos-scpimap-{}", std::process::id())));
-    eprintln!(
-        "map rows: {}, agree both ways: {ok}, not movable from the menu: {}, mismatches: {}",
-        rows.len(),
-        stuck.len(),
-        bad.len()
-    );
-    for l in stuck.iter().chain(bad.iter()) {
-        eprintln!("MAP {l}");
-    }
-    assert!(
-        bad.is_empty() && stuck.is_empty(),
-        "{} not movable, {} mismatches:\n{}\n{}",
-        stuck.len(),
-        bad.len(),
-        stuck.join("\n"),
-        bad.join("\n")
-    );
+    eprintln!("map rows: {}, agree both ways: {ok}, not movable from the menu: {}, mismatches: {}", rows.len(), stuck.len(), bad.len());
+    for l in stuck.iter().chain(bad.iter()) { eprintln!("MAP {l}"); }
+    assert!(bad.is_empty() && stuck.is_empty(), "{} not movable, {} mismatches:\n{}\n{}", stuck.len(), bad.len(), stuck.join("\n"), bad.join("\n"));
 }
 
 /// The text of the "Menu equivalent" column for a row of the map.
-fn menu_equivalent(r: &super::scpimap::Row) -> String {
-    format!("{} > {}", r.group, Ui::label(r.item))
-}
+fn menu_equivalent(r: &super::scpimap::Row) -> String { format!("{} > {}", r.group, Ui::label(r.item)) }
 
 #[test]
 fn the_menu_equivalent_column_of_the_reference_agrees_with_the_map() {
     let rows = super::scpimap::map();
-    let by_header: std::collections::BTreeMap<String, String> =
-        rows.iter().map(|r| (format!("`{}`", r.header), menu_equivalent(r))).collect();
+    let by_header: std::collections::BTreeMap<String, String> = rows.iter().map(|r| (format!("`{}`", r.header), menu_equivalent(r))).collect();
     let write = std::env::var_os("OOS_WRITE_DOCS").is_some();
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../docs/scpi");
     let mut drift = Vec::new();
@@ -1416,20 +1247,11 @@ fn the_menu_equivalent_column_of_the_reference_agrees_with_the_map() {
         }
         if write && changed {
             let keep_end = text.ends_with('\n');
-            std::fs::write(dir.join(&name), if keep_end { out } else { out.trim_end_matches('\n').to_string() })
-                .unwrap();
+            std::fs::write(dir.join(&name), if keep_end { out } else { out.trim_end_matches('\n').to_string() }).unwrap();
         }
     }
     let missing: Vec<&String> = by_header.keys().filter(|k| !found.contains(*k)).collect();
     assert!(missing.is_empty(), "headers of the map that no row of docs/scpi/ has: {missing:?}");
-    if write {
-        eprintln!("docs rewritten: {} rows", drift.len());
-        return;
-    }
-    assert!(
-        drift.is_empty(),
-        "{} rows of docs/scpi/ differ from the map (OOS_WRITE_DOCS=1 rewrites them):\n{}",
-        drift.len(),
-        drift.join("\n")
-    );
+    if write { eprintln!("docs rewritten: {} rows", drift.len()); return; }
+    assert!(drift.is_empty(), "{} rows of docs/scpi/ differ from the map (OOS_WRITE_DOCS=1 rewrites them):\n{}", drift.len(), drift.join("\n"));
 }

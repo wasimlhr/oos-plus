@@ -20,9 +20,7 @@ impl Ui {
     }
 
     /// XY replaces the waveform, except in Studio where it is a view of its own.
-    pub(super) fn xy_over(&self) -> bool {
-        self.xy && !self.dock_on()
-    }
+    pub(super) fn xy_over(&self) -> bool { self.xy && !self.dock_on() }
 
     pub(super) fn view_name(&self) -> &'static str {
         if self.xy {
@@ -33,9 +31,7 @@ impl Ui {
 
     /// The tile that holds the XY picture or the analyser (Studio): its content rectangle.
     pub(super) fn view_tile_rect(&self) -> Option<Rect> {
-        if !self.dock_on() {
-            return None;
-        }
+        if !self.dock_on() { return None; }
         let k = if self.xy { super::dock::VKind::Xy } else { super::dock::VKind::View };
         self.dock_content(k)
     }
@@ -43,12 +39,8 @@ impl Ui {
     pub(super) fn view_btn(&self) -> Rect {
         // a docked view (Studio) has its close button in its strip: a menu that holds Exit alone (XY) says the same
         // again, so that view has no button
-        if self.dock_on() && self.view_more_items() == [Item::ViewExit] {
-            return Rect::new(0, 0, 0, 0);
-        }
-        if let Some(t) = self.view_tile_rect() {
-            return Rect::new(t.right() - 48, t.y + 6, 42, 36);
-        }
+        if self.dock_on() && self.view_more_items() == [Item::ViewExit] { return Rect::new(0, 0, 0, 0); }
+        if let Some(t) = self.view_tile_rect() { return Rect::new(t.right() - 48, t.y + 6, 42, 36); }
         Rect::new(self.plot.area.x + self.plot.area.w - 48, self.plot.area.y + 6, 42, 36)
     }
 
@@ -76,9 +68,7 @@ impl Ui {
     /// footer of its menu), or a Bode plot without a sweep. (button, label)
     pub(super) fn view_fix_btn(&self) -> Option<(Rect, String)> {
         let menu = self.view_menu()?;
-        if !self.view_tile() || self.menu_open {
-            return None;
-        }
+        if !self.view_tile() || self.menu_open { return None; }
         let off = self.off_sources(menu);
         let label = if !off.is_empty() {
             format!("Turn on {}", off.iter().map(|c| format!("CH{}", c + 1)).collect::<Vec<_>>().join(", "))
@@ -102,17 +92,13 @@ impl Ui {
     /// A tap on the fix button of the view. True when it took the tap.
     pub(super) fn view_fix_tap(&mut self, x: i32, y: i32) -> bool {
         let Some((r, _)) = self.view_fix_btn() else { return false };
-        if !r.contains(x, y) {
-            return false;
-        }
+        if !r.contains(x, y) { return false; }
         let Some(menu) = self.view_menu() else { return false };
         let off = self.off_sources(menu);
         if off.is_empty() {
             self.activate(Item::BodeRun);
         } else {
-            for &c in &off {
-                self.m.ch[c].on = true;
-            }
+            for &c in &off { self.m.ch[c].on = true; }
             self.settings_changed();
             self.relayout();
             self.toast(&format!("{} on", off.iter().map(|c| format!("CH{}", c + 1)).collect::<Vec<_>>().join(", ")));
@@ -180,9 +166,7 @@ mod tests {
             ui.m.layout = layout;
             ui.relayout();
             ui.m.view = AView::Power;
-            for _ in 0..3 {
-                ui.step(1.0 / 30.0);
-            }
+            for _ in 0..3 { ui.step(1.0 / 30.0); }
             ui.render(&mut Canvas::new(super::super::PANEL_W, super::super::PANEL_H));
             assert!(!ui.m.ch[1].on);
             let (r, label) = ui.view_fix_btn().expect("power needs CH2");

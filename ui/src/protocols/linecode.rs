@@ -7,9 +7,9 @@
 
 use super::*;
 use oos_dsp::decode::Kind;
+use oos_dsp::linecode::MANCHESTER_AUTO;
 #[cfg(test)]
 use oos_dsp::linecode::manchester_fields;
-use oos_dsp::linecode::MANCHESTER_AUTO;
 
 const OPTIONS: [Opt; 1] = [Opt { name: "Baud", choices: &BAUD_NAMES, default: BAUD_DEFAULT }];
 

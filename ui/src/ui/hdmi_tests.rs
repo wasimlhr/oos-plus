@@ -129,11 +129,7 @@ fn a_ui_laid_out_for_a_window_answers_at_its_size() {
     for (w, h) in [(1280, 720), (1500, 900), (1920, 1080), (1728, 1080)] {
         let mut u = start(Layout::Studio);
         u.set_screen(Screen { w, h });
-        for _ in 0..4 {
-            u.step(0.03);
-            let mut c = Canvas::new(w, h);
-            u.render(&mut c);
-        }
+        for _ in 0..4 { u.step(0.03); let mut c = Canvas::new(w, h); u.render(&mut c); }
         let mut c = Canvas::new(w, h);
         u.render(&mut c);
         assert_eq!((u.scr.w, u.scr.h), (w, h));
@@ -149,8 +145,7 @@ fn a_ui_laid_out_for_a_window_answers_at_its_size() {
             let mut c = Canvas::new(w, h);
             u.step(0.03);
             u.render(&mut c);
-            std::fs::write(std::path::Path::new(&d).join(format!("window-{w}x{h}.png")), crate::store::png_of(&c))
-                .unwrap();
+            std::fs::write(std::path::Path::new(&d).join(format!("window-{w}x{h}.png")), crate::store::png_of(&c)).unwrap();
         }
     }
 }

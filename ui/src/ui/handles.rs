@@ -24,18 +24,11 @@ impl Ui {
     /// behind it instead of falling back to CHn.
     pub(super) fn pill_name(&self, name: &str, w: i32) -> (String, i32) {
         let sb = &self.fonts().sb;
-        let (least, room) = if w >= 130 {
-            (42, 90)
-        } else if w >= 70 {
-            (42, (w / 2).max(42))
-        } else {
-            (8, (w - 4).max(8))
-        };
+        let (least, room) = if w >= 130 { (42, 90) } else if w >= 70 { (42, (w / 2).max(42)) } else { (8, (w - 4).max(8)) };
         let total = name.chars().count();
         let mut n = total;
         loop {
-            let text =
-                if n == total { name.to_string() } else { format!("{}.", name.chars().take(n).collect::<String>()) };
+            let text = if n == total { name.to_string() } else { format!("{}.", name.chars().take(n).collect::<String>()) };
             let bw = (sb.width(&text) + 12).max(least);
             if bw <= room || n <= 1 {
                 return (text, bw.min(room));
@@ -63,13 +56,7 @@ impl Ui {
         let half = 12.min(a.h / 2);
         // the lane that carries the time labels keeps them readable, and the last one the Fit row above them
         let last = self.plot.cur_win + 1 >= self.plot.wins.len();
-        let times = if last {
-            self.ref_badge_pad(a).max(self.fonts().s.size + 8)
-        } else if self.stacked() && !self.studio_lane_has_own_time() {
-            0
-        } else {
-            self.fonts().s.size + 8
-        };
+        let times = if last { self.ref_badge_pad(a).max(self.fonts().s.size + 8) } else if self.stacked() && !self.studio_lane_has_own_time() { 0 } else { self.fonts().s.size + 8 };
         let low = (a.y + a.h - times - half).max(a.y + half);
         // what the handles keep clear of: the corner buttons with the word beside them, the grips of the dock, and the
         // trigger tag with its value
@@ -81,9 +68,7 @@ impl Ui {
         avoid.extend(self.dock_handles());
         let ts = self.m.trig_src;
         if self.m.trig_ref.is_none() && self.m.ch[ts].on && self.shows(ts) && self.m.trig_line().is_none() {
-            let y = self
-                .y_of_volts(ts, self.trig_level_shown())
-                .clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
+            let y = self.y_of_volts(ts, self.trig_level_shown()).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
             avoid.push(Rect::new(a.x + a.w - MARK_W - 70, y - 10, MARK_W + 74, 20));
         }
         let mut out: Vec<(super::workspace::Trace, Rect)> = Vec::new();
@@ -93,10 +78,7 @@ impl Ui {
             // a longer one is wider
             let w = (self.fonts().sb.width(&self.studio_handle_name(source)) + 14).max(44);
             let mut r = Rect::new(a.x + a.w - 3 - w, zero.clamp(a.y + half, low) - 12, w, 24);
-            while r.x > a.x + 60 && (avoid.iter().any(|b| overlaps(*b, r)) || out.iter().any(|(_, b)| overlaps(*b, r)))
-            {
-                r.x -= r.w + 2;
-            }
+            while r.x > a.x + 60 && (avoid.iter().any(|b| overlaps(*b, r)) || out.iter().any(|(_, b)| overlaps(*b, r))) { r.x -= r.w + 2; }
             out.push((source, r));
         }
         out

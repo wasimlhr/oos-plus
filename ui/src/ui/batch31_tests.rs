@@ -28,21 +28,9 @@ fn fresh(layout: Layout) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = layout;
     u.m.ch[1].on = true;
-    u.refs[0] = Some(RefWave {
-        src: 0,
-        color: 0,
-        label: "R1".into(),
-        t0: 0.0,
-        dt: 1e-9,
-        v: vec![0.0f32; 128].into(),
-        vpd: 0.5,
-        offset: 0.0,
-        on: true,
-    });
+    u.refs[0] = Some(RefWave { src: 0, color: 0, label: "R1".into(), t0: 0.0, dt: 1e-9, v: vec![0.0f32; 128].into(), vpd: 0.5, offset: 0.0, on: true });
     u.ref_page.sel = 0;
-    for _ in 0..4 {
-        u.step(0.05);
-    }
+    for _ in 0..4 { u.step(0.05); }
     u
 }
 
@@ -87,14 +75,8 @@ fn a_pll_faster_than_its_edges_gives_a_bounded_clock_instead_of_running_out_of_m
     // bandwidth, the period went to zero or below, and the tick loop allocated until the process was killed
     for bw in [0.0, 1e3, 1e5, 1.5e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e12] {
         for second in [true, false] {
-            let c = oos_dsp::eye::recover_clock_pll(&v, dt, 0.0, 0.05, Some(1e9), bw, second)
-                .unwrap_or_else(|| panic!("{bw} Hz: a clock"));
-            assert!(
-                c.ticks.len() <= 2 * (n / spb) + 8,
-                "{bw} Hz second order {second}: {} ticks for {} bits",
-                c.ticks.len(),
-                n / spb
-            );
+            let c = oos_dsp::eye::recover_clock_pll(&v, dt, 0.0, 0.05, Some(1e9), bw, second).unwrap_or_else(|| panic!("{bw} Hz: a clock"));
+            assert!(c.ticks.len() <= 2 * (n / spb) + 8, "{bw} Hz second order {second}: {} ticks for {} bits", c.ticks.len(), n / spb);
             assert!(c.ticks.windows(2).all(|w| w[1] > w[0]), "{bw} Hz: ticks go forward");
             assert!(c.ticks.windows(2).all(|w| (w[1] - w[0]) < 2.0 * c.period), "{bw} Hz: no tick is skipped");
         }
@@ -107,13 +89,9 @@ fn the_pll_bandwidth_is_limited_by_the_range_table_in_the_menu_the_pad_scpi_and_
         let mut u = fresh(layout);
         let r = u.item_range(Item::EyePll).expect("a range");
         assert_eq!((r.lo, r.hi), (0.0, crate::model::EYE_PLL_MAX));
-        for _ in 0..80 {
-            u.adjust(Item::EyePll, 1);
-        }
+        for _ in 0..80 { u.adjust(Item::EyePll, 1); }
         assert_eq!(u.m.eye_pll_bw, r.hi, "{layout:?} stepped to the top");
-        for _ in 0..80 {
-            u.adjust(Item::EyePll, 4);
-        }
+        for _ in 0..80 { u.adjust(Item::EyePll, 4); }
         assert_eq!(u.m.eye_pll_bw, r.hi, "{layout:?} knob");
         assert_eq!(u.numpad_apply(Item::EyePll, 1e12), r.hi, "{layout:?} pad");
         scpi_line(&mut u, ":EYE:PLL:BWIDth 1e12");
@@ -121,9 +99,7 @@ fn the_pll_bandwidth_is_limited_by_the_range_table_in_the_menu_the_pad_scpi_and_
         scpi_line(&mut u, ":EYE:PLL:BWIDth 1e8");
         assert_eq!(u.m.eye_pll_bw, 1e8);
         // down from the lowest rung is Auto again
-        for _ in 0..80 {
-            u.adjust(Item::EyePll, -1);
-        }
+        for _ in 0..80 { u.adjust(Item::EyePll, -1); }
         assert_eq!(u.m.eye_pll_bw, 0.0, "{layout:?} back to Auto");
     }
     let mut m = Model::default();
@@ -137,9 +113,7 @@ fn the_eye_runs_with_every_pll_bandwidth_without_hanging() {
     u.m.view = AView::Eye;
     for bw in [1e5, 2e5, 1e6, 1e8, 1e12] {
         u.m.eye_pll_bw = bw;
-        for _ in 0..6 {
-            frame(&mut u);
-        }
+        for _ in 0..6 { frame(&mut u); }
     }
 }
 
@@ -152,16 +126,12 @@ fn the_magnetic_turns_the_math_offset_and_the_reference_level_stop_at_a_limit() 
         let r = u.item_range(Item::MagN).expect("turns are in the table");
         assert_eq!((r.lo, r.hi, r.step), (1.0, 10_000.0, Step::Index));
         u.m.mag_n = 9990.0;
-        for _ in 0..30 {
-            u.adjust(Item::MagN, 1);
-        }
+        for _ in 0..30 { u.adjust(Item::MagN, 1); }
         assert_eq!(u.m.mag_n, 10_000.0, "{layout:?}");
         u.adjust(Item::MagN, 512);
         assert_eq!(u.m.mag_n, 10_000.0);
         assert_eq!(u.numpad_apply(Item::MagN, 1e9), 10_000.0);
-        for _ in 0..4 {
-            u.adjust(Item::MagN, -4096);
-        }
+        for _ in 0..4 { u.adjust(Item::MagN, -4096); }
         assert_eq!(u.m.mag_n, 1.0);
         // the math offset stops in Minimal and Studio; Default adds its step as upstream's (batch29)
         if layout == Layout::Default {
@@ -190,26 +160,14 @@ fn to_the_limit(u: &mut Ui, it: Item, d: i32) -> u32 {
     loop {
         let before = number(u, it);
         u.adjust(it, d);
-        if number(u, it) == before || n > 100_000 {
-            return n;
-        }
+        if number(u, it) == before || n > 100_000 { return n; }
         n += 1;
     }
 }
 
 const CLAMPED: [Item; 12] = [
-    Item::TrigLevel,
-    Item::HDelay,
-    Item::ChOffset(0),
-    Item::ChOffset(1),
-    Item::ChBias(0),
-    Item::ChSkew(0),
-    Item::DecThr,
-    Item::BusClkThr,
-    Item::BusDataThr,
-    Item::MathOffset,
-    Item::SpecRef,
-    Item::PatLevel,
+    Item::TrigLevel, Item::HDelay, Item::ChOffset(0), Item::ChOffset(1), Item::ChBias(0), Item::ChSkew(0), Item::DecThr, Item::BusClkThr,
+    Item::BusDataThr, Item::MathOffset, Item::SpecRef, Item::PatLevel,
 ];
 
 #[test]
@@ -230,18 +188,10 @@ fn a_press_up_into_the_limit_and_the_same_number_down_return_to_the_start_for_ev
                 let start = number(&u, it);
                 let n = to_the_limit(&mut u, it, dir);
                 assert!(n > 0, "{layout:?} {it:?} moves");
-                for _ in 0..n {
-                    u.adjust(it, -dir);
-                }
+                for _ in 0..n { u.adjust(it, -dir); }
                 let back = number(&u, it);
-                let tol = match u.item_range(it).map(|r| r.step) {
-                    Some(Step::Add(s)) => s * 1e-3,
-                    _ => 1e-9,
-                };
-                assert!(
-                    (back - start).abs() <= tol,
-                    "{layout:?} {it:?} {dir:+}: {start} -> {n} presses to the limit -> {back}"
-                );
+                let tol = match u.item_range(it).map(|r| r.step) { Some(Step::Add(s)) => s * 1e-3, _ => 1e-9 };
+                assert!((back - start).abs() <= tol, "{layout:?} {it:?} {dir:+}: {start} -> {n} presses to the limit -> {back}");
             }
         }
     }
@@ -254,9 +204,7 @@ fn the_trigger_level_of_the_function_check_comes_back_from_the_limit() {
     u.m.trig_level = 1.65;
     let n = to_the_limit(&mut u, Item::TrigLevel, 1);
     assert!((u.m.trig_level as f64 - 5.0 * u.trigger_vpd(false) as f64).abs() < 1e-5);
-    for _ in 0..n {
-        u.adjust(Item::TrigLevel, -1);
-    }
+    for _ in 0..n { u.adjust(Item::TrigLevel, -1); }
     assert!((u.m.trig_level - 1.65).abs() < 1e-4, "{}", u.m.trig_level);
 }
 
@@ -287,10 +235,7 @@ fn the_trigger_level_and_the_channel_offset_follow_the_volts_per_division() {
         seen.push((vpd, level.hi, off.hi));
     }
     assert!(seen.windows(2).all(|w| w[1].1 != w[0].1), "level limits differ per V/div: {seen:?}");
-    assert!(
-        seen.iter().any(|s| (s.1 - 10.0).abs() > 1e-6) && seen.iter().any(|s| (s.2 - 10.0).abs() > 1e-6),
-        "{seen:?}"
-    );
+    assert!(seen.iter().any(|s| (s.1 - 10.0).abs() > 1e-6) && seen.iter().any(|s| (s.2 - 10.0).abs() > 1e-6), "{seen:?}");
 }
 
 // ------------------------------------------------------------------------------------------------ 5 defaults off the ladder
@@ -317,13 +262,9 @@ fn a_value_between_two_rungs_comes_back_after_presses_down_and_up_without_warm_u
                 set(&mut u);
                 let start = u.value(*it);
                 // N presses one way and N the other, from a value between two rungs
-                for _ in 0..2 {
-                    u.adjust(*it, d);
-                }
+                for _ in 0..2 { u.adjust(*it, d); }
                 assert_ne!(u.value(*it), start, "{name} moved");
-                for _ in 0..2 {
-                    u.adjust(*it, -d);
-                }
+                for _ in 0..2 { u.adjust(*it, -d); }
                 assert_eq!(u.value(*it), start, "{layout:?} {name}: {d:+} x2 then back");
             }
             let mut u = fresh(layout);
@@ -391,9 +332,7 @@ fn spectrum_scope(layout: Layout) -> Ui {
     u.m.spec_rbw = 0.0;
     u.m.spec_span = 0.0;
     u.relayout();
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     u.analyzer_update();
     u
 }
@@ -415,11 +354,7 @@ fn rbw_and_span_step_from_the_value_auto_shows_not_from_one_hertz() {
         if s.azr.spec_stop > 0.0 && s.spec_follows() {
             let shown = s.azr.spec_stop;
             s.adjust(Item::SpecSpan, 1);
-            assert!(
-                s.m.spec_span >= shown && s.m.spec_span < 3.0 * shown,
-                "{layout:?}: span + from Auto {shown} gave {}",
-                s.m.spec_span
-            );
+            assert!(s.m.spec_span >= shown && s.m.spec_span < 3.0 * shown, "{layout:?}: span + from Auto {shown} gave {}", s.m.spec_span);
         }
         // with nothing to show: the first rung up
         let mut n = fresh(layout);
@@ -453,13 +388,7 @@ fn bode_start_and_amplitude_show_what_they_hold_after_every_tap() {
                     assert_eq!((before.0, before.1), (after.0, after.1), "{layout:?} {it:?}");
                 }
                 let (b, a) = if it == Item::BodeStart { (before.0, after.0) } else { (before.2, after.2) };
-                if a != b {
-                    assert_ne!(
-                        u.value(it),
-                        shown_before,
-                        "{layout:?} {it:?} press {press}: the value moved to {a} but shows {shown_before}"
-                    );
-                }
+                if a != b { assert_ne!(u.value(it), shown_before, "{layout:?} {it:?} press {press}: the value moved to {a} but shows {shown_before}"); }
                 assert_eq!(u.m.tscale, tscale, "{layout:?} {it:?}: time/div");
                 let want = if it == Item::BodeStart { si_short(after.0, "Hz") } else { si_short(after.2, "Vpp") };
                 assert_eq!(u.value(it), want, "{layout:?} {it:?}");
@@ -480,9 +409,7 @@ fn the_bode_amplitude_steps_below_one_volt_down_to_ten_millivolts() {
     }
     assert_eq!(seen[..4], [1.0, 0.95, 0.9, 0.85]);
     assert_eq!(*seen.last().unwrap(), 0.01);
-    for _ in 0..500 {
-        u.adjust(Item::BodeAmp, 1);
-    }
+    for _ in 0..500 { u.adjust(Item::BodeAmp, 1); }
     assert_eq!(u.m.bode_amp, 20.0);
 }
 
@@ -582,6 +509,9 @@ fn the_graphics_choice_shows_what_was_chosen_and_an_even_step_does_nothing() {
         assert!(u.sys.gpu);
     }
 }
+
+
+
 
 fn scpi_q(u: &mut Ui, cmd: &str) -> String {
     let cv = Canvas::new(u.scr.w, u.scr.h);

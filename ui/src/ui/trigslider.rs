@@ -31,28 +31,17 @@ pub(super) const SLIDER_W: i32 = 150;
 const THUMB: i32 = 44;
 
 impl Ui {
-    pub(super) fn trig_slider_open(&self) -> bool {
-        self.m.layout == Layout::Studio && self.studio.trig_slider
-    }
+    pub(super) fn trig_slider_open(&self) -> bool { self.m.layout == Layout::Studio && self.studio.trig_slider }
 
     /// The hit area of the trigger level tag on the plot (value and T marker), at least 40 px high.
     pub(super) fn trigger_tag_hit(&self) -> Option<Rect> {
         let f = self.fonts();
         let a = self.plot.area;
         let ts = self.m.trig_src;
-        let clamp = |y: i32, a: Rect| {
-            let m = (a.h / 2).min(9);
-            y.clamp(a.y + m, a.y + a.h - m)
-        };
+        let clamp = |y: i32, a: Rect| { let m = (a.h / 2).min(9); y.clamp(a.y + m, a.y + a.h - m) };
         match self.m.trigger_wave() {
             WaveId::Ch(_) => {
-                if !(self.m.ch[ts].on
-                    && self.shows(ts)
-                    && self.m.trig_line().is_none()
-                    && self.trigger_absolute_level_visible(false))
-                {
-                    return None;
-                }
+                if !(self.m.ch[ts].on && self.shows(ts) && self.m.trig_line().is_none() && self.trigger_absolute_level_visible(false)) { return None; }
                 let lvl = self.trig_level_shown();
                 let y = clamp(self.y_of_volts(ts, lvl), a);
                 let x1 = self.trigger_tag_x(a.x + a.w - MARK_W, y);
@@ -81,14 +70,7 @@ impl Ui {
         let panel = Rect::new(x, (g.y + (g.h - h) / 2).max(4), w, h);
         let value = Rect::new(panel.x + 8, panel.y + 8, w - 16, 52);
         let fifty = Rect::new(panel.x + 8, panel.bottom() - 8 - 52, w - 16, 52);
-        SliderGeo {
-            panel,
-            value,
-            fifty,
-            x: panel.x + w / 2,
-            top: value.bottom() + 16 + THUMB / 2,
-            bottom: fifty.y - 16 - THUMB / 2,
-        }
+        SliderGeo { panel, value, fifty, x: panel.x + w / 2, top: value.bottom() + 16 + THUMB / 2, bottom: fifty.y - 16 - THUMB / 2 }
     }
 
     /// The level range of the slider: that of the numeric pad.
@@ -124,23 +106,17 @@ impl Ui {
     }
 
     pub(super) fn trig_slider_down(&mut self, x: i32, y: i32) -> bool {
-        if !self.trig_slider_open() {
-            return false;
-        }
+        if !self.trig_slider_open() { return false; }
         let g = self.trig_slider_geo();
         let part = if !g.panel.contains(x, y) {
             self.studio.trig_slider = false;
             SliderPart::Dead
-        } else if g.value.contains(x, y) {
-            SliderPart::Value
-        } else if g.fifty.contains(x, y) {
-            SliderPart::Fifty
-        } else if y >= g.top - THUMB / 2 && y <= g.bottom + THUMB / 2 && (x - g.x).abs() <= 56 {
+        } else if g.value.contains(x, y) { SliderPart::Value }
+        else if g.fifty.contains(x, y) { SliderPart::Fifty }
+        else if y >= g.top - THUMB / 2 && y <= g.bottom + THUMB / 2 && (x - g.x).abs() <= 56 {
             self.trig_slider_set_at(y);
             SliderPart::Thumb
-        } else {
-            SliderPart::Dead
-        };
+        } else { SliderPart::Dead };
         self.studio.slider_part = Some(part);
         true
     }
@@ -148,24 +124,17 @@ impl Ui {
     pub(super) fn trig_slider_move(&mut self, y: i32) -> bool {
         match self.studio.slider_part {
             None => false,
-            Some(SliderPart::Thumb) => {
-                self.trig_slider_set_at(y);
-                true
-            }
+            Some(SliderPart::Thumb) => { self.trig_slider_set_at(y); true }
             Some(_) => true,
         }
     }
 
     pub(super) fn trig_slider_up(&mut self, x: i32, y: i32) -> bool {
         let Some(part) = self.studio.slider_part.take() else { return false };
-        if !self.trig_slider_open() {
-            return true;
-        }
+        if !self.trig_slider_open() { return true; }
         let g = self.trig_slider_geo();
         match part {
-            SliderPart::Value if g.value.contains(x, y) => {
-                self.open_numpad(Item::TrigLevel);
-            }
+            SliderPart::Value if g.value.contains(x, y) => { self.open_numpad(Item::TrigLevel); }
             SliderPart::Fifty if g.fifty.contains(x, y) => self.trig_slider_fifty(),
             _ => {}
         }
@@ -173,9 +142,7 @@ impl Ui {
     }
 
     pub(super) fn draw_trig_slider(&self, cv: &mut Canvas) {
-        if !self.trig_slider_open() {
-            return;
-        }
+        if !self.trig_slider_open() { return; }
         let f = self.fonts();
         let g = self.trig_slider_geo();
         cv.round(g.panel, 10, ACCENT, 255);
@@ -183,20 +150,8 @@ impl Ui {
         // the value: a tap types it
         let pressed = self.studio.slider_part == Some(SliderPart::Value);
         btn(cv, g.value, if pressed { mix(BTN, ACCENT, 60) } else { BTN }, BTN_BORDER);
-        cv.text_in(
-            &f.s,
-            Rect::new(g.value.x, g.value.y + 3, g.value.w, 16),
-            1,
-            &format!("{} level", Self::trigger_wave_label(self.m.trigger_wave())),
-            DIM,
-        );
-        cv.text_in(
-            &f.mb,
-            Rect::new(g.value.x, g.value.y + 18, g.value.w, g.value.h - 20),
-            1,
-            &self.value(Item::TrigLevel),
-            ACCENT,
-        );
+        cv.text_in(&f.s, Rect::new(g.value.x, g.value.y + 3, g.value.w, 16), 1, &format!("{} level", Self::trigger_wave_label(self.m.trigger_wave())), DIM);
+        cv.text_in(&f.mb, Rect::new(g.value.x, g.value.y + 18, g.value.w, g.value.h - 20), 1, &self.value(Item::TrigLevel), ACCENT);
         // the track, filled up to the thumb
         let r = self.trigger_vpd(false) as f64 * 5.0;
         let unit = self.numpad_value(Item::TrigLevel).map(|v| v.1).unwrap_or_default();

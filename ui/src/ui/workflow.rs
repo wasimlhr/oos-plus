@@ -608,47 +608,18 @@ impl Ui {
             })
             .collect();
         let channels: Vec<_> = self.m.ch.iter().map(|ch| (ch.volts_per_div().to_bits(), ch.unit.name())).collect();
-        let gate = (!self.m.meas_full_record).then(|| {
-            let (scale, delay) = self.view();
-            (scale.to_bits(), delay.to_bits())
-        });
-        format!(
-            "{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}",
-            self.m.meas,
-            (&self.m.meas2, &self.m.cat),
-            (
-                self.m.meas_full_record,
-                self.m.meas_lpct.to_bits(),
-                self.m.meas_hpct.to_bits(),
-                self.m.meas_idle.to_bits(),
-                self.m.meas_n,
-                self.m.meas_data,
-                self.m.meas_out,
-                self.m.meas_tsetup.to_bits(),
-                self.m.meas_thold.to_bits(),
-                self.m.meas_lv
-            ),
-            refs,
-            channels,
-            gate,
-            self.m.trigger(),
-            self.m.trigger_wave(),
-            (
-                self.m.trig_type,
-                self.m.trig_bus,
-                self.m.trig_bus_val,
-                self.m.trig_nrej,
-                self.m.deskew_ch.map(f64::to_bits),
-                self.m.deskew_ref.map(f64::to_bits)
-            )
-        )
+        let gate = (!self.m.meas_full_record).then(|| { let (scale, delay) = self.view(); (scale.to_bits(), delay.to_bits()) });
+        format!("{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}|{:?}", self.m.meas, (&self.m.meas2, &self.m.cat),
+            (self.m.meas_full_record, self.m.meas_lpct.to_bits(), self.m.meas_hpct.to_bits(), self.m.meas_idle.to_bits(),
+                self.m.meas_n, self.m.meas_data, self.m.meas_out, self.m.meas_tsetup.to_bits(), self.m.meas_thold.to_bits(), self.m.meas_lv),
+            refs, channels, gate, self.m.trigger(), self.m.trigger_wave(),
+            (self.m.trig_type, self.m.trig_bus, self.m.trig_bus_val, self.m.trig_nrej,
+                self.m.deskew_ch.map(f64::to_bits), self.m.deskew_ref.map(f64::to_bits)))
     }
 
     fn add_capture_statistic(stat: &mut MStat, value: f64, current: bool) {
-        if !value.is_finite() {
-            return;
-        }
-        stat.push(value, current);
+        if !value.is_finite() { return; }
+stat.push(value, current);
     }
 
     /// Finish only rows pending for this exact accepted record and measurement
@@ -662,9 +633,7 @@ impl Ui {
         self.results.rows.resize(rows.len(), MStat::default());
         pending.rows.retain(|&index| {
             let Some(row) = rows.get(index) else { return false };
-            if row.computing {
-                return true;
-            }
+            if row.computing { return true; }
             Self::add_capture_statistic(&mut self.results.rows[index], row.v, self.m.meas_pop_current);
             false
         });
@@ -694,12 +663,7 @@ impl Ui {
     pub(super) fn remember_live(&mut self) {
         if self.workflow_hold.is_none() && !self.record_mode() {
             let visible = std::array::from_fn(|i| self.refs[i].as_ref().is_some_and(|r| r.on));
-            self.workflow_hold = Some(LiveSession {
-                model: self.m.clone(),
-                visible,
-                had: std::array::from_fn(|i| self.refs[i].is_some()),
-                bus_auto: self.bus_auto,
-            });
+            self.workflow_hold = Some(LiveSession { model: self.m.clone(), visible, had: std::array::from_fn(|i| self.refs[i].is_some()), bus_auto: self.bus_auto });
         }
     }
 
@@ -725,21 +689,16 @@ impl Ui {
             self.m = saved.model;
             self.bus_auto = saved.bus_auto;
             for (i, r) in self.refs.iter_mut().enumerate() {
-                if let Some(r) = r {
-                    r.on = saved.visible[i] || (studio && !saved.had[i]);
-                }
+                if let Some(r) = r { r.on = saved.visible[i] || (studio && !saved.had[i]); }
             }
         }
         // the acquisition source in Live is a live channel: a ref that was the trigger in SIM is not playing now
         for secondary in [false, true].into_iter().filter(|_| studio) {
             if (if secondary { self.m.trig_ref2 } else { self.m.trig_ref }).is_some() {
                 let c = if secondary { self.m.trig_src2 } else { self.m.trig_src };
-                let c =
-                    if c < n_ch() && self.m.ch[c].on { c } else { (0..n_ch()).find(|&c| self.m.ch[c].on).unwrap_or(0) };
+                let c = if c < n_ch() && self.m.ch[c].on { c } else { (0..n_ch()).find(|&c| self.m.ch[c].on).unwrap_or(0) };
                 self.m.set_trigger_wave(WaveId::Ch(c), secondary);
-                if !secondary {
-                    self.m.trig_level = 0.0;
-                }
+                if !secondary { self.m.trig_level = 0.0; }
             }
         }
         self.m.floor_live_tdiv();
@@ -757,14 +716,8 @@ impl Ui {
             // a session entered without `remember_live` (OOS started with --offline): `set_offline` gave back the
             // channels and the time base it held; an input shows and acquires, the measurements and the page stay.
             // Studio: a loaded ref stays shown, Live never hides what the user loaded
-            if !studio {
-                for r in self.refs.iter_mut().flatten() {
-                    r.on = false;
-                }
-            }
-            if !(0..n_ch()).any(|c| self.m.ch[c].on) {
-                self.m.ch[0].on = true;
-            }
+            if !studio { for r in self.refs.iter_mut().flatten() { r.on = false; } }
+            if !(0..n_ch()).any(|c| self.m.ch[c].on) { self.m.ch[0].on = true; }
             self.m.run = RunState::Run;
             self.m.zoom = false;
             self.m.floor_live_tdiv();
@@ -931,8 +884,8 @@ impl Ui {
         }
         // Adding a source must not discard a user's catalog or channel-pair setup.
         // A fresh, untouched live default gets useful reference readouts on its first import.
-        let initialize_measurements =
-            self.refs.iter().all(Option::is_none) && self.m.meas == Self::default_meas() && self.m.meas2.is_empty();
+        let initialize_measurements = self.refs.iter().all(Option::is_none)
+            && self.m.meas == Self::default_meas() && self.m.meas2.is_empty();
         // a file loaded while SIM plays refs joins the playback; it does not end it
         let sim_refs_playing = !self.sim_refs.is_empty();
         let count = traces.len();
@@ -963,18 +916,9 @@ impl Ui {
             let summary = crate::wave::autoset_summary(&trace.v, trace.dt);
             let (lo, hi) = (summary.vmin, summary.vmax);
             let (lo, hi) = if lo.is_finite() && hi.is_finite() { (lo, hi) } else { (0.0, 1.0) };
-            self.refs[slot] = Some(RefWave {
-                src: 0,
-                color: slot % REF_COLORS.len(),
-                label: if trace.label.is_empty() { name.into() } else { trace.label },
-                t0: trace.t0,
-                dt: trace.dt,
-                v: (trace.v).into(),
+            self.refs[slot] = Some(RefWave { src: 0, color: slot % REF_COLORS.len(), label: if trace.label.is_empty() { name.into() } else { trace.label }, t0: trace.t0, dt: trace.dt, v: (trace.v).into(),
                 vpd: Self::nice_ref_vpd(((hi - lo).abs() / 6.0).max(1e-6)),
-                offset: -Self::nice_ref_vpd(((hi - lo).abs() / 6.0).max(1e-6))
-                    * ((0.5 * (hi + lo)) / Self::nice_ref_vpd(((hi - lo).abs() / 6.0).max(1e-6))).round() as f32,
-                on: true,
-            });
+                offset: -Self::nice_ref_vpd(((hi - lo).abs() / 6.0).max(1e-6)) * ((0.5 * (hi + lo)) / Self::nice_ref_vpd(((hi - lo).abs() / 6.0).max(1e-6))).round() as f32, on: true });
         }
         self.ref_page.sel = first;
         if reference_session {
@@ -1007,9 +951,7 @@ impl Ui {
         }
         if sim_refs_playing {
             for slot in first..first + count {
-                if !self.sim_refs.contains(&slot) {
-                    self.sim_refs.push(slot);
-                }
+                if !self.sim_refs.contains(&slot) { self.sim_refs.push(slot); }
             }
             self.sim_refs.sort_unstable();
             self.measure_refs();
@@ -1022,9 +964,7 @@ impl Ui {
     /// A volts/div for a loaded ref on the 1-2-5 ladder (the next one up, so the trace fits): its lane gets the same
     /// round axis labels as a channel (0 V, 0.25 V), not 0.55662 V.
     pub(super) fn nice_ref_vpd(want: f32) -> f32 {
-        if !(want.is_finite() && want > 0.0) {
-            return 1.0;
-        }
+        if !(want.is_finite() && want > 0.0) { return 1.0; }
         let e = want.log10().floor();
         let base = 10f32.powf(e);
         [1.0, 2.0, 5.0, 10.0].into_iter().map(|m| m * base).find(|&v| v >= want * 0.999).unwrap_or(10.0 * base)
@@ -1079,9 +1019,7 @@ impl Ui {
         };
         self.select_workspace_source(WaveId::Ref(slot));
         // Studio: the lane gets its own time/div; the live time base stays where it is
-        if self.studio_ref_fit(slot) {
-            return;
-        }
+        if self.studio_ref_fit(slot) { return; }
         self.fit_selected_record();
     }
 
@@ -1246,11 +1184,8 @@ impl Ui {
         let mut pending = Vec::new();
         let current = self.m.meas_pop_current;
         for (index, (row, stat)) in rows.iter().zip(&mut self.results.rows).enumerate() {
-            if row.computing {
-                pending.push(index);
-            } else {
-                Self::add_capture_statistic(stat, row.v, current);
-            }
+            if row.computing { pending.push(index); }
+            else { Self::add_capture_statistic(stat, row.v, current); }
         }
         self.replay.deferred_statistics = (!pending.is_empty()).then(|| DeferredCaptureStatistics {
             capture: self.replay.captures,
@@ -1296,20 +1231,9 @@ impl Ui {
     pub(super) fn record_caption(&self) -> String {
         let slot = self.active_reference();
         if !self.sim_refs.is_empty() {
-            return format!(
-                "SIM \u{b7} {} \u{b7} {} measurements \u{b7} #{}",
-                self.sim_refs_caption(),
-                self.measurement_gate_label(),
-                self.replay.captures
-            );
+            return format!("SIM \u{b7} {} \u{b7} {} measurements \u{b7} #{}", self.sim_refs_caption(), self.measurement_gate_label(), self.replay.captures);
         }
-        format!(
-            "{} R{} · {} measurements · #{}",
-            if self.session_is_sim { "SIM" } else { "Reference" },
-            slot + 1,
-            self.measurement_gate_label(),
-            self.replay.captures
-        )
+        format!("{} R{} · {} measurements · #{}", if self.session_is_sim { "SIM" } else { "Reference" }, slot + 1, self.measurement_gate_label(), self.replay.captures)
     }
 
     pub fn workflow_state(&self) -> String {
@@ -1321,16 +1245,7 @@ impl Ui {
             TrigStatus::Stop => "STOP",
         };
         J::obj(&[
-            (
-                "mode",
-                J::s(if self.sim_mode() {
-                    "sim"
-                } else if self.record_mode() {
-                    "reference"
-                } else {
-                    "live"
-                }),
-            ),
+            ("mode", J::s(if self.sim_mode() { "sim" } else if self.record_mode() { "reference" } else { "live" })),
             ("running", J::Bool(self.m.run == RunState::Run)),
             ("busy", J::Bool(self.sim_generating())),
             ("measurementBusy", J::Bool(self.measurement_busy())),
@@ -1370,6 +1285,7 @@ impl Ui {
     pub(super) fn session_buttons(r: Rect) -> (Rect, Rect) {
         (Rect::new(r.x + 6, r.y + 22, r.w / 2 - 9, 40), Rect::new(r.x + r.w / 2 + 3, r.y + 22, r.w / 2 - 9, 40))
     }
+
 
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
     pub(super) fn draw_session_card(&self, cv: &mut Canvas, r: Rect) {

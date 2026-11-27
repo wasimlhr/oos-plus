@@ -67,28 +67,10 @@ impl Ui {
     fn classic_cells(&self) -> Vec<(WaveId, Vec<(MeasKey, i32, i32)>)> {
         let f = self.fonts();
         let rows = self.meas_rows();
-        self.classic_groups()
-            .into_iter()
-            .take(MAX_GROUPS)
-            .map(|(src, keys)| {
-                (
-                    src,
-                    keys.into_iter()
-                        .filter_map(|key| {
-                            let r = self
-                                .studio_index(key)
-                                .and_then(|i| rows.get(i))
-                                .filter(|r| !self.meas_row_hidden(r))?;
-                            Some((
-                                key,
-                                f.s.width(&self.studio_badge_name(key, &r.name)),
-                                f.sb.width(&format!("-00.0 m{}", r.unit)),
-                            ))
-                        })
-                        .collect(),
-                )
-            })
-            .collect()
+        self.classic_groups().into_iter().take(MAX_GROUPS).map(|(src, keys)| (src, keys.into_iter().filter_map(|key| {
+            let r = self.studio_index(key).and_then(|i| rows.get(i)).filter(|r| !self.meas_row_hidden(r))?;
+            Some((key, f.s.width(&self.studio_badge_name(key, &r.name)), f.sb.width(&format!("-00.0 m{}", r.unit))))
+        }).collect())).collect()
     }
 
     /// The columns of the strip in `avail` px, each as (width of its names, width of its values): as many as fit,
@@ -98,20 +80,9 @@ impl Ui {
         let longest = cells.iter().map(|(_, c)| c.len()).max().unwrap_or(0).max(1);
         // column k holds the pairs k, k + cols, ... of every source
         let widths = |cols: usize| -> Vec<(i32, i32)> {
-            (0..cols)
-                .map(|k| {
-                    cells
-                        .iter()
-                        .flat_map(|(_, c)| c.iter().skip(k).step_by(cols))
-                        .fold((0, 0), |(n, v), c| (n.max(c.1), v.max(c.2)))
-                })
-                .collect()
+            (0..cols).map(|k| cells.iter().flat_map(|(_, c)| c.iter().skip(k).step_by(cols)).fold((0, 0), |(n, v), c| (n.max(c.1), v.max(c.2)))).collect()
         };
-        (1..=longest)
-            .rev()
-            .map(widths)
-            .find(|w| w.iter().map(|&(n, v)| Self::classic_col_w(n, v)).sum::<i32>() <= avail)
-            .unwrap_or_else(|| widths(1))
+        (1..=longest).rev().map(widths).find(|w| w.iter().map(|&(n, v)| Self::classic_col_w(n, v)).sum::<i32>() <= avail).unwrap_or_else(|| widths(1))
     }
 
     /// The width of a column: 3 to the name, 5 between the name and the value, 8 to the next column.
@@ -143,45 +114,19 @@ impl Ui {
         let columns = Self::classic_columns(&cells, Self::classic_room(row));
         let cols = columns.len();
         // where each column starts, from the first
-        let starts: Vec<i32> = columns
-            .iter()
-            .scan(0, |x, &(n, v)| {
-                let at = *x;
-                *x += Self::classic_col_w(n, v);
-                Some(at)
-            })
-            .collect();
-        let mut l = ClassicLayout {
-            chips: Vec::new(),
-            pairs: Vec::new(),
-            values: Vec::new(),
-            overflow: 0,
-            chip: Rect::new(row.right() - 4 - LIST_W, row.y + 3, LIST_W, CLASSIC_ROW - 3),
-        };
+        let starts: Vec<i32> = columns.iter().scan(0, |x, &(n, v)| { let at = *x; *x += Self::classic_col_w(n, v); Some(at) }).collect();
+        let mut l = ClassicLayout { chips: Vec::new(), pairs: Vec::new(), values: Vec::new(), overflow: 0, chip: Rect::new(row.right() - 4 - LIST_W, row.y + 3, LIST_W, CLASSIC_ROW - 3) };
         // the lines beyond one per source go to the sources whose pairs do not fit their line, in order
         let mut spare = self.classic_spare(cells.len() as i32);
         let mut line = 0;
         for (src, pairs) in &cells {
-            let lines = if pairs.len() > cols && spare > 0 {
-                spare -= 1;
-                2
-            } else {
-                1
-            };
+            let lines = if pairs.len() > cols && spare > 0 { spare -= 1; 2 } else { 1 };
             let y = row.y + 3 + line * CLASSIC_ROW;
             l.chips.push((*src, Rect::new(x0, y, CHIP_W, CLASSIC_ROW - 3)));
             for (c, &(key, _, _)) in pairs.iter().enumerate() {
-                if c >= cols * lines {
-                    l.overflow += 1;
-                    continue;
-                }
+                if c >= cols * lines { l.overflow += 1; continue; }
                 let (k, cy) = (c % cols, (c / cols) as i32 * CLASSIC_ROW);
-                let cell = Rect::new(
-                    x0 + CHIP_W + 8 + starts[k],
-                    y + cy,
-                    Self::classic_col_w(columns[k].0, columns[k].1) - 3,
-                    CLASSIC_ROW - 3,
-                );
+                let cell = Rect::new(x0 + CHIP_W + 8 + starts[k], y + cy, Self::classic_col_w(columns[k].0, columns[k].1) - 3, CLASSIC_ROW - 3);
                 l.pairs.push((key, cell));
                 // the values of a column begin at one place, after its widest name
                 l.values.push(cell.x + 3 + columns[k].0 + 5);
@@ -190,9 +135,7 @@ impl Ui {
         }
         // the chip at the end of the row is the last thing of a line, not a column of its own: it goes to the last
         // line that has the room after its pairs, and only when every line is full does the last line give it a pair
-        let free = |y: i32| {
-            l.pairs.iter().filter(|(_, r)| r.y == y).map(|(_, r)| r.right()).max().unwrap_or(0) + 6 <= l.chip.x
-        };
+        let free = |y: i32| l.pairs.iter().filter(|(_, r)| r.y == y).map(|(_, r)| r.right()).max().unwrap_or(0) + 6 <= l.chip.x;
         let ys: Vec<i32> = (0..line.max(1)).map(|k| row.y + 3 + k * CLASSIC_ROW).collect();
         l.chip.y = ys.iter().rev().copied().find(|y| free(*y)).unwrap_or(ys[ys.len() - 1]);
         let (chip, before) = (l.chip, l.pairs.len());
@@ -213,17 +156,13 @@ impl Ui {
         let l = self.classic_layout();
         let row = self.studio_row();
         for (g, (src, r)) in l.chips.iter().enumerate() {
-            if g > 0 {
-                cv.hline(row.x + 6, row.right() - 6, r.y - 2, LINE);
-            }
+            if g > 0 { cv.hline(row.x + 6, row.right() - 6, r.y - 2, LINE); }
             cv.round(*r, 4, self.wave_color(*src), 255);
             cv.text_in(&f.sb, *r, 1, &self.wave_name(*src), DARK_TEXT);
         }
         for ((key, r), value_x) in l.pairs.iter().zip(&l.values) {
             let Some(m) = self.studio_index(*key).and_then(|i| rows.get(i)) else { continue };
-            if self.studio.popup == Some(*key) {
-                cv.round_outline(*r, 4, ACCENT);
-            }
+            if self.studio.popup == Some(*key) { cv.round_outline(*r, 4, ACCENT); }
             let cy = r.y + (r.h + 1) / 2 + 4;
             cv.set_clip(Rect::new(r.x, r.y, r.w, r.h + 3));
             // as the row of the Default layout reads: the value in the colour of its source, the name in the same

@@ -10,21 +10,15 @@ fn fresh(l: Layout) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = l;
     u.m.ch[1].on = true;
-    if l == Layout::Studio {
-        u.studio.enter = true;
-    }
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    if l == Layout::Studio { u.studio.enter = true; }
+    for _ in 0..10 { u.step(0.05); }
     u
 }
 
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
@@ -32,9 +26,7 @@ fn shot(u: &mut Ui, name: &str) {
     }
 }
 
-fn tap_in(u: &mut Ui, r: Rect) {
-    u.tap(r.x + r.w / 2, r.y + r.h / 2);
-}
+fn tap_in(u: &mut Ui, r: Rect) { u.tap(r.x + r.w / 2, r.y + r.h / 2); }
 
 /// A record of pulses whose cycles are `cycles` samples long (low first, then high), delayed by `delay` low samples.
 fn pulses(cycles: &[usize], delay: usize) -> Vec<f32> {
@@ -48,27 +40,14 @@ fn pulses(cycles: &[usize], delay: usize) -> Vec<f32> {
 }
 
 fn put(u: &mut Ui, slot: usize, v: Vec<f32>) {
-    u.refs[slot] = Some(RefWave {
-        src: 0,
-        color: slot,
-        label: format!("R{}", slot + 1),
-        t0: 0.0,
-        dt: 1e-9,
-        v: v.into(),
-        vpd: 1.0,
-        offset: 0.0,
-        on: true,
-    });
+    u.refs[slot] = Some(RefWave { src: 0, color: slot, label: format!("R{}", slot + 1), t0: 0.0, dt: 1e-9, v: v.into(), vpd: 1.0, offset: 0.0, on: true });
 }
 
 fn bench() -> Ui {
     let mut u = fresh(Layout::Default);
     u.m.run = RunState::Stop;
     u.m.meas_full_record = true;
-    u.m.meas.clear();
-    u.m.meas2.clear();
-    u.m.cat.clear();
-    u.m.row_cfg.clear();
+    u.m.meas.clear(); u.m.meas2.clear(); u.m.cat.clear(); u.m.row_cfg.clear();
     u.meas_own.rows.clear();
     // cycles of 40, 60, 80, 100, 120 samples
     put(&mut u, 0, pulses(&[40, 60, 80, 100, 120], 0));
@@ -76,9 +55,7 @@ fn bench() -> Ui {
     u
 }
 
-fn analysis(v: &[f32]) -> measure::Analysis {
-    measure::analyze_min(v, 1e-9, 0.0)
-}
+fn analysis(v: &[f32]) -> measure::Analysis { measure::analyze_min(v, 1e-9, 0.0) }
 
 #[test]
 fn a_row_follows_the_shared_settings_until_one_of_its_fields_is_set() {
@@ -120,19 +97,13 @@ fn a_row_can_set_its_own_levels_base_top_and_outside_level() {
     u.m.meas = vec![(Meas::Vtop, WaveId::Ref(0)), (Meas::Vbase, WaveId::Ref(0)), (Meas::Vamp, WaveId::Ref(0))];
     let auto = u.meas_number(WaveId::Ref(0), Meas::Vtop);
     assert!((auto - 1.0).abs() < 0.05, "{auto}");
-    u.m.set_row_cfg(
-        RowKey::One(Meas::Vtop, WaveId::Ref(0)),
-        RowCfg { base_top: Some(BaseTop::MinMax), ..Default::default() },
-    );
+    u.m.set_row_cfg(RowKey::One(Meas::Vtop, WaveId::Ref(0)), RowCfg { base_top: Some(BaseTop::MinMax), ..Default::default() });
     assert!((u.meas_number(WaveId::Ref(0), Meas::Vtop) - 1.5).abs() < 1e-6);
     assert!((u.meas_number(WaveId::Ref(0), Meas::Vamp) - auto).abs() < 0.05, "the other rows keep the shared method");
     // overshoot against a manual reference
     u.m.meas = vec![(Meas::Overshoot, WaveId::Ref(0))];
     let shared = u.meas_number(WaveId::Ref(0), Meas::Overshoot);
-    u.m.set_row_cfg(
-        RowKey::One(Meas::Overshoot, WaveId::Ref(0)),
-        RowCfg { os_top: Some(1.0), os_base: Some(0.0), ..Default::default() },
-    );
+    u.m.set_row_cfg(RowKey::One(Meas::Overshoot, WaveId::Ref(0)), RowCfg { os_top: Some(1.0), os_base: Some(0.0), ..Default::default() });
     let manual = u.meas_number(WaveId::Ref(0), Meas::Overshoot);
     assert!((manual - 50.0).abs() < 0.1, "{manual} vs {shared}");
     // time outside its own volts: below 0.5 V is the whole low half; above 1.2 V is only the spike
@@ -173,33 +144,13 @@ fn a_pair_row_has_its_own_edges_direction_and_window() {
     // from a rise to a fall of the other source
     u.m.set_row_cfg(key, RowCfg { to: Some(1), ..Default::default() });
     let rf = u.pair_at(0, WaveId::Ref(0), WaveId::Ref(1));
-    let want = measure::delay_opts(
-        &a,
-        &b,
-        &measure::PairOpts {
-            from: measure::EdgeSel::Rise,
-            to: measure::ToSel::Fall,
-            dir: measure::SearchDir::First,
-            min: None,
-            max: None,
-        },
-    );
+    let want = measure::delay_opts(&a, &b, &measure::PairOpts { from: measure::EdgeSel::Rise, to: measure::ToSel::Fall, dir: measure::SearchDir::First, min: None, max: None });
     assert_eq!(rf.to_bits(), want.to_bits());
     assert!(rf > 7e-9 + 10e-9, "{rf}");
     // the last edges, and the same / opposite direction from both
     u.m.set_row_cfg(key, RowCfg { from: Some(2), to: Some(4), dir: Some(1), ..Default::default() });
     let last = u.pair_at(0, WaveId::Ref(0), WaveId::Ref(1));
-    let want = measure::delay_opts(
-        &a,
-        &b,
-        &measure::PairOpts {
-            from: measure::EdgeSel::Both,
-            to: measure::ToSel::Opposite,
-            dir: measure::SearchDir::Last,
-            min: None,
-            max: None,
-        },
-    );
+    let want = measure::delay_opts(&a, &b, &measure::PairOpts { from: measure::EdgeSel::Both, to: measure::ToSel::Opposite, dir: measure::SearchDir::Last, min: None, max: None });
     assert_eq!(last.to_bits(), want.to_bits());
     // a window that excludes the 7 ns delay
     u.m.set_row_cfg(key, RowCfg { wmin: Some(20e-9), ..Default::default() });
@@ -221,13 +172,8 @@ fn the_four_list_rows_map_to_from_and_to() {
                 assert_eq!(o.from, if *ea { measure::EdgeSel::Rise } else { measure::EdgeSel::Fall }, "{i}");
                 assert_eq!(o.to, if *eb { measure::ToSel::Rise } else { measure::ToSel::Fall }, "{i}");
             }
-            tools::PairKind::SetupBoth | tools::PairKind::HoldBoth | tools::PairKind::SetupAndHoldBoth => {
-                assert_eq!(o.from, measure::EdgeSel::Both)
-            }
-            _ => assert_eq!(
-                (o.from, o.to),
-                (if *ea { measure::EdgeSel::Rise } else { measure::EdgeSel::Fall }, measure::ToSel::Both)
-            ),
+            tools::PairKind::SetupBoth | tools::PairKind::HoldBoth | tools::PairKind::SetupAndHoldBoth => assert_eq!(o.from, measure::EdgeSel::Both),
+            _ => assert_eq!((o.from, o.to), (if *ea { measure::EdgeSel::Rise } else { measure::EdgeSel::Fall }, measure::ToSel::Both)),
         }
         assert_eq!((o.dir, o.min, o.max), (measure::SearchDir::First, None, None));
     }
@@ -238,17 +184,8 @@ fn row_settings_are_saved_in_the_setup_and_only_for_rows_that_remain() {
     let mut u = bench();
     u.m.meas = vec![(Meas::Period, WaveId::Ref(0))];
     u.m.meas2 = vec![(0, WaveId::Ref(0), WaveId::Ref(1))];
-    let one = RowCfg {
-        pol: Some(2),
-        off: Some(3),
-        step: Some(2),
-        base_top: Some(BaseTop::Mean),
-        hyst: Some(0.1),
-        os_top: Some(1.25),
-        ..Default::default()
-    };
-    let pair =
-        RowCfg { from: Some(2), to: Some(4), dir: Some(1), wmin: Some(-2e-9), wmax: Some(5e-9), ..Default::default() };
+    let one = RowCfg { pol: Some(2), off: Some(3), step: Some(2), base_top: Some(BaseTop::Mean), hyst: Some(0.1), os_top: Some(1.25), ..Default::default() };
+    let pair = RowCfg { from: Some(2), to: Some(4), dir: Some(1), wmin: Some(-2e-9), wmax: Some(5e-9), ..Default::default() };
     u.m.set_row_cfg(RowKey::One(Meas::Period, WaveId::Ref(0)), one);
     u.m.set_row_cfg(RowKey::Pair(0, WaveId::Ref(0), WaveId::Ref(1)), pair);
     // a row that is gone is not kept
@@ -285,8 +222,8 @@ fn the_gate_of_a_row_is_its_own() {
 // ------------------------------------------------------------------------------------------------ the card
 
 use super::measrow::RF;
-use super::sheet::{RowKind, SHEET_MAX_ROWS, SHEET_ROW};
 use super::studio::StudioView;
+use super::sheet::{RowKind, SHEET_MAX_ROWS, SHEET_ROW};
 
 fn card(l: Layout, rows: &[(Meas, WaveId)], pairs: &[(usize, WaveId, WaveId)]) -> Ui {
     let mut u = fresh(l);
@@ -303,30 +240,13 @@ fn card(l: Layout, rows: &[(Meas, WaveId)], pairs: &[(usize, WaveId, WaveId)]) -
     u
 }
 
-fn rows_of(u: &Ui) -> Vec<Item> {
-    u.measrow_plan().into_iter().flat_map(|(_, r)| r).collect()
-}
+fn rows_of(u: &Ui) -> Vec<Item> { u.measrow_plan().into_iter().flat_map(|(_, r)| r).collect() }
 
 #[test]
 fn every_group_has_a_card_of_at_most_seven_rows_per_tab() {
     let r0 = WaveId::Ref(0);
-    let single = [
-        Meas::Vpp,
-        Meas::Vtop,
-        Meas::Overshoot,
-        Meas::Preshoot,
-        Meas::Period,
-        Meas::Freq,
-        Meas::PWidth,
-        Meas::PDuty,
-        Meas::Rise,
-        Meas::Fall,
-        Meas::PSlew,
-        Meas::HighTime,
-        Meas::Burst,
-        Meas::NPeriods,
-        Meas::Outside,
-    ];
+    let single = [Meas::Vpp, Meas::Vtop, Meas::Overshoot, Meas::Preshoot, Meas::Period, Meas::Freq, Meas::PWidth, Meas::PDuty, Meas::Rise, Meas::Fall,
+        Meas::PSlew, Meas::HighTime, Meas::Burst, Meas::NPeriods, Meas::Outside];
     let rows: Vec<(Meas, WaveId)> = single.iter().map(|&k| (k, r0)).collect();
     let pairs: Vec<(usize, WaveId, WaveId)> = (0..tools::PAIRS.len()).map(|k| (k, r0, WaveId::Ref(1))).collect();
     let mut u = card(Layout::Studio, &rows, &pairs);
@@ -334,13 +254,7 @@ fn every_group_has_a_card_of_at_most_seven_rows_per_tab() {
         u.open_meas_cfg(i);
         assert_eq!(u.menu, MenuId::MeasRow);
         let spec = u.sheet_spec(MenuId::MeasRow).unwrap_or_else(|| panic!("row {i} has a card"));
-        assert!(
-            spec.tabs.len() <= 4
-                && spec.tabs.iter().all(|t| !t.rows.is_empty()
-                    && t.rows.len() <= SHEET_MAX_ROWS
-                    && t.foot == [Item::RowF(RF::Reset), Item::MeasRemove(i as u16)]),
-            "row {i}"
-        );
+        assert!(spec.tabs.len() <= 4 && spec.tabs.iter().all(|t| !t.rows.is_empty() && t.rows.len() <= SHEET_MAX_ROWS && t.foot == [Item::RowF(RF::Reset), Item::MeasRemove(i as u16)]), "row {i}");
         assert!(u.sheet_active());
         let g = u.sheet_geo().unwrap();
         assert!(g.rows.iter().all(|r| r.row.h == SHEET_ROW));
@@ -348,9 +262,7 @@ fn every_group_has_a_card_of_at_most_seven_rows_per_tab() {
         for it in rows_of(&u) {
             assert!(!u.item_label(it).is_empty(), "{it:?}");
             let opts = u.options(it);
-            if !opts.is_empty() {
-                assert!(opts.contains(&u.value(it)), "row {i} {it:?}: {:?} in {opts:?}", u.value(it));
-            }
+            if !opts.is_empty() { assert!(opts.contains(&u.value(it)), "row {i} {it:?}: {:?} in {opts:?}", u.value(it)); }
         }
         u.close_menu();
         assert!(u.meas_own.dialog.is_none());
@@ -360,32 +272,15 @@ fn every_group_has_a_card_of_at_most_seven_rows_per_tab() {
 #[test]
 fn the_card_content_follows_the_row() {
     let r0 = WaveId::Ref(0);
-    let mut u = card(
-        Layout::Studio,
-        &[
-            (Meas::Overshoot, r0),
-            (Meas::Period, r0),
-            (Meas::PWidth, r0),
-            (Meas::Rise, r0),
-            (Meas::Burst, r0),
-            (Meas::NPeriods, r0),
-            (Meas::Outside, r0),
-        ],
-        &[(0, r0, WaveId::Ref(1)), (8, r0, WaveId::Ref(1)), (12, r0, WaveId::Ref(1))],
-    );
+    let mut u = card(Layout::Studio, &[(Meas::Overshoot, r0), (Meas::Period, r0), (Meas::PWidth, r0), (Meas::Rise, r0), (Meas::Burst, r0), (Meas::NPeriods, r0), (Meas::Outside, r0)],
+        &[(0, r0, WaveId::Ref(1)), (8, r0, WaveId::Ref(1)), (12, r0, WaveId::Ref(1))]);
     let has = |u: &Ui, f: RF| rows_of(u).contains(&Item::RowF(f));
     u.open_meas_cfg(0);
-    assert!(
-        has(&u, RF::OsRef) && has(&u, RF::BaseTop) && has(&u, RF::Gate) && !has(&u, RF::OsTop),
-        "overshoot: reference Auto until Manual"
-    );
+    assert!(has(&u, RF::OsRef) && has(&u, RF::BaseTop) && has(&u, RF::Gate) && !has(&u, RF::OsTop), "overshoot: reference Auto until Manual");
     u.adjust(Item::RowF(RF::OsRef), 1);
     assert!(has(&u, RF::OsTop) && has(&u, RF::OsBase));
     u.adjust(Item::RowF(RF::OsRef), 1);
-    assert!(
-        !has(&u, RF::OsTop) && u.m.row_cfg(RowKey::One(Meas::Overshoot, r0)).is_none(),
-        "back to Auto removes the entry"
-    );
+    assert!(!has(&u, RF::OsTop) && u.m.row_cfg(RowKey::One(Meas::Overshoot, r0)).is_none(), "back to Auto removes the entry");
     u.open_meas_cfg(1);
     assert!(has(&u, RF::Pol) && has(&u, RF::Off) && has(&u, RF::Step));
     u.open_meas_cfg(2);
@@ -534,19 +429,10 @@ fn the_gear_paths_open_the_card_for_every_kind_of_row() {
 
 #[test]
 fn pictures_of_the_cards() {
-    if std::env::var_os("OOS_SHOTS").is_none() {
-        return;
-    }
+    if std::env::var_os("OOS_SHOTS").is_none() { return; }
     let r0 = WaveId::Ref(0);
     let r1 = WaveId::Ref(1);
-    let kinds = [
-        ("amplitude", Meas::Overshoot),
-        ("timing", Meas::Period),
-        ("edges", Meas::Rise),
-        ("burst", Meas::Burst),
-        ("nperiods", Meas::NPeriods),
-        ("outside", Meas::Outside),
-    ];
+    let kinds = [("amplitude", Meas::Overshoot), ("timing", Meas::Period), ("edges", Meas::Rise), ("burst", Meas::Burst), ("nperiods", Meas::NPeriods), ("outside", Meas::Outside)];
     let rows: Vec<(Meas, WaveId)> = kinds.iter().map(|k| (k.1, r0)).collect();
     let mut u = card(Layout::Studio, &rows, &[(0, r0, r1), (8, r0, r1), (12, r0, r1)]);
     u.m.row_cfg.clear();
@@ -592,40 +478,20 @@ fn statistics_settings_are_a_page_with_a_reset_and_follow_the_toggles() {
     u.open_menu(MenuId::Measure);
     let spec = u.sheet_spec(MenuId::Measure).unwrap();
     // the settings of the page, then the links to its other pages
-    assert_eq!(
-        spec.tabs[0].rows,
-        [
-            Item::MeasGate,
-            Item::BadgeStyle,
-            Item::MeasLabels,
-            Item::Open(MenuId::MeasPair),
-            Item::Open(MenuId::Dvm),
-            Item::Open(MenuId::MeasStat)
-        ]
-    );
+    assert_eq!(spec.tabs[0].rows, [Item::MeasGate, Item::BadgeStyle, Item::MeasLabels, Item::Open(MenuId::MeasPair), Item::Open(MenuId::Dvm), Item::Open(MenuId::MeasStat)]);
     u.open_menu(MenuId::MeasStat);
     let spec = u.sheet_spec(MenuId::MeasStat).unwrap();
-    assert_eq!(
-        spec.tabs[0].rows,
-        [Item::MeasStats, Item::MeasPop, Item::MeasShowSd, Item::MeasShowMin, Item::MeasShowMax]
-    );
+    assert_eq!(spec.tabs[0].rows, [Item::MeasStats, Item::MeasPop, Item::MeasShowSd, Item::MeasShowMin, Item::MeasShowMax]);
     assert_eq!(spec.tabs[0].foot, [Item::MeasStatReset]);
     assert_eq!(u.value(Item::MeasPop), "Accumulated");
-    assert_eq!(
-        (u.value(Item::MeasShowSd), u.value(Item::MeasShowMin), u.value(Item::MeasShowMax)),
-        ("On".into(), "On".into(), "On".into())
-    );
+    assert_eq!((u.value(Item::MeasShowSd), u.value(Item::MeasShowMin), u.value(Item::MeasShowMax)), ("On".into(), "On".into(), "On".into()));
     // the population: Current starts a new history
     u.results.rows = vec![MStat { n: 5, sum: 5.0, ..Default::default() }];
     u.adjust(Item::MeasPop, 1);
     assert!(u.m.meas_pop_current && u.results.rows.is_empty(), "the history of the other population is dropped");
     // the toggles are Toggle rows on the sheet
     let g = u.sheet_geo().unwrap();
-    assert!(g
-        .rows
-        .iter()
-        .filter(|r| matches!(r.it, Item::MeasShowSd | Item::MeasShowMin | Item::MeasShowMax))
-        .all(|r| r.kind == RowKind::Toggle));
+    assert!(g.rows.iter().filter(|r| matches!(r.it, Item::MeasShowSd | Item::MeasShowMin | Item::MeasShowMax)).all(|r| r.kind == RowKind::Toggle));
     let sd = g.rows.iter().find(|r| r.it == Item::MeasShowSd).unwrap().ctrl;
     tap_in(&mut u, Ui::sheet_toggle_half(sd, false));
     assert_eq!(u.m.meas_show, [false, true, true]);
@@ -688,16 +554,10 @@ fn eye_jitter_and_power_rows_open_a_card_of_the_settings_they_use() {
     u.m.cat = vec![cat_row(Cat::TjBer), cat_row(Cat::PowerQuality), cat_row(Cat::DcCommon), cat_row(Cat::Speed)];
     u.open_meas_cfg(0);
     assert_eq!(u.menu, MenuId::MeasRow);
-    assert_eq!(
-        rows_of(&u),
-        [Item::EyeRate, Item::EyeBer, Item::EyePll, Item::EyePnLo, Item::EyePnHi, Item::EyeNotch, Item::EyeHp]
-    );
+    assert_eq!(rows_of(&u), [Item::EyeRate, Item::EyeBer, Item::EyePll, Item::EyePnLo, Item::EyePnHi, Item::EyeNotch, Item::EyeHp]);
     let spec = u.sheet_spec(MenuId::MeasRow).unwrap();
     assert_eq!(spec.tabs.len(), 1);
-    assert!(
-        spec.tabs[0].rows.len() <= SHEET_MAX_ROWS && spec.tabs[0].foot == [Item::MeasRemove(0)],
-        "the card edits the shared settings: no Follow shared"
-    );
+    assert!(spec.tabs[0].rows.len() <= SHEET_MAX_ROWS && spec.tabs[0].foot == [Item::MeasRemove(0)], "the card edits the shared settings: no Follow shared");
     shot(&mut u, "b7b-card-jitter");
     // a change on the card is the change of the Eye page
     let before = u.m.eye_ber;
@@ -779,9 +639,7 @@ fn the_studio_card_offers_every_option_of_upstreams_dialog() {
     for (i, &(k, _)) in rows.iter().enumerate() {
         u.open_meas_cfg(i);
         let have = rows_of(&u);
-        missing.extend(
-            upstream(k).into_iter().filter(|f| !have.contains(&Item::RowF(*f))).map(|f| format!("{k:?}: {f:?}")),
-        );
+        missing.extend(upstream(k).into_iter().filter(|f| !have.contains(&Item::RowF(*f))).map(|f| format!("{k:?}: {f:?}")));
         u.close_menu();
     }
     assert!(missing.is_empty(), "options of upstream's dialog missing from the Studio card: {missing:?}");

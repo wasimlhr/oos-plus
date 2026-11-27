@@ -20,8 +20,7 @@ pub const SLICES: [&[Setting]; 6] = [&EDGE, &REJECT, &SECOND, &TIMES, &WINDOW, &
 /// Why the rows of a trigger type's own values have no command.
 const NO_SUBTREE: &str = "OOS has no `:TRIGger` subtree of this trigger type yet";
 /// Answered by hand, in the pulse trigger's own commands (docs/scpi.md, "Pulse trigger").
-const BY_HAND_POL: &str =
-    "answered by hand in the polarity commands of the pulse and runt triggers (docs/scpi/trigger.md)";
+const BY_HAND_POL: &str = "answered by hand in the polarity commands of the pulse and runt triggers (docs/scpi/trigger.md)";
 const BY_HAND_T1: &str = "answered by hand in the width and time commands of the typed triggers (docs/scpi/trigger.md)";
 const BY_HAND_T2: &str = "answered by hand in the upper-limit commands of the typed triggers (docs/scpi/trigger.md)";
 

@@ -57,14 +57,7 @@ fn the_panels_menu_is_not_on_another_view_of_the_monitor() {
 fn a_monitor_pass_leaves_the_panels_touch_targets() {
     for mode in [HdmiMode::Waveform, HdmiMode::Layout] {
         let mut u = studio(mode);
-        let count = |u: &Ui| {
-            (
-                u.studio.handles.borrow().len(),
-                u.studio.label_rects.borrow().len(),
-                u.band_hits.borrow().len(),
-                u.studio.lane_badges.borrow().len(),
-            )
-        };
+        let count = |u: &Ui| (u.studio.handles.borrow().len(), u.studio.label_rects.borrow().len(), u.band_hits.borrow().len(), u.studio.lane_badges.borrow().len());
         let before = count(&u);
         assert!(before.0 + before.1 + before.3 > 0, "the panel has touch targets to keep: {before:?}");
         let mut cv = Canvas::new(1920, 1080);
@@ -74,9 +67,6 @@ fn a_monitor_pass_leaves_the_panels_touch_targets() {
             u.render_waveform(&mut cv);
         }
         assert_eq!(before, count(&u), "{mode:?}");
-        assert!(
-            u.studio.handles.borrow().iter().all(|(_, r)| r.right() <= u.scr.w && r.bottom() <= u.scr.h),
-            "{mode:?}: the targets are on the panel"
-        );
+        assert!(u.studio.handles.borrow().iter().all(|(_, r)| r.right() <= u.scr.w && r.bottom() <= u.scr.h), "{mode:?}: the targets are on the panel");
     }
 }

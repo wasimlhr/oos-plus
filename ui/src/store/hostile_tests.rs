@@ -11,9 +11,7 @@ use crate::gfx::Canvas;
 use crate::hostile::run;
 use crate::model::*;
 use crate::wave::Record;
-use oos_store::testkit::{
-    ag_f32, isf_i16, raw_f64, tr0_f32, tss, tss_set, wavedesc_i16, wfm_f32, wfmx_f32, zip, ZipFile,
-};
+use oos_store::testkit::{ag_f32, isf_i16, raw_f64, tr0_f32, tss, tss_set, wavedesc_i16, wfm_f32, wfmx_f32, zip, ZipFile};
 
 /// A record of two channels, as a capture stores it.
 fn record() -> (Record, Model) {
@@ -117,10 +115,7 @@ fn session_archive() -> (Vec<u8>, usize, usize) {
 #[test]
 fn hostile_session_archives() {
     let (deflated, _, _) = session_archive();
-    let stored = zip(&[
-        ZipFile::stored("s.set", &tss_set("", &[])),
-        ZipFile::stored("ch2.wfm", &wfm_f32(b":WFM#003", 0.0, 1e-9, &[1.0; 8], "")),
-    ]);
+    let stored = zip(&[ZipFile::stored("s.set", &tss_set("", &[])), ZipFile::stored("ch2.wfm", &wfm_f32(b":WFM#003", 0.0, 1e-9, &[1.0; 8], ""))]);
     run("store::parse_wave (archive)", &[&deflated, &stored], 1, |b| match parse_wave(b, "hostile.tss") {
         Ok(traces) if traces.is_empty() => Err("accepted an archive without a trace".into()),
         Ok(traces) => traces.iter().try_for_each(trace_ok),
@@ -136,9 +131,7 @@ fn hostile_session_archives() {
                 return Err("accepted a session without a waveform".into());
             }
             s.record.as_ref().map_or(Ok(()), record_ok)?;
-            let odd = |r: &SessionRef| {
-                r.slot >= NREF || r.v.len() < 2 || !(r.dt.is_finite() && r.dt > 0.0) || !r.t0.is_finite()
-            };
+            let odd = |r: &SessionRef| r.slot >= NREF || r.v.len() < 2 || !(r.dt.is_finite() && r.dt > 0.0) || !r.t0.is_finite();
             if s.refs.iter().any(odd) || s.offline_ref.is_some_and(|slot| !s.refs.iter().any(|r| r.slot == slot)) {
                 return Err("accepted a reference that is not valid, or shows one it does not hold".into());
             }
@@ -171,9 +164,7 @@ fn hostile_archive_is_refused_with_its_reason() {
     let set = list + 46 + "shot.png".len();
     let ch1 = set + 46 + "bench.set".len();
     // (under four bytes it is no archive to the reader of waveforms, and to the reader of sessions a cut one)
-    assert!(
-        parse_wave(&good[..3], "a.tss").is_err() && parse_tss(&good[..3], NREF).is_err_and(|e| e.contains("cut short"))
-    );
+    assert!(parse_wave(&good[..3], "a.tss").is_err() && parse_tss(&good[..3], NREF).is_err_and(|e| e.contains("cut short")));
     for cut in [4, 100, list - 1, list, list + 40, end, end + 21] {
         assert!(!refused_both(&good[..cut]).is_empty(), "cut at {cut}");
     }

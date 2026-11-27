@@ -17,9 +17,7 @@ fn studio() -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -30,9 +28,7 @@ fn studio() -> Ui {
 fn settle(u: &mut Ui) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..3 {
-        u.step(0.05);
-    }
+    for _ in 0..3 { u.step(0.05); }
 }
 
 fn shot(u: &mut Ui, name: &str) {
@@ -58,37 +54,23 @@ fn tap(u: &mut Ui, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 {
-        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
-    }
+    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
     touch(u, Phase::Up, b.0, b.1);
     u.step(0.05);
 }
 
-fn centre(r: Rect) -> (i32, i32) {
-    (r.x + r.w / 2, r.y + r.h / 2)
-}
+fn centre(r: Rect) -> (i32, i32) { (r.x + r.w / 2, r.y + r.h / 2) }
 
-fn screen(u: &Ui) -> Rect {
-    Rect::new(0, 0, u.scr.w, u.scr.h)
-}
+fn screen(u: &Ui) -> Rect { Rect::new(0, 0, u.scr.w, u.scr.h) }
 
-fn inside(r: Rect, outer: Rect) -> bool {
-    r.x >= outer.x && r.y >= outer.y && r.right() <= outer.right() && r.bottom() <= outer.bottom()
-}
+fn inside(r: Rect, outer: Rect) -> bool { r.x >= outer.x && r.y >= outer.y && r.right() <= outer.right() && r.bottom() <= outer.bottom() }
 
-fn overlaps(a: Rect, b: Rect) -> bool {
-    a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom()
-}
+fn overlaps(a: Rect, b: Rect) -> bool { a.x < b.right() && b.x < a.right() && a.y < b.bottom() && b.y < a.bottom() }
 
 /// Where the views are on the screen: docked (the one in front of a group) and floating, the rectangle of each.
 fn visible(u: &Ui) -> Vec<(VKind, Rect, bool)> {
     let mut v: Vec<(VKind, Rect, bool)> = u.dock_layout().leaves.iter().map(|(k, r)| (*k, *r, false)).collect();
-    for k in KINDS {
-        if let Some(r) = u.dock_float_rect(k) {
-            v.push((k, r, true));
-        }
-    }
+    for k in KINDS { if let Some(r) = u.dock_float_rect(k) { v.push((k, r, true)); } }
     v
 }
 
@@ -119,150 +101,83 @@ fn check(u: &Ui) -> Result<(), String> {
     // every view at most once
     let mut seen: Vec<VKind> = Vec::new();
     for (k, r) in lay.leaves.iter() {
-        if seen.contains(k) {
-            return Err(format!("{k:?} is in the dock twice"));
-        }
+        if seen.contains(k) { return Err(format!("{k:?} is in the dock twice")); }
         seen.push(*k);
-        if !u.dock_shown(*k) {
-            return Err(format!("an empty host frame: {k:?} is docked but off"));
-        }
-        if u.dock_floating(*k) {
-            return Err(format!("{k:?} is docked and floating"));
-        }
-        if r.w < 40 || r.h < STRIP_H + 8 {
-            return Err(format!("{k:?} is only {r:?}"));
-        }
-        if !inside(*r, region) {
-            return Err(format!("{k:?} {r:?} is outside the area {region:?}"));
-        }
+        if !u.dock_shown(*k) { return Err(format!("an empty host frame: {k:?} is docked but off")); }
+        if u.dock_floating(*k) { return Err(format!("{k:?} is docked and floating")); }
+        if r.w < 40 || r.h < STRIP_H + 8 { return Err(format!("{k:?} is only {r:?}")); }
+        if !inside(*r, region) { return Err(format!("{k:?} {r:?} is outside the area {region:?}")); }
     }
     for k in KINDS {
         if let Some(r) = u.dock_float_rect(k) {
-            if seen.contains(&k) {
-                return Err(format!("{k:?} floats and is docked: a copy over the host"));
-            }
+            if seen.contains(&k) { return Err(format!("{k:?} floats and is docked: a copy over the host")); }
             seen.push(k);
-            if !inside(r, region) {
-                return Err(format!("floating {k:?} {r:?} is off the area {region:?}"));
-            }
+            if !inside(r, region) { return Err(format!("floating {k:?} {r:?} is off the area {region:?}")); }
         }
     }
     for (i, (a, ra)) in lay.leaves.iter().enumerate() {
         for (b, rb) in lay.leaves.iter().skip(i + 1) {
-            if overlaps(*ra, *rb) {
-                return Err(format!("{a:?} and {b:?} overlap"));
-            }
+            if overlaps(*ra, *rb) { return Err(format!("{a:?} and {b:?} overlap")); }
         }
     }
     for g in &lay.tabs {
-        if g.kinds.len() < 2 {
-            return Err("a group of one".into());
-        }
+        if g.kinds.len() < 2 { return Err("a group of one".into()); }
         for (i, k) in g.kinds.iter().enumerate() {
-            if g.kinds[..i].contains(k) {
-                return Err(format!("{k:?} twice in a group"));
-            }
-            if !u.dock_shown(*k) {
-                return Err(format!("a closed view {k:?} is a tab"));
-            }
-            if u.dock_floating(*k) {
-                return Err(format!("{k:?} is a tab and floats"));
-            }
-            if i != g.active && seen.contains(k) {
-                return Err(format!("{k:?} is a tab behind another and drawn too"));
-            }
+            if g.kinds[..i].contains(k) { return Err(format!("{k:?} twice in a group")); }
+            if !u.dock_shown(*k) { return Err(format!("a closed view {k:?} is a tab")); }
+            if u.dock_floating(*k) { return Err(format!("{k:?} is a tab and floats")); }
+            if i != g.active && seen.contains(k) { return Err(format!("{k:?} is a tab behind another and drawn too")); }
         }
     }
     // every view that is on is somewhere
     for k in KINDS {
-        if !u.dock_shown(k) {
-            continue;
-        }
+        if !u.dock_shown(k) { continue; }
         let in_group = lay.tabs.iter().any(|g| g.kinds.contains(&k));
-        if !seen.contains(&k) && !in_group {
-            return Err(format!("{k:?} is on and nowhere"));
-        }
+        if !seen.contains(&k) && !in_group { return Err(format!("{k:?} is on and nowhere")); }
     }
-    if lay.leaves.is_empty() {
-        return Err("nothing is docked".into());
-    }
+    if lay.leaves.is_empty() { return Err("nothing is docked".into()); }
     // the waveform can be reached
-    if !u.dock_shown(VKind::Wave) {
-        return Err("the waveform is gone".into());
-    }
+    if !u.dock_shown(VKind::Wave) { return Err("the waveform is gone".into()); }
     let direct = seen.contains(&VKind::Wave);
     let tab = lay.tabs.iter().find(|g| g.kinds.contains(&VKind::Wave)).is_some_and(|g| {
         let front = g.kinds[g.active];
-        u.dock_tab_rects(front, g.rect).iter().any(|(k, t)| *k == VKind::Wave && inside(*t, scr))
-            || u.dock_tab_more(front, g.rect).is_some_and(|m| inside(m, scr))
+        u.dock_tab_rects(front, g.rect).iter().any(|(k, t)| *k == VKind::Wave && inside(*t, scr)) || u.dock_tab_more(front, g.rect).is_some_and(|m| inside(m, scr))
     });
-    if !direct && !tab {
-        return Err("the waveform is neither on the screen nor a tab".into());
-    }
+    if !direct && !tab { return Err("the waveform is neither on the screen nor a tab".into()); }
     // a full state shows its way out
     if u.dock_tabs_root() {
         let (k, r) = lay.leaves[0];
-        if u.dock_extra_kind(k) != Some(Extra::RestoreTabs) {
-            return Err(format!("tabs fill the area but {k:?} has {:?}", u.dock_extra_kind(k)));
-        }
+        if u.dock_extra_kind(k) != Some(Extra::RestoreTabs) { return Err(format!("tabs fill the area but {k:?} has {:?}", u.dock_extra_kind(k))); }
         let e = u.dock_extra_rect(k, r).ok_or("no restore rectangle")?;
-        if !inside(e, scr) || e.w < 24 || e.h < 24 {
-            return Err(format!("restore {e:?} is off the screen or small"));
-        }
+        if !inside(e, scr) || e.w < 24 || e.h < 24 { return Err(format!("restore {e:?} is off the screen or small")); }
     }
     if u.eye_open() && u.m.eye_place == EyePlace::Full {
         // (the waveform's place can be a tab behind another: the group's own exit is there)
         if let Some(r) = u.dock_rect(VKind::Wave) {
-            if !u.dock_tabs_root() && u.dock_extra_kind(VKind::Wave) != Some(Extra::RestoreEye) {
-                return Err("eye on the whole plot has no restore".into());
-            }
-            if u.dock_extra_rect(VKind::Wave, r).is_none() {
-                return Err("eye on the whole plot: no restore rectangle".into());
-            }
+            if !u.dock_tabs_root() && u.dock_extra_kind(VKind::Wave) != Some(Extra::RestoreEye) { return Err("eye on the whole plot has no restore".into()); }
+            if u.dock_extra_rect(VKind::Wave, r).is_none() { return Err("eye on the whole plot: no restore rectangle".into()); }
         }
     }
-    if u.dock_full_state() && !u.dock_tabs_root() && !(u.eye_open() && u.m.eye_place == EyePlace::Full) {
-        return Err("a full state without a known exit".into());
-    }
+    if u.dock_full_state() && !u.dock_tabs_root() && !(u.eye_open() && u.m.eye_place == EyePlace::Full) { return Err("a full state without a known exit".into()); }
     // the title bars
     for (k, r, floating) in visible(u) {
         let s = Ui::dock_strip(r);
-        if s.h < 24 {
-            return Err(format!("{k:?} strip is {} px", s.h));
-        }
+        if s.h < 24 { return Err(format!("{k:?} strip is {} px", s.h)); }
         let c = Ui::dock_close_rect(r);
-        if !inside(c, scr) || c.w < 24 || c.h < 24 {
-            return Err(format!("close of {k:?} {c:?}"));
-        }
+        if !inside(c, scr) || c.w < 24 || c.h < 24 { return Err(format!("close of {k:?} {c:?}")); }
         if let Some(e) = u.dock_extra_rect(k, r) {
-            if !inside(e, scr) || e.w < 24 || e.h < 24 || overlaps(e, c) {
-                return Err(format!("extra button of {k:?} {e:?}"));
-            }
+            if !inside(e, scr) || e.w < 24 || e.h < 24 || overlaps(e, c) { return Err(format!("extra button of {k:?} {e:?}")); }
         }
-        if floating {
-            continue;
-        }
+        if floating { continue; }
         let tabs = u.dock_tab_rects(k, r);
         for (i, (v, t)) in tabs.iter().enumerate() {
-            if t.w < 24 || t.h < 24 || !inside(*t, s) {
-                return Err(format!("tab {v:?} of {k:?} {t:?} in strip {s:?}"));
-            }
-            if tabs.iter().skip(i + 1).any(|(_, o)| overlaps(*t, *o)) {
-                return Err(format!("tabs of {k:?} overlap"));
-            }
-            if let Some(e) = u.dock_extra_rect(k, r) {
-                if overlaps(*t, e) {
-                    return Err(format!("tab {v:?} under the extra button"));
-                }
-            }
-            if overlaps(*t, c) {
-                return Err(format!("tab {v:?} under the X"));
-            }
+            if t.w < 24 || t.h < 24 || !inside(*t, s) { return Err(format!("tab {v:?} of {k:?} {t:?} in strip {s:?}")); }
+            if tabs.iter().skip(i + 1).any(|(_, o)| overlaps(*t, *o)) { return Err(format!("tabs of {k:?} overlap")); }
+            if let Some(e) = u.dock_extra_rect(k, r) { if overlaps(*t, e) { return Err(format!("tab {v:?} under the extra button")); } }
+            if overlaps(*t, c) { return Err(format!("tab {v:?} under the X")); }
         }
         if let Some(g) = u.dock_tab_group(k) {
-            if g.kinds[g.active] == k && !tabs.iter().any(|(v, _)| *v == k) {
-                return Err(format!("the tab of {k:?}, in front, is not in its strip"));
-            }
+            if g.kinds[g.active] == k && !tabs.iter().any(|(v, _)| *v == k) { return Err(format!("the tab of {k:?}, in front, is not in its strip")); }
         }
     }
     Ok(())
@@ -299,22 +214,8 @@ enum Act {
 }
 
 const ACTS: [Act; 16] = [
-    Act::DockEdge,
-    Act::DragFloat,
-    Act::Maximise,
-    Act::Restore,
-    Act::TabSwitch,
-    Act::TabDragOut,
-    Act::TabJoin,
-    Act::Close,
-    Act::Reopen,
-    Act::SwitchViews,
-    Act::Divider,
-    Act::LargerText,
-    Act::EyePlace,
-    Act::Escape,
-    Act::DoubleTap,
-    Act::ContextMenu,
+    Act::DockEdge, Act::DragFloat, Act::Maximise, Act::Restore, Act::TabSwitch, Act::TabDragOut, Act::TabJoin, Act::Close,
+    Act::Reopen, Act::SwitchViews, Act::Divider, Act::LargerText, Act::EyePlace, Act::Escape, Act::DoubleTap, Act::ContextMenu,
 ];
 
 /// An action with two raw numbers; what they pick is decided by the state the action meets, so a shortened sequence
@@ -341,10 +242,7 @@ impl Rng {
         let total: u32 = weights.iter().sum();
         let mut n = self.next() % total;
         let mut i = 0;
-        while n >= weights[i] {
-            n -= weights[i];
-            i += 1;
-        }
+        while n >= weights[i] { n -= weights[i]; i += 1; }
         Step { act: ACTS[i], a: self.next(), b: self.next() }
     }
 }
@@ -377,9 +275,7 @@ impl Walk {
 
     fn quiet(&mut self) {
         let u = &mut self.u;
-        if u.menu_open {
-            u.close_menu();
-        }
+        if u.menu_open { u.close_menu(); }
         u.studio.ctx = None;
         u.studio.add_menu = false;
         u.studio.popup = None;
@@ -403,58 +299,34 @@ impl Walk {
         match s.act {
             Act::DockEdge => {
                 let docked: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|v| !v.2).collect();
-                if vis.is_empty() || docked.is_empty() {
-                    return "none".into();
-                }
+                if vis.is_empty() || docked.is_empty() { return "none".into(); }
                 let (k, r, floating) = vis[pick(vis.len(), s.a)];
                 let (t, tr, _) = docked[pick(docked.len(), s.b)];
-                if t == k {
-                    return "self".into();
-                }
+                if t == k { return "self".into(); }
                 let g = (r.x + 24, r.y + STRIP_H / 2);
                 let to = aim(tr, s.a >> 8);
                 drag(u, g, to);
                 format!("{k:?}{} to side {} of {t:?}", if floating { " (floating)" } else { "" }, (s.a >> 8) % 4)
             }
             Act::DragFloat => {
-                if vis.is_empty() {
-                    return "none".into();
-                }
+                if vis.is_empty() { return "none".into(); }
                 let (k, r, floating) = vis[pick(vis.len(), s.a)];
                 let reg = u.dock_region();
                 let to = (reg.x + 40 + (s.b % 600) as i32, reg.y + 60 + ((s.b >> 10) % 240) as i32);
-                if floating {
-                    drag(u, (r.x + 50, r.y + STRIP_H / 2), to);
-                } else {
-                    drag(u, (r.x + 24, r.y + STRIP_H / 2), (r.x + r.w * 31 / 100, r.y + r.h * 60 / 100));
-                }
+                if floating { drag(u, (r.x + 50, r.y + STRIP_H / 2), to); } else { drag(u, (r.x + 24, r.y + STRIP_H / 2), (r.x + r.w * 31 / 100, r.y + r.h * 60 / 100)); }
                 format!("{k:?}{}", if floating { " by its title" } else { " to the ring" })
             }
             Act::Maximise => {
-                let with: Vec<(VKind, Rect, bool)> = vis
-                    .iter()
-                    .copied()
-                    .filter(|(k, r, _)| {
-                        u.dock_extra_kind(*k) == Some(Extra::Maximise) && u.dock_extra_rect(*k, *r).is_some()
-                    })
-                    .collect();
-                if with.is_empty() {
-                    return "none".into();
-                }
+                let with: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|(k, r, _)| u.dock_extra_kind(*k) == Some(Extra::Maximise) && u.dock_extra_rect(*k, *r).is_some()).collect();
+                if with.is_empty() { return "none".into(); }
                 let (k, r, _) = with[pick(with.len(), s.a)];
                 let e = u.dock_extra_rect(k, r).unwrap();
                 tap(u, e.x + e.w / 2, r.y + STRIP_H / 2);
                 format!("{k:?} button")
             }
             Act::Restore => {
-                let with: Vec<(VKind, Rect, bool)> = vis
-                    .iter()
-                    .copied()
-                    .filter(|(k, _, _)| matches!(u.dock_extra_kind(*k), Some(Extra::RestoreTabs | Extra::RestoreEye)))
-                    .collect();
-                if with.is_empty() {
-                    return "none".into();
-                }
+                let with: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|(k, _, _)| matches!(u.dock_extra_kind(*k), Some(Extra::RestoreTabs | Extra::RestoreEye))).collect();
+                if with.is_empty() { return "none".into(); }
                 let (k, r, _) = with[pick(with.len(), s.a)];
                 let e = u.dock_extra_rect(k, r).unwrap();
                 tap(u, e.x + e.w / 2, r.y + STRIP_H / 2);
@@ -462,16 +334,12 @@ impl Walk {
             }
             Act::TabSwitch => {
                 let lay = u.dock_layout();
-                if lay.tabs.is_empty() {
-                    return "none".into();
-                }
+                if lay.tabs.is_empty() { return "none".into(); }
                 let g = lay.tabs[pick(lay.tabs.len(), s.a)].clone();
                 let front = g.kinds[g.active];
                 let rect = lay.leaves.iter().find(|(k, _)| *k == front).map(|(_, r)| *r).unwrap();
                 let tabs = u.dock_tab_rects(front, rect);
-                if tabs.is_empty() {
-                    return "no tabs".into();
-                }
+                if tabs.is_empty() { return "no tabs".into(); }
                 let (k, t) = tabs[pick(tabs.len(), s.b)];
                 let c = centre(t);
                 tap(u, c.0, c.1);
@@ -479,45 +347,28 @@ impl Walk {
             }
             Act::TabDragOut => {
                 let lay = u.dock_layout();
-                if lay.tabs.is_empty() {
-                    return "none".into();
-                }
+                if lay.tabs.is_empty() { return "none".into(); }
                 let g = lay.tabs[pick(lay.tabs.len(), s.a)].clone();
                 let front = g.kinds[g.active];
                 let rect = lay.leaves.iter().find(|(k, _)| *k == front).map(|(_, r)| *r).unwrap();
                 let tabs = u.dock_tab_rects(front, rect);
-                if tabs.is_empty() {
-                    return "no tabs".into();
-                }
+                if tabs.is_empty() { return "no tabs".into(); }
                 let (k, t) = tabs[pick(tabs.len(), s.b)];
-                let to = match (s.b >> 8) % 5 {
-                    4 => (rect.x + rect.w * 31 / 100, rect.y + rect.h * 60 / 100),
-                    n => aim(rect, n),
-                };
+                let to = match (s.b >> 8) % 5 { 4 => (rect.x + rect.w * 31 / 100, rect.y + rect.h * 60 / 100), n => aim(rect, n) };
                 drag(u, centre(t), to);
                 format!("tab {k:?} out to {}", (s.b >> 8) % 5)
             }
             Act::TabJoin => {
                 let docked: Vec<(VKind, Rect, bool)> = vis.iter().copied().filter(|v| !v.2).collect();
-                if vis.len() < 2 || docked.is_empty() {
-                    return "none".into();
-                }
+                if vis.len() < 2 || docked.is_empty() { return "none".into(); }
                 let (k, r, _) = vis[pick(vis.len(), s.a)];
                 let (t, tr, _) = docked[pick(docked.len(), s.b)];
-                if t == k {
-                    return "self".into();
-                }
-                drag(
-                    u,
-                    (r.x + 24, r.y + STRIP_H / 2),
-                    (tr.x + tr.w * if s.b & 0x100 != 0 { 22 } else { 78 } / 100, tr.y + STRIP_H / 2),
-                );
+                if t == k { return "self".into(); }
+                drag(u, (r.x + 24, r.y + STRIP_H / 2), (tr.x + tr.w * if s.b & 0x100 != 0 { 22 } else { 78 } / 100, tr.y + STRIP_H / 2));
                 format!("{k:?} onto the title bar of {t:?}")
             }
             Act::Close => {
-                if vis.is_empty() {
-                    return "none".into();
-                }
+                if vis.is_empty() { return "none".into(); }
                 let (k, r, _) = vis[pick(vis.len(), s.a)];
                 let c = Ui::dock_close_rect(r);
                 tap(u, c.x + c.w / 2, r.y + STRIP_H / 2);
@@ -525,9 +376,7 @@ impl Walk {
             }
             Act::Reopen => {
                 let off: Vec<VKind> = WALK.into_iter().filter(|k| !u.dock_shown(*k)).collect();
-                if off.is_empty() {
-                    return "all on".into();
-                }
+                if off.is_empty() { return "all on".into(); }
                 let k = off[pick(off.len(), s.a)];
                 open(u, k);
                 format!("{k:?}")
@@ -540,17 +389,13 @@ impl Walk {
                 settle(u);
                 if let Some(before) = self.snap[1 - cur].clone() {
                     let now = state_text(u);
-                    if before.1 == now.1 && before.0 != now.0 {
-                        return format!("MISMATCH view {} came back as {} not {}", 2 - cur, now.0, before.0);
-                    }
+                    if before.1 == now.1 && before.0 != now.0 { return format!("MISMATCH view {} came back as {} not {}", 2 - cur, now.0, before.0); }
                 }
                 format!("to view {}", 2 - cur)
             }
             Act::Divider => {
                 let lay = u.dock_layout();
-                if lay.dividers.is_empty() {
-                    return "none".into();
-                }
+                if lay.dividers.is_empty() { return "none".into(); }
                 let d = &lay.dividers[pick(lay.dividers.len(), s.a)];
                 let c = centre(d.line);
                 let dx = (s.b % 241) as i32 - 120;
@@ -558,30 +403,19 @@ impl Walk {
                 format!("divider by {dx}")
             }
             Act::LargerText => {
-                u.m.text_size = if u.m.text_size == crate::model::TextSize::Larger {
-                    crate::model::TextSize::Normal
-                } else {
-                    crate::model::TextSize::Larger
-                };
+                u.m.text_size = if u.m.text_size == crate::model::TextSize::Larger { crate::model::TextSize::Normal } else { crate::model::TextSize::Larger };
                 u.dock_changed();
                 format!("{:?}", u.m.text_size)
             }
             Act::EyePlace => {
-                if !u.eye_open() {
-                    return "no eye".into();
-                }
+                if !u.eye_open() { return "no eye".into(); }
                 let to = ["Full", "Side", "Under"][pick(3, s.a)];
                 u.select_option(Item::EyePlace, to);
                 to.into()
             }
-            Act::Escape => {
-                u.dismiss_context();
-                "Esc".into()
-            }
+            Act::Escape => { u.dismiss_context(); "Esc".into() }
             Act::DoubleTap => {
-                if vis.is_empty() {
-                    return "none".into();
-                }
+                if vis.is_empty() { return "none".into(); }
                 let (k, r, floating) = vis[pick(vis.len(), s.a)];
                 let x = if floating { r.x + 50 } else { r.x + 24 };
                 tap(u, x, r.y + STRIP_H / 2);
@@ -592,11 +426,7 @@ impl Walk {
                 let reg = u.dock_region();
                 u.studio_ctx_open(reg.x + reg.w / 2, reg.y + reg.h / 2);
                 let rows = u.studio_ctx_rows();
-                let Some((_, _, r)) =
-                    rows.into_iter().find(|(row, _, _)| matches!(row, super::studioctx::CtxRow::Layout))
-                else {
-                    return "no row".into();
-                };
+                let Some((_, _, r)) = rows.into_iter().find(|(row, _, _)| matches!(row, super::studioctx::CtxRow::Layout)) else { return "no row".into() };
                 let c = centre(r);
                 tap(u, c.0, c.1);
                 "layout row".into()
@@ -611,19 +441,9 @@ fn start_layout(u: &mut Ui, n: usize) {
         0 => {}
         1 => u.studio_set_view(StudioView::Waveform),
         2 => open(u, VKind::Eye),
-        3 => {
-            open(u, VKind::Eye);
-            open(u, VKind::Pane);
-        }
-        4 => {
-            open(u, VKind::Hist);
-            u.studio_set_view(StudioView::Floating);
-        }
-        5 => {
-            u.studio_set_view(StudioView::Waveform);
-            open(u, VKind::Table);
-            open(u, VKind::Xy);
-        }
+        3 => { open(u, VKind::Eye); open(u, VKind::Pane); }
+        4 => { open(u, VKind::Hist); u.studio_set_view(StudioView::Floating); }
+        5 => { u.studio_set_view(StudioView::Waveform); open(u, VKind::Table); open(u, VKind::Xy); }
         6 => {
             open(u, VKind::Eye);
             settle(u);
@@ -633,11 +453,7 @@ fn start_layout(u: &mut Ui, n: usize) {
             let (w, m) = (u.dock_leaf(VKind::Wave).unwrap(), u.dock_leaf(VKind::Measure).unwrap());
             drag(u, (m.x + 24, m.y + STRIP_H / 2), aim(w, 0));
         }
-        _ => {
-            for k in [VKind::Eye, VKind::Pane, VKind::Hist, VKind::Table] {
-                open(u, k);
-            }
-        }
+        _ => { for k in [VKind::Eye, VKind::Pane, VKind::Hist, VKind::Table] { open(u, k); } }
     }
     settle(u);
 }
@@ -651,16 +467,11 @@ fn replay(layout: usize, steps: &[Step]) -> Result<(), String> {
         check(&w.u).map_err(|e| format!("start: {e}"))?;
         for (i, s) in steps.iter().enumerate() {
             w.apply(*s).map_err(|e| format!("step {}: {e}", i + 1))?;
-            if w.log.last().is_some_and(|l| l.contains("MISMATCH")) {
-                return Err(format!("step {}: {}", i + 1, w.log.last().unwrap()));
-            }
+            if w.log.last().is_some_and(|l| l.contains("MISMATCH")) { return Err(format!("step {}: {}", i + 1, w.log.last().unwrap())); }
         }
         Ok(())
     }));
-    match r {
-        Ok(v) => v,
-        Err(_) => Err("panic".into()),
-    }
+    match r { Ok(v) => v, Err(_) => Err("panic".into()) }
 }
 
 /// The steps without the ones that do not matter (the failure is still there).
@@ -670,9 +481,7 @@ fn shorten(layout: usize, mut steps: Vec<Step>) -> Vec<Step> {
         i -= 1;
         let mut t = steps.clone();
         t.remove(i);
-        if replay(layout, &t).is_err() {
-            steps = t;
-        }
+        if replay(layout, &t).is_err() { steps = t; }
     }
     steps
 }
@@ -685,39 +494,21 @@ fn walk(layout: usize, seed: u64, n: usize) -> usize {
     let mut cv = Canvas::new(W, H);
     for (i, s) in steps.iter().enumerate() {
         let r = w.apply(*s);
-        let r = r.and_then(|_| {
-            if w.log.last().is_some_and(|l| l.contains("MISMATCH")) {
-                Err(w.log.last().unwrap().clone())
-            } else {
-                Ok(())
-            }
-        });
+        let r = r.and_then(|_| if w.log.last().is_some_and(|l| l.contains("MISMATCH")) { Err(w.log.last().unwrap().clone()) } else { Ok(()) });
         if let Err(e) = r {
             let tail: Vec<&String> = w.log.iter().rev().take(12).collect::<Vec<_>>().into_iter().rev().collect();
-            eprintln!(
-                "DOCKWALK FAIL layout {layout} seed {seed} step {}: {e}
-  last actions: {tail:?}",
-                i + 1
-            );
+            eprintln!("DOCKWALK FAIL layout {layout} seed {seed} step {}: {e}
+  last actions: {tail:?}", i + 1);
             let min = shorten(layout, steps[..=i].to_vec());
             let again = replay(layout, &min).err().unwrap_or_default();
             let mut m = Walk::new(layout);
             let mut text = Vec::new();
-            for s in &min {
-                let _ = m.apply(*s);
-            }
+            for s in &min { let _ = m.apply(*s); }
             text.extend(m.log.iter().cloned());
-            panic!(
-                "layout {layout}, seed {seed}, step {}: {e}\nminimal sequence ({} steps, fails with: {again}):\n  {}",
-                i + 1,
-                min.len(),
-                text.join("\n  ")
-            );
+            panic!("layout {layout}, seed {seed}, step {}: {e}\nminimal sequence ({} steps, fails with: {again}):\n  {}", i + 1, min.len(), text.join("\n  "));
         }
         // a picture now and then: drawing the arrangement must not fail either
-        if i % 20 == 0 {
-            w.u.render(&mut cv);
-        }
+        if i % 20 == 0 { w.u.render(&mut cv); }
     }
     eprintln!("dockwalk: layout {layout} seed {seed}: {} steps clean", steps.len());
     steps.len()
@@ -729,9 +520,7 @@ fn walk(layout: usize, seed: u64, n: usize) -> usize {
 #[test]
 fn dockwalk_fast_subset() {
     let mut total = 0;
-    for layout in 0..LAYOUTS {
-        total += walk(layout, 7 + layout as u64, 60);
-    }
+    for layout in 0..LAYOUTS { total += walk(layout, 7 + layout as u64, 60); }
     assert!(total >= 480);
 }
 
@@ -741,9 +530,7 @@ fn dockwalk_fast_subset() {
 fn dockwalk_long() {
     let mut total = 0;
     for seed in 0..3u64 {
-        for layout in 0..LAYOUTS {
-            total += walk(layout, 1000 + seed * 31 + layout as u64, 250);
-        }
+        for layout in 0..LAYOUTS { total += walk(layout, 1000 + seed * 31 + layout as u64, 250); }
     }
     eprintln!("dockwalk_long: {total} steps");
     assert!(total >= 2000);
@@ -759,8 +546,7 @@ fn extra_tap(u: &mut Ui, k: VKind) {
 
 fn tab_tap(u: &mut Ui, front: VKind, k: VKind) {
     let r = u.dock_rect(front).expect("the group");
-    let t =
-        u.dock_tab_rects(front, r).into_iter().find(|(v, _)| *v == k).unwrap_or_else(|| panic!("a tab for {k:?}")).1;
+    let t = u.dock_tab_rects(front, r).into_iter().find(|(v, _)| *v == k).unwrap_or_else(|| panic!("a tab for {k:?}")).1;
     let c = centre(t);
     tap(u, c.0, c.1);
 }
@@ -799,9 +585,7 @@ fn maximising_the_eye_puts_the_waveform_in_a_tab_not_in_a_float() {
     // holds stays as it is until its tab is in front again
     assert!(u.analyser_tabbed_out());
     u.azr.page.status = ["kept".into(), "behind the tab".into()];
-    for _ in 0..5 {
-        u.step(0.04);
-    }
+    for _ in 0..5 { u.step(0.04); }
     assert_eq!(u.azr.page.status[0], "kept", "the eye behind a tab was analysed");
     check(&u).unwrap();
     shot(&mut u, "tab-switched-to-waveform");
@@ -918,11 +702,7 @@ fn every_full_state_has_an_exit_on_the_button_escape_double_tap_and_the_menu() {
     extra_tap(&mut u, VKind::Eye);
     let reg = u.dock_region();
     u.studio_ctx_open(reg.x + 200, reg.y + 200);
-    let row = u
-        .studio_ctx_rows()
-        .into_iter()
-        .find(|(row, _, _)| matches!(row, super::studioctx::CtxRow::Layout))
-        .expect("the layout row");
+    let row = u.studio_ctx_rows().into_iter().find(|(row, _, _)| matches!(row, super::studioctx::CtxRow::Layout)).expect("the layout row");
     assert_eq!(row.1, "Restore layout");
     let c = centre(row.2);
     tap(&mut u, c.0, c.1);
@@ -994,12 +774,7 @@ fn the_tree_text_of_a_group_round_trips() {
         let n = Node::parse(t).unwrap_or_else(|| panic!("{t}"));
         assert_eq!(n.text(), t.replace("0.500", "0.500"));
     }
-    assert!(
-        Node::parse("G2(WE)").is_none()
-            && Node::parse("G0(W)").is_none()
-            && Node::parse("G0(WW)").is_none()
-            && Node::parse("H0.500(G0(WE),E)").is_none()
-    );
+    assert!(Node::parse("G2(WE)").is_none() && Node::parse("G0(W)").is_none() && Node::parse("G0(WW)").is_none() && Node::parse("H0.500(G0(WE),E)").is_none());
 }
 
 #[test]

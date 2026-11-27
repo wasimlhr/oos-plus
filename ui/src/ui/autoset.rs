@@ -299,9 +299,7 @@ impl Ui {
         let on: Vec<usize> = (0..n_ch()).filter(|&c| self.m.ch[c].on).collect();
         for c in on {
             let (lo, hi) = self.auto_levels(c);
-            if !(lo.is_finite() && hi.is_finite()) {
-                continue;
-            }
+            if !(lo.is_finite() && hi.is_finite()) { continue; }
             let clipped = self.channel_clipping(c);
             let ch = &mut self.m.ch[c];
             let before = (ch.vscale, ch.offset);
@@ -312,15 +310,12 @@ impl Ui {
                 ch.vscale = scale_for(ch, vpp / 6.0);
             }
             ch.offset = -(hi + lo) / 2.0;
-            if before != (ch.vscale, ch.offset) {
-                fitted += 1;
-            }
+            if before != (ch.vscale, ch.offset) { fitted += 1; }
         }
         if fitted > 0 {
             // the trigger level follows its source, as after an auto set-up: it was a level of the old offset
             let (lo, hi) = self.auto_levels(self.m.trig_src);
-            if lo.is_finite() && hi.is_finite() && hi - lo >= MIN_VPP * self.m.ch[self.m.trig_src.min(n_ch() - 1)].probe
-            {
+            if lo.is_finite() && hi.is_finite() && hi - lo >= MIN_VPP * self.m.ch[self.m.trig_src.min(n_ch() - 1)].probe {
                 // (counted from the signal's mean with AC trigger coupling, `trig_level_base`)
                 let base = self.trig_level_base();
                 self.m.trig_level = self.m.trig_level.clamp(lo - base, hi - base);
@@ -412,9 +407,7 @@ impl Ui {
                     // height at every time base, and a slower record only folds it (on a unit, 2026-11-17: bursts of
                     // 100 ns pulses every 1.6 us ended at 2 ms/div, a band of aliases). A window with one edge of a slow
                     // signal is not busy, and gives way to the first that is.
-                    let busy = swing > 0.0
-                        && oos_dsp::edges::edges(&v, (lo + hi) / 2.0, 0.4 * swing).iter().filter(|e| e.rising).count()
-                            >= 3;
+                    let busy = swing > 0.0 && oos_dsp::edges::edges(&v, (lo + hi) / 2.0, 0.4 * swing).iter().filter(|e| e.rising).count() >= 3;
                     if a.best[c].is_none_or(|b| swing > 1.1 * b.0 || (busy && !b.2 && swing >= 0.9 * b.0)) {
                         a.best[c] = Some((swing, self.m.tscale, busy));
                     }
@@ -568,12 +561,7 @@ impl Ui {
         }
         self.m.trig_src = first;
         // with AC or LF reject trigger coupling the level counts from the signal's mean (`Ui::trig_level_base`)
-        let base =
-            if matches!(self.m.trig_coupling(), TrigCoup::Ac | TrigCoup::LfReject) && a.st[first].vavg.is_finite() {
-                a.st[first].vavg
-            } else {
-                0.0
-            };
+        let base = if matches!(self.m.trig_coupling(), TrigCoup::Ac | TrigCoup::LfReject) && a.st[first].vavg.is_finite() { a.st[first].vavg } else { 0.0 };
         self.m.trig_level = mid_level(&a.st[first]) - base;
         // the hardware search starts with one deep record; other sources go through the time bases from fast to slow
         a.deep = self.src.is_hw();
@@ -765,14 +753,7 @@ mod tests {
         for _ in 0..5 {
             ui.step(0.05);
         }
-        let far = |op, a, b| crate::math::MathCh {
-            op,
-            a,
-            b,
-            scale: math_scales().len() - 1,
-            offset: 40.0,
-            ..Default::default()
-        };
+        let far = |op, a, b| crate::math::MathCh { op, a, b, scale: math_scales().len() - 1, offset: 40.0, ..Default::default() };
         ui.m.maths[1] = far(MathOp::Abs, 0, 0);
         ui.m.maths[2] = far(MathOp::Add, 0, 1);
         ui.m.math_hidden[2] = true;
@@ -811,12 +792,7 @@ mod tests {
         }
         for k in [0, 1] {
             let c = ui.m.math_ch(k);
-            assert!(
-                c.scale < math_scales().len() - 1 && c.offset.abs() < 5.0,
-                "Math{}: {:?}",
-                k + 1,
-                (c.scale, c.offset)
-            );
+            assert!(c.scale < math_scales().len() - 1 && c.offset.abs() < 5.0, "Math{}: {:?}", k + 1, (c.scale, c.offset));
             let want = fitted(&mut ui, k);
             // the demo signal moves a little between records: within one step of the 1-2-5 ladder
             assert!(c.scale.abs_diff(want.0) <= 1, "Math{}: {} against {}", k + 1, c.scale, want.0);
@@ -1154,21 +1130,13 @@ mod tests {
         assert_eq!(ui.m.trig_src, 0);
         assert!(ui.toast.as_ref().is_some_and(|t| t.0.contains("no steady period")));
         assert!(!ui.auto_bar_on());
-        assert!(
-            ui.m.time_per_div() >= 100e-6,
-            "pulses of 0.2 to 1.9 ms are not shown at {} s/div",
-            ui.m.time_per_div()
-        );
+        assert!(ui.m.time_per_div() >= 100e-6, "pulses of 0.2 to 1.9 ms are not shown at {} s/div", ui.m.time_per_div());
         // bursts of fast pulses (three of 100 and 200 ns every 1.6 us, as on a unit 2026-11-17): the fast time base that
         // shows them, not a slow one that folds them
         let mut ui = Ui::new(Source::Demo { t: 0.0 });
         let burst = |t: f64| {
             let x = t.rem_euclid(1.6e-6) * 1e6;
-            if (0.0..0.1).contains(&x) || (0.2..0.4).contains(&x) || (0.5..0.6).contains(&x) {
-                0.33
-            } else {
-                0.0
-            }
+            if (0.0..0.1).contains(&x) || (0.2..0.4).contains(&x) || (0.5..0.6).contains(&x) { 0.33 } else { 0.0 }
         };
         run_hw_of(&mut ui, &burst);
         assert!(ui.m.time_per_div() <= 5e-6, "bursts every 1.6 us at {} s/div", ui.m.time_per_div());

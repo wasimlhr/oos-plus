@@ -73,35 +73,8 @@ const PHRASES: &[(&str, &str)] = &[
 ];
 /// Words of a search that say nothing about a command.
 const STOP: &[&str] = &[
-    "the",
-    "a",
-    "an",
-    "of",
-    "to",
-    "per",
-    "is",
-    "are",
-    "for",
-    "in",
-    "and",
-    "or",
-    "how",
-    "do",
-    "does",
-    "i",
-    "my",
-    "it",
-    "its",
-    "set",
-    "sets",
-    "get",
-    "change",
-    "what",
-    "with",
-    "scope",
-    "oscilloscope",
-    "turn",
-    "command",
+    "the", "a", "an", "of", "to", "per", "is", "are", "for", "in", "and", "or", "how", "do", "does", "i", "my", "it",
+    "its", "set", "sets", "get", "change", "what", "with", "scope", "oscilloscope", "turn", "command",
 ];
 /// Words the reference uses where a search has another: a command fits the word of the search or one of these.
 const ALSO: &[(&str, &str)] = &[
@@ -546,8 +519,7 @@ mod tests {
         for (_, c, n) in &r.commands {
             let header = c.get("header").and_then(J::str).unwrap();
             let form = |long: bool| -> Vec<String> {
-                let node =
-                    |p: &Node| format!("{}{}", if long { &p.long } else { &p.short }, if p.suffix { "2" } else { "" });
+                let node = |p: &Node| format!("{}{}", if long { &p.long } else { &p.short }, if p.suffix { "2" } else { "" });
                 n.iter().filter(|p| !p.optional).map(node).collect()
             };
             assert!(matches(n, &form(false)) && matches(n, &form(true)), "{header}");

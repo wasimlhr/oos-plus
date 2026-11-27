@@ -11,14 +11,8 @@ fn layout(l: Layout) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = l;
     u.m.ch[1].on = true;
-    if l == Layout::Studio {
-        u.studio.enter = true;
-        u.m.studio_zoom_tab = false;
-        u.m.studio_detail = false;
-    }
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    if l == Layout::Studio { u.studio.enter = true; u.m.studio_zoom_tab = false; u.m.studio_detail = false; }
+    for _ in 0..8 { u.step(0.05); }
     u.render(&mut Canvas::new(W, H));
     u
 }
@@ -31,23 +25,14 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 fn hold(u: &mut Ui, x: i32, y: i32, secs: f64) {
     touch(u, Phase::Down, x, y);
     let mut t = 0.0;
-    while t < secs {
-        u.step(1.0 / 30.0);
-        t += 1.0 / 30.0;
-    }
+    while t < secs { u.step(1.0 / 30.0); t += 1.0 / 30.0; }
 }
 
-fn centre(r: Rect) -> (i32, i32) {
-    (r.x + r.w / 2, r.y + r.h / 2)
-}
+fn centre(r: Rect) -> (i32, i32) { (r.x + r.w / 2, r.y + r.h / 2) }
 
-fn chip(u: &Ui, c: usize) -> Rect {
-    u.cards().0[c]
-}
+fn chip(u: &Ui, c: usize) -> Rect { u.cards().0[c] }
 
-fn popup_rows(u: &Ui) -> Vec<String> {
-    u.workspace.popup.as_ref().map(|p| p.rows.iter().map(|r| r.0.clone()).collect()).unwrap_or_default()
-}
+fn popup_rows(u: &Ui) -> Vec<String> { u.workspace.popup.as_ref().map(|p| p.rows.iter().map(|r| r.0.clone()).collect()).unwrap_or_default() }
 
 #[test]
 fn there_is_one_long_press_time() {
@@ -84,10 +69,7 @@ fn a_hold_on_a_channel_chip_opens_its_quick_actions_in_minimal_and_studio() {
 
 fn hold_more(u: &mut Ui, secs: f64) {
     let mut t = 0.0;
-    while t < secs {
-        u.step(1.0 / 30.0);
-        t += 1.0 / 30.0;
-    }
+    while t < secs { u.step(1.0 / 30.0); t += 1.0 / 30.0; }
 }
 
 #[test]
@@ -103,10 +85,7 @@ fn a_hold_on_a_lane_badge_or_marker_opens_the_same_quick_actions() {
         hold(&mut u, x, y, LONG_PRESS + 0.1);
         assert_eq!(u.workspace.popup.as_ref().map(|p| p.title.as_str()), Some("CH1"), "{l:?}");
         let rows = popup_rows(&u);
-        assert!(
-            rows.iter().any(|r| r.starts_with("Coupling")) && rows.iter().any(|r| r.starts_with("Zero offset")),
-            "{l:?}: {rows:?}"
-        );
+        assert!(rows.iter().any(|r| r.starts_with("Coupling")) && rows.iter().any(|r| r.starts_with("Zero offset")), "{l:?}: {rows:?}");
         touch(&mut u, Phase::Up, x, y);
     }
 }
@@ -122,10 +101,7 @@ fn a_ring_fills_under_a_held_finger_and_the_popup_has_a_title_a_close_and_finger
         let (rx, ry, f) = u.press_ring().expect("ring while holding");
         assert!((rx, ry) == (x, y) && f > 0.2 && f < 1.0, "{l:?}: {f}");
         let mut cv = Canvas::new(W, H);
-        let before = {
-            u.render(&mut cv);
-            cv.px.clone()
-        };
+        let before = { u.render(&mut cv); cv.px.clone() };
         let mut u2 = layout(l);
         u2.render(&mut cv);
         assert_ne!(before, cv.px, "{l:?}: the ring is drawn");
@@ -133,9 +109,7 @@ fn a_ring_fills_under_a_held_finger_and_the_popup_has_a_title_a_close_and_finger
         assert!(u.press_ring().is_none());
         let p = u.workspace.popup.as_ref().unwrap();
         assert!(p.close_rect().w >= 40 && p.close_rect().h >= 40);
-        for i in 0..p.rows.len() {
-            assert!(p.row_rect(i).h >= 40, "{l:?} row {i}");
-        }
+        for i in 0..p.rows.len() { assert!(p.row_rect(i).h >= 40, "{l:?} row {i}"); }
         // the close
         let (cx, cy) = centre(p.close_rect());
         touch(&mut u, Phase::Up, x, y);
@@ -148,32 +122,19 @@ fn a_ring_fills_under_a_held_finger_and_the_popup_has_a_title_a_close_and_finger
 fn the_plot_hold_popup_has_a_title_and_fits_with_rows_of_40_px() {
     for l in LAYOUTS {
         // Studio has a context menu of its own (studioctx.rs, tested in measpanel_redesign_tests)
-        if l == Layout::Studio {
-            continue;
-        }
+        if l == Layout::Studio { continue; }
         let mut u = layout(l);
         let g = u.plot.grid;
         u.context_menu(g.x + g.w / 2, g.y + g.h / 2);
         let p = u.workspace.popup.as_ref().unwrap();
         assert_eq!(p.title, "Plot");
-        assert!(
-            p.rect.y >= g.y && p.rect.bottom() <= g.bottom() && p.rect.x >= g.x && p.rect.right() <= g.right(),
-            "{l:?} {:?} in {g:?}",
-            p.rect
-        );
-        for i in 0..p.rows.len() {
-            assert!(
-                p.row_rect(i).h >= 40 && p.rect.contains(p.row_rect(i).x + 1, p.row_rect(i).y + 1),
-                "{l:?} row {i}"
-            );
-        }
+        assert!(p.rect.y >= g.y && p.rect.bottom() <= g.bottom() && p.rect.x >= g.x && p.rect.right() <= g.right(), "{l:?} {:?} in {g:?}", p.rect);
+        for i in 0..p.rows.len() { assert!(p.row_rect(i).h >= 40 && p.rect.contains(p.row_rect(i).x + 1, p.row_rect(i).y + 1), "{l:?} row {i}"); }
         assert!(p.rows.iter().any(|r| r.0 == "Windows"), "the three arrangements are in the plot's hold popup");
     }
 }
 
-fn h_of(r: Rect) -> i32 {
-    r.h
-}
+fn h_of(r: Rect) -> i32 { r.h }
 
 #[test]
 fn chips_in_the_compact_bars_take_a_touch_over_a_40_px_height() {
@@ -215,13 +176,8 @@ fn zoom_bar_buttons_take_a_40_px_touch_in_default_and_studio() {
         let row = u.zoom_readout();
         // the same row in both layouts; Studio names its buttons (`studio_zoom_bar`)
         let target = u.zoom_controls()[4].0;
-        if l == Layout::Studio {
-            assert_eq!(u.studio_zoom_bar().unwrap().boxr, target);
-        }
-        assert!(
-            target.h < 40 && target.y >= row.y && target.bottom() <= row.bottom(),
-            "{l:?}: drawn {target:?} in {row:?}"
-        );
+        if l == Layout::Studio { assert_eq!(u.studio_zoom_bar().unwrap().boxr, target); }
+        assert!(target.h < 40 && target.y >= row.y && target.bottom() <= row.bottom(), "{l:?}: drawn {target:?} in {row:?}");
         let (x, y) = centre(target);
         // Box: arms the zoom box, from the edge of a 40 px target
         assert!(!u.zoom_box.arm);
@@ -230,9 +186,7 @@ fn zoom_bar_buttons_take_a_40_px_touch_in_default_and_studio() {
     }
 }
 
-fn toast_text(u: &Ui) -> String {
-    u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default()
-}
+fn toast_text(u: &Ui) -> String { u.toast.as_ref().map(|t| t.0.clone()).unwrap_or_default() }
 
 #[test]
 fn the_trigger_marker_opens_trigger_in_minimal_and_studio() {
@@ -246,11 +200,7 @@ fn the_trigger_marker_opens_trigger_in_minimal_and_studio() {
             u.studio.trig_slider = false;
             u.tap(x, y);
             // Studio: the level tag opens the slider (batch 26), the other layouts the Trigger sheet
-            if l == Layout::Studio && u.trigger_tag_hit().is_some_and(|t| t.contains(x, y)) {
-                assert!(u.studio.trig_slider, "{l:?}: marker {r:?}");
-                u.studio.trig_slider = false;
-                continue;
-            }
+            if l == Layout::Studio && u.trigger_tag_hit().is_some_and(|t| t.contains(x, y)) { assert!(u.studio.trig_slider, "{l:?}: marker {r:?}"); u.studio.trig_slider = false; continue; }
             assert!(u.menu_open && u.menu == MenuId::Trigger, "{l:?}: marker {r:?}");
             // 40 px: a touch 17 px off the middle of the 16 px marker still counts
             u.close_menu();
@@ -316,9 +266,7 @@ fn a_vertical_drag_moves_the_trace_under_the_finger() {
         let (o0, o1) = (u.m.ch[0].offset, u.m.ch[1].offset);
         let (x, y) = on_trace(&u, 1);
         touch(&mut u, Phase::Down, x, y);
-        for k in 1..=4 {
-            touch(&mut u, Phase::Move, x, y + k * 10);
-        }
+        for k in 1..=4 { touch(&mut u, Phase::Move, x, y + k * 10); }
         touch(&mut u, Phase::Up, x, y + 40);
         assert_eq!(u.m.ch[0].offset, o0, "{l:?}: the active channel stays");
         assert!(u.m.ch[1].offset != o1, "{l:?}: the trace under the finger moved");
@@ -338,9 +286,7 @@ fn a_cursor_drags_in_any_lane() {
     let x = lane.x + (0.3 * lane.w as f32) as i32;
     let y = lane.y + lane.h / 2;
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=4 {
-        touch(&mut u, Phase::Move, x + k * 15, y);
-    }
+    for k in 1..=4 { touch(&mut u, Phase::Move, x + k * 15, y); }
     touch(&mut u, Phase::Up, x + 60, y);
     assert!(u.m.cur_a > 0.33, "cursor A followed the finger in the other lane: {}", u.m.cur_a);
 }
@@ -365,36 +311,11 @@ fn autoset_is_two_taps_away_in_every_layout() {
     for l in LAYOUTS {
         // Menu, then Autoset (the plot's menu has no Autoset: the Auto key and the Menu have it)
         let mut u = layout(l);
-        let (x, y) = if l == Layout::Studio {
-            centre(u.studio_top().gear)
-        } else if l == Layout::Minimal {
-            centre(Ui::MENU_BTN)
-        } else {
-            centre(u.menu_btn())
-        };
+        let (x, y) = if l == Layout::Studio { centre(u.studio_top().gear) } else if l == Layout::Minimal { centre(Ui::MENU_BTN) } else { centre(u.menu_btn()) };
         u.tap(x, y);
         assert_eq!(u.menu, MenuId::Main, "{l:?}");
-        let (x, y) = if l == Layout::Studio {
-            centre(
-                u.menu_geo()
-                    .groups
-                    .iter()
-                    .flat_map(|g| g.items.iter())
-                    .find(|(it, _)| *it == Item::AutosetAct)
-                    .expect("Autoset in the Menu")
-                    .1,
-            )
-        } else {
-            centre(
-                u.dlg_layout()
-                    .expect("menu")
-                    .rows
-                    .into_iter()
-                    .find(|r| r.it == Item::AutosetAct)
-                    .expect("Autoset row")
-                    .ctrl,
-            )
-        };
+        let (x, y) = if l == Layout::Studio { centre(u.menu_geo().groups.iter().flat_map(|g| g.items.iter()).find(|(it, _)| *it == Item::AutosetAct).expect("Autoset in the Menu").1) }
+            else { centre(u.dlg_layout().expect("menu").rows.into_iter().find(|r| r.it == Item::AutosetAct).expect("Autoset row").ctrl) };
         u.tap(x, y);
         assert_eq!(toast_text(&u), "Auto set-up", "{l:?}: Menu");
     }
@@ -499,9 +420,7 @@ fn a_vertical_drag_in_default_moves_the_active_channel() {
     let (o0, o1) = (u.m.ch[0].offset, u.m.ch[1].offset);
     let (x, y) = on_trace(&u, 1);
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=4 {
-        touch(&mut u, Phase::Move, x, y + k * 10);
-    }
+    for k in 1..=4 { touch(&mut u, Phase::Move, x, y + k * 10); }
     touch(&mut u, Phase::Up, x, y + 40);
     assert!(u.m.ch[0].offset != o0, "the active channel moved");
     assert_eq!(u.m.ch[1].offset, o1, "the trace under the finger stays");
@@ -517,9 +436,7 @@ fn a_vertical_drag_in_default_moves_the_active_channel() {
     let (o0, o1) = (u.m.ch[0].offset, u.m.ch[1].offset);
     let (x, y) = on_trace(&u, 1);
     touch(&mut u, Phase::Down, x, y);
-    for k in 1..=4 {
-        touch(&mut u, Phase::Move, x, y + k * 10);
-    }
+    for k in 1..=4 { touch(&mut u, Phase::Move, x, y + k * 10); }
     touch(&mut u, Phase::Up, x, y + 40);
     assert_eq!(u.m.ch[0].offset, o0, "Studio: the selected channel stays");
     assert!(u.m.ch[1].offset != o1, "Studio: the trace under the finger moved");

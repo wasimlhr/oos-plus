@@ -3,8 +3,8 @@
 //! the main time/div in 1-2-5 steps; the same on the volts labels at the left of a lane changes the V/div of the
 //! channel that lane labels. Each strip is at least 40 px thick and lights up while it is touched. Elsewhere on the
 //! waveform nothing changes: a pinch there does nothing, and Ctrl-wheel is what it was.
-use super::studio::StudioDrag;
 use super::*;
+use super::studio::StudioDrag;
 
 /// Thickness of the time strip and width of the volts strip: finger-sized.
 const STRIP: i32 = 40;
@@ -50,17 +50,10 @@ impl Ui {
     /// The channel a lane labels on its volts axis.
     fn axis_lane_channel(&self, lane: usize) -> Option<usize> {
         if self.stacked() {
-            return match self.trace_sources().get(lane)? {
-                workspace::Trace::Channel(c) => Some(*c),
-                _ => None,
-            };
+            return match self.trace_sources().get(lane)? { workspace::Trace::Channel(c) => Some(*c), _ => None };
         }
         let c = self.m.active;
-        if c < n_ch() && self.m.ch[c].on {
-            Some(c)
-        } else {
-            (0..n_ch()).find(|&i| self.m.ch[i].on)
-        }
+        if c < n_ch() && self.m.ch[c].on { Some(c) } else { (0..n_ch()).find(|&i| self.m.ch[i].on) }
     }
 
     /// The time strip: the bottom of the lowest lane, where the time labels are.
@@ -78,16 +71,7 @@ impl Ui {
 
     /// The strip under a point, when the gesture may start there.
     pub(super) fn axis_at(&self, x: i32, y: i32) -> Option<Axis> {
-        if self.m.layout != Layout::Studio
-            || self.full_on()
-            || self.menu_open
-            || self.dialog.is_some()
-            || self.m.touch_lock
-            || self.view_on()
-            || self.plot.wins.is_empty()
-        {
-            return None;
-        }
+        if self.m.layout != Layout::Studio || self.full_on() || self.menu_open || self.dialog.is_some() || self.m.touch_lock || self.view_on() || self.plot.wins.is_empty() { return None; }
         if let Some(t) = self.axis_time_strip().filter(|t| t.contains(x, y)) {
             // a time cursor within reach of the finger is the cursor's
             let near_cursor = matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy)
@@ -96,24 +80,18 @@ impl Ui {
         }
         let lane = self.plot.wins.iter().position(|l| l.contains(x, y))?;
         let v = self.axis_volts_strip(lane)?;
-        if !v.contains(x, y) {
-            return None;
-        }
+        if !v.contains(x, y) { return None; }
         let c = self.axis_lane_channel(lane)?;
         // the ground marker keeps its own drag
         let my = self.y_of_volts(c, 0.0).clamp(v.y + (v.h / 2).min(9), v.y + v.h - (v.h / 2).min(9));
-        if (y - my).abs() < 16 && x < v.x + MARK_W + 6 {
-            return None;
-        }
+        if (y - my).abs() < 16 && x < v.x + MARK_W + 6 { return None; }
         Some(Axis::Volts(c))
     }
 
     fn axis_rect(&self, a: Axis) -> Option<Rect> {
         match a {
             Axis::Time => self.axis_time_strip(),
-            Axis::Volts(c) => (0..self.plot.wins.len())
-                .find(|&l| self.axis_lane_channel(l) == Some(c))
-                .and_then(|l| self.axis_volts_strip(l)),
+            Axis::Volts(c) => (0..self.plot.wins.len()).find(|&l| self.axis_lane_channel(l) == Some(c)).and_then(|l| self.axis_volts_strip(l)),
         }
     }
 
@@ -132,9 +110,7 @@ impl Ui {
     /// The wheel over a strip: its steps. True when a strip took it.
     pub(super) fn axis_wheel(&mut self, x: i32, y: i32, steps: i32) -> bool {
         let Some(a) = self.axis_at(x, y) else { return false };
-        for _ in 0..steps.clamp(-32, 32).unsigned_abs() {
-            self.axis_step(a, -steps.signum());
-        }
+        for _ in 0..steps.clamp(-32, 32).unsigned_abs() { self.axis_step(a, -steps.signum()); }
         self.studio.axis.flash = Some((a, self.now));
         true
     }
@@ -172,10 +148,7 @@ impl Ui {
     }
 
     fn axis_spread(a: Axis, p: (i32, i32), q: (i32, i32)) -> i32 {
-        match a {
-            Axis::Time => (q.0 - p.0).abs(),
-            Axis::Volts(_) => (q.1 - p.1).abs(),
-        }
+        match a { Axis::Time => (q.0 - p.0).abs(), Axis::Volts(_) => (q.1 - p.1).abs() }
     }
 
     /// The second finger moved or lifted.
@@ -183,11 +156,7 @@ impl Ui {
         let Some(mut t) = self.studio.axis.touch else { return };
         match ph {
             Phase::Move => t.p1 = Some((x, y)),
-            _ => {
-                t.p1 = None;
-                self.studio.axis.touch = Some(t);
-                return;
-            }
+            _ => { t.p1 = None; self.studio.axis.touch = Some(t); return; }
         }
         self.studio.axis.touch = Some(t);
         self.axis_pinch_steps();
@@ -199,49 +168,29 @@ impl Ui {
         let Some(p1) = t.p1 else { return };
         let spread = Self::axis_spread(t.axis, (t.x, t.y), p1);
         if t.ref_spread > 30 {
-            if spread * 100 > t.ref_spread * 125 {
-                self.axis_step(t.axis, -1);
-                t.ref_spread = spread;
-            } else if spread * 100 < t.ref_spread * 80 {
-                self.axis_step(t.axis, 1);
-                t.ref_spread = spread;
-            }
-        } else if spread > 30 {
-            t.ref_spread = spread;
-        }
+            if spread * 100 > t.ref_spread * 125 { self.axis_step(t.axis, -1); t.ref_spread = spread; }
+            else if spread * 100 < t.ref_spread * 80 { self.axis_step(t.axis, 1); t.ref_spread = spread; }
+        } else if spread > 30 { t.ref_spread = spread; }
         self.studio.axis.touch = Some(t);
     }
 
     /// The first finger moved. True while a strip has it (a drag along the axis, or the first finger of a pinch).
     pub(super) fn axis_move(&mut self, x: i32, y: i32) -> bool {
         let Some(mut t) = self.studio.axis.touch else { return false };
-        if (x - t.x0).abs().max((y - t.y0).abs()) > 8 {
-            self.studio.axis.last_down = None;
-        }
+        if (x - t.x0).abs().max((y - t.y0).abs()) > 8 { self.studio.axis.last_down = None; }
         t.x = x;
         t.y = y;
         self.studio.axis.touch = Some(t);
-        if t.p1.is_some() {
-            self.axis_pinch_steps();
-            return true;
-        }
+        if t.p1.is_some() { self.axis_pinch_steps(); return true; }
         // a drag: right and up zoom in, left and down out; one step for every STEP_PX
-        let travel = match t.axis {
-            Axis::Time => x - t.x0,
-            Axis::Volts(_) => t.y0 - y,
-        };
+        let travel = match t.axis { Axis::Time => x - t.x0, Axis::Volts(_) => t.y0 - y };
         let steps = (travel.abs() / STEP_PX).min(MAX_STEPS);
         if steps > 0 {
-            for _ in 0..steps {
-                self.axis_step(t.axis, if travel > 0 { -1 } else { 1 });
-            }
+            for _ in 0..steps { self.axis_step(t.axis, if travel > 0 { -1 } else { 1 }); }
             // keep the rest of the travel for the next step; what a clamp left over is dropped
             let used = if travel.abs() / STEP_PX > MAX_STEPS { travel.abs() } else { steps * STEP_PX };
             let mut t = t;
-            match t.axis {
-                Axis::Time => t.x0 += travel.signum() * used,
-                Axis::Volts(_) => t.y0 -= travel.signum() * used,
-            }
+            match t.axis { Axis::Time => t.x0 += travel.signum() * used, Axis::Volts(_) => t.y0 -= travel.signum() * used }
             self.studio.axis.touch = Some(t);
         }
         // only a clear move along the axis is the gesture; a small one is still a tap
@@ -249,17 +198,12 @@ impl Ui {
         moved || steps > 0
     }
 
-    pub(super) fn axis_up(&mut self) {
-        self.studio.axis.touch = None;
-    }
+    pub(super) fn axis_up(&mut self) { self.studio.axis.touch = None; }
 
     /// The horizontal position back to the trigger.
     pub(super) fn axis_center_delay(&mut self) {
         self.m.delay = 0.0;
-        if self.m.zoom {
-            self.m.zdelay = 0.0;
-            self.clamp_zoom();
-        }
+        if self.m.zoom { self.m.zdelay = 0.0; self.clamp_zoom(); }
         self.settings_changed();
         self.dirty_map = true;
         self.toast("Trigger centred");
@@ -268,15 +212,11 @@ impl Ui {
     /// Every frame: the horizontal position stays within 50 screens of the trigger. A pan at a huge time base that was
     /// followed by zooming in left the screen at minus 200 seconds.
     pub(super) fn studio_delay_clamp(&mut self) {
-        if self.m.layout != Layout::Studio || self.record_mode() {
-            return;
-        }
+        if self.m.layout != Layout::Studio || self.record_mode() { return; }
         let lim = self.item_range(Item::HDelay).map_or(0.0, |r| r.hi as f32);
         if lim.is_finite() && lim > 0.0 && self.m.delay.abs() > lim {
             self.m.delay = self.m.delay.clamp(-lim, lim);
-            if self.m.zoom {
-                self.clamp_zoom();
-            }
+            if self.m.zoom { self.clamp_zoom(); }
             self.dirty_map = true;
         }
     }
@@ -285,12 +225,7 @@ impl Ui {
 
     /// A touched strip is lit: subtly, so the gesture can be found.
     pub(super) fn draw_axis_highlight(&self, cv: &mut Canvas) {
-        let lit = self
-            .studio
-            .axis
-            .touch
-            .map(|t| t.axis)
-            .or_else(|| self.studio.axis.flash.filter(|(_, at)| self.now - at < FLASH_S).map(|(a, _)| a));
+        let lit = self.studio.axis.touch.map(|t| t.axis).or_else(|| self.studio.axis.flash.filter(|(_, at)| self.now - at < FLASH_S).map(|(a, _)| a));
         let Some(r) = lit.and_then(|a| self.axis_rect(a)) else { return };
         cv.blend(r, ACCENT, 28);
         cv.rect(r, mix(BG, ACCENT, 90));

@@ -160,6 +160,7 @@ pub(super) mod cat {
     pub const Qoss: u16 = 186;
 }
 
+
 pub(super) fn cat_from(n: u16) -> Option<Cat> {
     measures::def(n)
 }
@@ -257,11 +258,7 @@ pub(super) fn cat_info(c: Cat) -> CatInfo {
         cat::Phase => "The delay between source A and source B divided by the period of A, in degrees.".to_string(),
         _ => how,
     };
-    let sources = match m.roles.len() {
-        1 => "Reads one source".to_string(),
-        2 => "Reads two sources: A and B".to_string(),
-        n => format!("Reads {n} sources"),
-    };
+    let sources = match m.roles.len() { 1 => "Reads one source".to_string(), 2 => "Reads two sources: A and B".to_string(), n => format!("Reads {n} sources") };
     CatInfo { name: m.name, blurb: m.blurb, mark: m.mark, unit: m.unit, how,
         settings: "Gate (screen or whole record), levels and edge options are on the settings card of the measurement: a tap on it in the measurements panel.".into(), sources }
 }
@@ -929,7 +926,8 @@ impl Ui {
 
     /// A few words for a row that has no value: which source is missing, or what the analysis needs.
     fn short_reason(&self, r: &str, roles: &[WaveId]) -> String {
-        let missing = |f: &dyn Fn(WaveId) -> bool| roles.iter().copied().find(|&id| f(id)).map(|id| self.wave_name(id));
+        let missing =
+            |f: &dyn Fn(WaveId) -> bool| roles.iter().copied().find(|&id| f(id)).map(|id| self.wave_name(id));
         match r {
             "Reference source empty" => {
                 missing(&|id| matches!(id, WaveId::Ref(i) if self.refs.get(i).is_none_or(|s| s.is_none())))
@@ -1016,9 +1014,7 @@ impl Ui {
         for &r in catalog_roles(c) {
             match row[r] {
                 WaveId::Ch(ch) if ch < NCH && !self.m.ch[ch].on => return Preview::Off(ch),
-                WaveId::Ref(i) if self.refs.get(i).is_none_or(|r| r.is_none()) => {
-                    return Preview::Reason(format!("Reference R{} is empty", i + 1))
-                }
+                WaveId::Ref(i) if self.refs.get(i).is_none_or(|r| r.is_none()) => return Preview::Reason(format!("Reference R{} is empty", i + 1)),
                 _ => {}
             }
         }

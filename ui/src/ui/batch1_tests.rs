@@ -19,17 +19,9 @@ fn studio() -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..8 {
-        u.step(0.05);
-    }
-    u.m.meas = vec![
-        (Meas::Freq, WaveId::Ch(0)),
-        (Meas::Vpp, WaveId::Ch(0)),
-        (Meas::Vrms, WaveId::Ch(0)),
-        (Meas::Rise, WaveId::Ch(0)),
-        (Meas::Freq, WaveId::Ch(1)),
-        (Meas::Vpp, WaveId::Ch(1)),
-    ];
+    for _ in 0..8 { u.step(0.05); }
+    u.m.meas = vec![(Meas::Freq, WaveId::Ch(0)), (Meas::Vpp, WaveId::Ch(0)), (Meas::Vrms, WaveId::Ch(0)), (Meas::Rise, WaveId::Ch(0)),
+        (Meas::Freq, WaveId::Ch(1)), (Meas::Vpp, WaveId::Ch(1))];
     u.studio.pinned = Some(vec![MeasKey::One(Meas::Freq, WaveId::Ch(0)), MeasKey::One(Meas::Vpp, WaveId::Ch(0))]);
     u.relayout();
     u
@@ -86,10 +78,7 @@ fn the_docked_studio_panel_stays_beside_an_analysis_view() {
     let cv = shot(&mut u, "b1-studio-spectrum");
     let p = u.studio_panel_rect().expect("the panel keeps its place");
     let corner = cv.px[((p.y + 3) * W + p.x + 3) as usize];
-    let ink = (p.y..p.bottom())
-        .flat_map(|y| (p.x..p.right()).map(move |x| (x, y)))
-        .filter(|&(x, y)| cv.px[(y * W + x) as usize] != corner)
-        .count();
+    let ink = (p.y..p.bottom()).flat_map(|y| (p.x..p.right()).map(move |x| (x, y))).filter(|&(x, y)| cv.px[(y * W + x) as usize] != corner).count();
     assert!(ink > 600, "the docked panel is drawn beside the analysis view ({ink})");
 }
 
@@ -127,10 +116,7 @@ fn entering_studio_shows_its_bars_even_from_full_screen() {
     assert!(u.full_on());
     u.select_option(Item::Layout, "Studio");
     let mut cv = Canvas::new(W, H);
-    for _ in 0..3 {
-        u.step(0.05);
-        u.render(&mut cv);
-    }
+    for _ in 0..3 { u.step(0.05); u.render(&mut cv); }
     assert!(!u.full_on(), "Studio starts with its bars");
 }
 
@@ -236,9 +222,7 @@ fn layout_and_studio_view_come_back_after_a_restart() {
     let mut v = Ui::new(Source::Demo { t: 0.0 });
     v.m = crate::store::parse_setup(&text).unwrap();
     v.restore_view_state();
-    for _ in 0..4 {
-        v.step(0.05);
-    }
+    for _ in 0..4 { v.step(0.05); }
     assert_eq!((v.m.layout, v.studio.view), (Layout::Studio, StudioView::Docked));
     assert!(v.stacked(), "its lanes are drawn");
     assert!(crate::store::parse_setup(&text.replace("studio_view = docked", "studio_view = nonsense")).is_err());

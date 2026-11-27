@@ -1512,13 +1512,7 @@ mod tests {
         // the two frequencies before it were measured, each after the generator had it
         assert_eq!(ui.bode.points.len(), 2, "{:?}", ui.bode.points);
         // without the error queries, and the mark of the connection the sweep closed at its end
-        let l: Vec<String> = got
-            .lock()
-            .unwrap()
-            .iter()
-            .filter(|l| *l != "SYSTem:ERRor?" && *l != crate::extgen::tests::CLOSED)
-            .cloned()
-            .collect();
+        let l: Vec<String> = got.lock().unwrap().iter().filter(|l| *l != "SYSTem:ERRor?" && *l != crate::extgen::tests::CLOSED).cloned().collect();
         assert_eq!(
             l,
             [

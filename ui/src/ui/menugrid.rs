@@ -101,9 +101,7 @@ impl Ui {
 
     /// Buttons per row in a Menu `w` wide (the sheet): as many as keep a button at least `CELL_MIN_W` wide, up to six.
     #[cfg_attr(not(test), allow(dead_code))] // only the tests use it
-    pub(super) fn menu_cols(w: i32) -> i32 {
-        Self::menu_cols_with(w, GROUP_LABEL_W)
-    }
+    pub(super) fn menu_cols(w: i32) -> i32 { Self::menu_cols_with(w, GROUP_LABEL_W) }
     fn menu_cols_with(w: i32, label_w: i32) -> i32 {
         let gw = w - 2 * PAD - label_w - 6;
         ((gw + GAP) / (CELL_MIN_W + GAP)).clamp(1, MAX_COLS)
@@ -112,10 +110,7 @@ impl Ui {
     /// Height of the page of the Menu for `cols` buttons per row, with the room under the last row.
     pub(super) fn menu_content_h(&self, cols: i32) -> i32 {
         let all = self.main_groups();
-        let height = |n: usize| {
-            let rows = (n as i32 + cols - 1) / cols;
-            rows * CELL_H + (rows - 1) * GAP
-        };
+        let height = |n: usize| { let rows = (n as i32 + cols - 1) / cols; rows * CELL_H + (rows - 1) * GAP };
         (all.iter().map(|(_, items)| height(items.len()) + GROUP_GAP).sum::<i32>() - GROUP_GAP).max(0) + BOTTOM_PAD
     }
 
@@ -138,36 +133,24 @@ impl Ui {
     /// is kept inside what the real content height allows (the last row can scroll fully into view, with its padding).
     pub(super) fn menu_geo(&self) -> MenuGeo {
         let r = self.sheet_rect();
-        let view =
-            Rect::new(r.x + PAD, r.y + SHEET_HEAD + 4, r.w - 2 * PAD, (r.bottom() - r.y - SHEET_HEAD - 10).max(CELL_H));
+        let view = Rect::new(r.x + PAD, r.y + SHEET_HEAD + 4, r.w - 2 * PAD, (r.bottom() - r.y - SHEET_HEAD - 10).max(CELL_H));
         let cols = Self::menu_cols_with(r.w, self.group_label_w());
         let gx = view.x + self.group_label_w();
         let gw = view.w - self.group_label_w() - 6;
         let cw = (gw - (cols - 1) * GAP) / cols;
         let all = self.main_groups();
-        let height = |n: usize| {
-            let rows = (n as i32 + cols - 1) / cols;
-            rows * CELL_H + (rows - 1) * GAP
-        };
+        let height = |n: usize| { let rows = (n as i32 + cols - 1) / cols; rows * CELL_H + (rows - 1) * GAP };
         let content_h = self.menu_content_h(cols);
         let scroll = self.sheet.scroll.clamp(0, (content_h - view.h).max(0));
         let mut y = 0;
         let mut groups = Vec::new();
         for (name, items) in all {
             let h = height(items.len());
-            let cells = items
-                .iter()
-                .enumerate()
-                .map(|(i, &it)| {
-                    let (c, row) = (i as i32 % cols, i as i32 / cols);
-                    (it, Rect::new(gx + c * (cw + GAP), view.y + y - scroll + row * (CELL_H + GAP), cw, CELL_H))
-                })
-                .collect();
-            groups.push(MenuGroupGeo {
-                name,
-                label: Rect::new(view.x, view.y + y - scroll, self.group_label_w() - 6, CELL_H),
-                items: cells,
-            });
+            let cells = items.iter().enumerate().map(|(i, &it)| {
+                let (c, row) = (i as i32 % cols, i as i32 / cols);
+                (it, Rect::new(gx + c * (cw + GAP), view.y + y - scroll + row * (CELL_H + GAP), cw, CELL_H))
+            }).collect();
+            groups.push(MenuGroupGeo { name, label: Rect::new(view.x, view.y + y - scroll, self.group_label_w() - 6, CELL_H), items: cells });
             y += h + GROUP_GAP;
         }
         MenuGeo { r, view, groups, content_h }
@@ -185,14 +168,10 @@ impl Ui {
             }
             if n > 0 {
                 let y = grp.label.y - GROUP_GAP / 2 - 1;
-                if y >= g.view.y && y < g.view.bottom() {
-                    cv.hline(g.view.x, g.view.right() - 8, y, LINE);
-                }
+                if y >= g.view.y && y < g.view.bottom() { cv.hline(g.view.x, g.view.right() - 8, y, LINE); }
             }
             for &(it, c) in &grp.items {
-                if c.bottom() < g.view.y || c.y > g.view.bottom() {
-                    continue;
-                }
+                if c.bottom() < g.view.y || c.y > g.view.bottom() { continue; }
                 self.draw_menu_cell(cv, it, c, g.view);
             }
         }
@@ -232,20 +211,7 @@ impl Ui {
             (BTN, BTN_BORDER, TEXT)
         };
         btn(cv, c, fill, border);
-        draw_menu_icon(
-            cv,
-            it,
-            c.x + 8,
-            c.y + (c.h - ICON) / 2,
-            if on || armed {
-                ink
-            } else if danger {
-                RED
-            } else {
-                ACCENT
-            },
-            fill,
-        );
+        draw_menu_icon(cv, it, c.x + 8, c.y + (c.h - ICON) / 2, if on || armed { ink } else if danger { RED } else { ACCENT }, fill);
         let open = matches!(it, Item::Open(_));
         let label = if armed { "Tap again".to_string() } else { self.menu_cell_label(it) };
         let room = c.w - 32 - if open { 16 } else { 6 };
@@ -254,13 +220,9 @@ impl Ui {
         let outer = cv.save_clip();
         let (top, bottom) = (c.y.max(view.y), c.bottom().min(view.bottom()));
         cv.clip_within(Rect::new(c.x + 30, top, room + 2, (bottom - top).max(0)));
-        if f.m.width(&label) <= room {
-            cv.text_in(&f.m, Rect::new(c.x + 30, c.y, room, c.h), 0, &label, ink);
-        } else if f.s.width(&label) <= room {
-            cv.text_in(&f.s, Rect::new(c.x + 30, c.y, room, c.h), 0, &label, ink);
-        } else {
-            fitted_text(cv, &[&f.s], Rect::new(c.x + 28, c.y, room + 6, c.h), &label, ink);
-        }
+        if f.m.width(&label) <= room { cv.text_in(&f.m, Rect::new(c.x + 30, c.y, room, c.h), 0, &label, ink); }
+        else if f.s.width(&label) <= room { cv.text_in(&f.s, Rect::new(c.x + 30, c.y, room, c.h), 0, &label, ink); }
+        else { fitted_text(cv, &[&f.s], Rect::new(c.x + 28, c.y, room + 6, c.h), &label, ink); }
         cv.restore_clip(outer);
         if open {
             chevron(cv, c.right() - 12, c.y + c.h / 2, 1, if on { ink } else { DIM });
@@ -294,212 +256,51 @@ pub(super) fn draw_menu_icon(cv: &mut Canvas, it: Item, x: i32, y: i32, c: Rgb, 
     use MenuId as M;
     let mut i = Ic { cv, x, y, c, bg };
     match it {
-        RunStop => {
-            i.tri((0.1, 0.1), (0.1, 0.9), (0.55, 0.5));
-            i.bar(0.68, 0.1, 0.8, 0.9);
-            i.bar(0.9, 0.1, 1.0, 0.9);
-        }
-        SingleAct => {
-            i.ring(0.5, 0.5, 8);
-            i.text1();
-        }
-        AutosetAct => {
-            i.wave();
-            i.l((0.0, 0.1), (0.3, 0.1));
-            i.l((0.7, 0.9), (1.0, 0.9));
-        }
-        ClearDisp => {
-            i.l((0.15, 0.15), (0.85, 0.85));
-            i.l((0.15, 0.85), (0.85, 0.15));
-        }
-        DefaultAct => {
-            i.ring(0.5, 0.55, 7);
-            i.cut(0.5, 0.2, 0.8, 0.5);
-            i.tri((0.5, 0.0), (0.5, 0.4), (0.8, 0.2));
-        }
-        Open(M::Acquire) => {
-            i.pl(&[(0.0, 0.5), (0.2, 0.1), (0.5, 0.9), (0.8, 0.1), (1.0, 0.5)]);
-            i.dot(0.2, 0.1);
-            i.dot(0.5, 0.9);
-            i.dot(0.8, 0.1);
-        }
-        Open(M::Trigger) => {
-            i.pl(&[(0.0, 0.8), (0.4, 0.8), (0.4, 0.2), (1.0, 0.2)]);
-            i.l((0.7, 0.5), (1.0, 0.5));
-            i.l((0.9, 0.4), (1.0, 0.5));
-            i.l((0.9, 0.6), (1.0, 0.5));
-        }
-        SlopeAct => {
-            i.pl(&[(0.0, 0.9), (0.3, 0.9), (0.7, 0.1), (1.0, 0.1)]);
-        }
-        ForceAct => {
-            i.pl(&[(0.65, 0.0), (0.25, 0.55), (0.55, 0.55), (0.35, 1.0)]);
-        }
-        Open(M::Zone) => {
-            i.dashed_box(0.05, 0.2, 0.95, 0.8);
-        }
-        Open(M::Measure) => {
-            i.wave();
-            i.l((0.0, 1.0), (1.0, 1.0));
-        }
-        Open(M::Cursor) => {
-            i.dash_v(0.25);
-            i.dash_v(0.75);
-            i.l((0.25, 0.5), (0.75, 0.5));
-        }
-        Open(M::Math) => {
-            i.l((0.0, 0.3), (0.5, 0.3));
-            i.l((0.25, 0.05), (0.25, 0.55));
-            i.l((0.55, 0.8), (1.0, 0.8));
-            i.l((0.55, 0.3), (1.0, 0.3));
-        }
-        Open(M::Ref) => {
-            i.pl(&[(0.15, 0.0), (0.15, 1.0), (0.85, 1.0), (0.85, 0.0), (0.5, 0.35), (0.15, 0.0)]);
-        }
-        Open(M::Sim) => {
-            i.pl(&[(0.0, 0.8), (0.2, 0.8), (0.2, 0.2), (0.5, 0.2), (0.5, 0.8), (0.8, 0.8), (0.8, 0.2), (1.0, 0.2)]);
-        }
-        Open(M::Decode) => {
-            i.pl(&[(0.3, 0.1), (0.0, 0.5), (0.3, 0.9)]);
-            i.pl(&[(0.7, 0.1), (1.0, 0.5), (0.7, 0.9)]);
-            i.dot(0.5, 0.5);
-        }
-        Open(M::Bus) => {
-            for v in [0.15, 0.5, 0.85] {
-                i.l((0.0, v), (1.0, v));
-            }
-            i.bar(0.3, 0.05, 0.4, 0.95);
-        }
-        Open(M::Mask) => {
-            i.pl(&[(0.0, 0.9), (0.25, 0.9), (0.35, 0.55), (0.65, 0.55), (0.75, 0.9), (1.0, 0.9)]);
-            i.pl(&[(0.25, 0.1), (0.75, 0.1)]);
-        }
-        Open(M::Spectrum) => {
-            for (k, h) in [0.4, 0.9, 0.6, 0.3, 0.5].into_iter().enumerate() {
-                let u = k as f32 * 0.22;
-                i.bar(u, 1.0 - h, u + 0.12, 1.0);
-            }
-        }
-        Open(M::Eye) => {
-            i.pl(&[(0.0, 0.5), (0.25, 0.1), (0.75, 0.1), (1.0, 0.5), (0.75, 0.9), (0.25, 0.9), (0.0, 0.5)]);
-            i.pl(&[(0.0, 0.5), (0.3, 0.5)]);
-            i.pl(&[(0.7, 0.5), (1.0, 0.5)]);
-        }
-        Open(M::Power) => {
-            i.pl(&[(0.0, 0.5), (0.15, 0.2), (0.35, 0.8), (0.5, 0.5)]);
-            i.pl(&[(0.5, 0.5), (0.65, 0.2), (0.85, 0.8), (1.0, 0.5)]);
-            i.l((0.0, 1.0), (1.0, 1.0));
-        }
-        Open(M::Bode) => {
-            i.pl(&[(0.0, 0.2), (0.5, 0.2), (0.7, 0.4), (1.0, 0.9)]);
-            i.l((0.0, 0.0), (0.0, 1.0));
-        }
-        Open(M::BwTest) => {
-            i.pl(&[(0.0, 0.2), (0.5, 0.2), (0.75, 0.3), (1.0, 0.9)]);
-            i.dash_h(0.35, 0.0, 1.0);
-        }
-        IdentifyAct => {
-            i.ring(0.4, 0.4, 6);
-            i.l((0.7, 0.7), (1.0, 1.0));
-        }
-        Open(M::Magnetic) => {
-            i.pl(&[(0.15, 1.0), (0.15, 0.4), (0.3, 0.1), (0.7, 0.1), (0.85, 0.4), (0.85, 1.0)]);
-            i.bar(0.05, 0.85, 0.3, 1.0);
-            i.bar(0.7, 0.85, 0.95, 1.0);
-        }
-        Open(M::Inverter) => {
-            i.wave();
-            i.l((0.0, 0.5), (1.0, 0.5));
-        }
-        Open(M::Dpt) => {
-            i.pl(&[
-                (0.0, 0.9),
-                (0.15, 0.9),
-                (0.15, 0.1),
-                (0.4, 0.1),
-                (0.4, 0.9),
-                (0.6, 0.9),
-                (0.6, 0.1),
-                (0.75, 0.1),
-                (0.75, 0.9),
-                (1.0, 0.9),
-            ]);
-        }
-        Open(M::Afg) => {
-            i.frame();
-            i.wave();
-        }
+        RunStop => { i.tri((0.1, 0.1), (0.1, 0.9), (0.55, 0.5)); i.bar(0.68, 0.1, 0.8, 0.9); i.bar(0.9, 0.1, 1.0, 0.9); }
+        SingleAct => { i.ring(0.5, 0.5, 8); i.text1(); }
+        AutosetAct => { i.wave(); i.l((0.0, 0.1), (0.3, 0.1)); i.l((0.7, 0.9), (1.0, 0.9)); }
+        ClearDisp => { i.l((0.15, 0.15), (0.85, 0.85)); i.l((0.15, 0.85), (0.85, 0.15)); }
+        DefaultAct => { i.ring(0.5, 0.55, 7); i.cut(0.5, 0.2, 0.8, 0.5); i.tri((0.5, 0.0), (0.5, 0.4), (0.8, 0.2)); }
+        Open(M::Acquire) => { i.pl(&[(0.0, 0.5), (0.2, 0.1), (0.5, 0.9), (0.8, 0.1), (1.0, 0.5)]); i.dot(0.2, 0.1); i.dot(0.5, 0.9); i.dot(0.8, 0.1); }
+        Open(M::Trigger) => { i.pl(&[(0.0, 0.8), (0.4, 0.8), (0.4, 0.2), (1.0, 0.2)]); i.l((0.7, 0.5), (1.0, 0.5)); i.l((0.9, 0.4), (1.0, 0.5)); i.l((0.9, 0.6), (1.0, 0.5)); }
+        SlopeAct => { i.pl(&[(0.0, 0.9), (0.3, 0.9), (0.7, 0.1), (1.0, 0.1)]); }
+        ForceAct => { i.pl(&[(0.65, 0.0), (0.25, 0.55), (0.55, 0.55), (0.35, 1.0)]); }
+        Open(M::Zone) => { i.dashed_box(0.05, 0.2, 0.95, 0.8); }
+        Open(M::Measure) => { i.wave(); i.l((0.0, 1.0), (1.0, 1.0)); }
+        Open(M::Cursor) => { i.dash_v(0.25); i.dash_v(0.75); i.l((0.25, 0.5), (0.75, 0.5)); }
+        Open(M::Math) => { i.l((0.0, 0.3), (0.5, 0.3)); i.l((0.25, 0.05), (0.25, 0.55)); i.l((0.55, 0.8), (1.0, 0.8)); i.l((0.55, 0.3), (1.0, 0.3)); }
+        Open(M::Ref) => { i.pl(&[(0.15, 0.0), (0.15, 1.0), (0.85, 1.0), (0.85, 0.0), (0.5, 0.35), (0.15, 0.0)]); }
+        Open(M::Sim) => { i.pl(&[(0.0, 0.8), (0.2, 0.8), (0.2, 0.2), (0.5, 0.2), (0.5, 0.8), (0.8, 0.8), (0.8, 0.2), (1.0, 0.2)]); }
+        Open(M::Decode) => { i.pl(&[(0.3, 0.1), (0.0, 0.5), (0.3, 0.9)]); i.pl(&[(0.7, 0.1), (1.0, 0.5), (0.7, 0.9)]); i.dot(0.5, 0.5); }
+        Open(M::Bus) => { for v in [0.15, 0.5, 0.85] { i.l((0.0, v), (1.0, v)); } i.bar(0.3, 0.05, 0.4, 0.95); }
+        Open(M::Mask) => { i.pl(&[(0.0, 0.9), (0.25, 0.9), (0.35, 0.55), (0.65, 0.55), (0.75, 0.9), (1.0, 0.9)]); i.pl(&[(0.25, 0.1), (0.75, 0.1)]); }
+        Open(M::Spectrum) => { for (k, h) in [0.4, 0.9, 0.6, 0.3, 0.5].into_iter().enumerate() { let u = k as f32 * 0.22; i.bar(u, 1.0 - h, u + 0.12, 1.0); } }
+        Open(M::Eye) => { i.pl(&[(0.0, 0.5), (0.25, 0.1), (0.75, 0.1), (1.0, 0.5), (0.75, 0.9), (0.25, 0.9), (0.0, 0.5)]); i.pl(&[(0.0, 0.5), (0.3, 0.5)]); i.pl(&[(0.7, 0.5), (1.0, 0.5)]); }
+        Open(M::Power) => { i.pl(&[(0.0, 0.5), (0.15, 0.2), (0.35, 0.8), (0.5, 0.5)]); i.pl(&[(0.5, 0.5), (0.65, 0.2), (0.85, 0.8), (1.0, 0.5)]); i.l((0.0, 1.0), (1.0, 1.0)); }
+        Open(M::Bode) => { i.pl(&[(0.0, 0.2), (0.5, 0.2), (0.7, 0.4), (1.0, 0.9)]); i.l((0.0, 0.0), (0.0, 1.0)); }
+        Open(M::BwTest) => { i.pl(&[(0.0, 0.2), (0.5, 0.2), (0.75, 0.3), (1.0, 0.9)]); i.dash_h(0.35, 0.0, 1.0); }
+        IdentifyAct => { i.ring(0.4, 0.4, 6); i.l((0.7, 0.7), (1.0, 1.0)); }
+        Open(M::Magnetic) => { i.pl(&[(0.15, 1.0), (0.15, 0.4), (0.3, 0.1), (0.7, 0.1), (0.85, 0.4), (0.85, 1.0)]); i.bar(0.05, 0.85, 0.3, 1.0); i.bar(0.7, 0.85, 0.95, 1.0); }
+        Open(M::Inverter) => { i.wave(); i.l((0.0, 0.5), (1.0, 0.5)); }
+        Open(M::Dpt) => { i.pl(&[(0.0, 0.9), (0.15, 0.9), (0.15, 0.1), (0.4, 0.1), (0.4, 0.9), (0.6, 0.9), (0.6, 0.1), (0.75, 0.1), (0.75, 0.9), (1.0, 0.9)]); }
+        Open(M::Afg) => { i.frame(); i.wave(); }
         // a wave leaving a box: the generator is another instrument
-        Open(M::ExtGen) => {
-            i.pl(&[(0.0, 0.25), (0.45, 0.25), (0.45, 0.75), (0.0, 0.75), (0.0, 0.25)]);
-            i.pl(&[(0.45, 0.5), (0.6, 0.5), (0.7, 0.25), (0.85, 0.75), (1.0, 0.5)]);
-        }
-        Open(M::La) => {
-            for (k, v) in [0.1, 0.5, 0.9].into_iter().enumerate() {
-                let _ = k;
-                i.pl(&[(0.0, v), (0.3, v), (0.3, v - 0.1), (0.6, v - 0.1), (0.6, v), (1.0, v)]);
-            }
-        }
-        Open(M::Dvm) => {
-            i.frame();
-            i.pl(&[(0.25, 0.3), (0.25, 0.7), (0.5, 0.7), (0.5, 0.3), (0.25, 0.3)]);
-            i.l((0.72, 0.3), (0.72, 0.7));
-        }
-        Open(M::Logger) => {
-            i.l((0.0, 0.0), (0.0, 1.0));
-            i.l((0.0, 1.0), (1.0, 1.0));
-            i.pl(&[(0.1, 0.7), (0.35, 0.3), (0.6, 0.6), (1.0, 0.1)]);
-        }
-        Open(M::Display) => {
-            i.frame_to(0.8);
-            i.l((0.5, 0.8), (0.5, 1.0));
-            i.l((0.25, 1.0), (0.75, 1.0));
-        }
-        Open(M::Horizontal) => {
-            i.l((0.0, 0.5), (1.0, 0.5));
-            i.l((0.0, 0.5), (0.2, 0.3));
-            i.l((0.0, 0.5), (0.2, 0.7));
-            i.l((1.0, 0.5), (0.8, 0.3));
-            i.l((1.0, 0.5), (0.8, 0.7));
-        }
-        NavHist => {
-            i.ring(0.5, 0.5, 8);
-            i.l((0.5, 0.5), (0.5, 0.2));
-            i.l((0.5, 0.5), (0.72, 0.6));
-        }
-        NavBack => {
-            i.pl(&[(0.7, 0.1), (0.25, 0.5), (0.7, 0.9)]);
-        }
-        NavFwd => {
-            i.pl(&[(0.3, 0.1), (0.75, 0.5), (0.3, 0.9)]);
-        }
-        Open(M::Storage) => {
-            i.pl(&[(0.05, 0.05), (0.95, 0.05), (0.95, 0.95), (0.25, 0.95), (0.05, 0.75), (0.05, 0.05)]);
-            i.pl(&[(0.25, 0.05), (0.25, 0.35), (0.75, 0.35), (0.75, 0.05)]);
-        }
-        Shot => {
-            i.frame_to(0.85);
-            i.ring(0.5, 0.45, 4);
-            i.bar(0.15, 0.05, 0.3, 0.2);
-        }
-        QuickRun => {
-            i.pl(&[(0.65, 0.0), (0.25, 0.55), (0.55, 0.55), (0.35, 1.0)]);
-        }
-        LockAct => {
-            i.frame_from(0.45, 0.2, 0.8, 1.0);
-            i.pl(&[(0.3, 0.45), (0.3, 0.2), (0.5, 0.0), (0.7, 0.2), (0.7, 0.45)]);
-        }
-        Open(M::Utility) => {
-            super::studio::icon_gear(i.cv, x + 9, y + 9, c, bg);
-        }
-        PowerAct => {
-            i.ring(0.5, 0.55, 7);
-            i.cut(0.4, 0.0, 0.6, 0.45);
-            i.l((0.5, 0.0), (0.5, 0.5));
-        }
-        _ => {
-            i.frame();
-        }
+        Open(M::ExtGen) => { i.pl(&[(0.0, 0.25), (0.45, 0.25), (0.45, 0.75), (0.0, 0.75), (0.0, 0.25)]); i.pl(&[(0.45, 0.5), (0.6, 0.5), (0.7, 0.25), (0.85, 0.75), (1.0, 0.5)]); }
+        Open(M::La) => { for (k, v) in [0.1, 0.5, 0.9].into_iter().enumerate() { let _ = k; i.pl(&[(0.0, v), (0.3, v), (0.3, v - 0.1), (0.6, v - 0.1), (0.6, v), (1.0, v)]); } }
+        Open(M::Dvm) => { i.frame(); i.pl(&[(0.25, 0.3), (0.25, 0.7), (0.5, 0.7), (0.5, 0.3), (0.25, 0.3)]); i.l((0.72, 0.3), (0.72, 0.7)); }
+        Open(M::Logger) => { i.l((0.0, 0.0), (0.0, 1.0)); i.l((0.0, 1.0), (1.0, 1.0)); i.pl(&[(0.1, 0.7), (0.35, 0.3), (0.6, 0.6), (1.0, 0.1)]); }
+        Open(M::Display) => { i.frame_to(0.8); i.l((0.5, 0.8), (0.5, 1.0)); i.l((0.25, 1.0), (0.75, 1.0)); }
+        Open(M::Horizontal) => { i.l((0.0, 0.5), (1.0, 0.5)); i.l((0.0, 0.5), (0.2, 0.3)); i.l((0.0, 0.5), (0.2, 0.7)); i.l((1.0, 0.5), (0.8, 0.3)); i.l((1.0, 0.5), (0.8, 0.7)); }
+        NavHist => { i.ring(0.5, 0.5, 8); i.l((0.5, 0.5), (0.5, 0.2)); i.l((0.5, 0.5), (0.72, 0.6)); }
+        NavBack => { i.pl(&[(0.7, 0.1), (0.25, 0.5), (0.7, 0.9)]); }
+        NavFwd => { i.pl(&[(0.3, 0.1), (0.75, 0.5), (0.3, 0.9)]); }
+        Open(M::Storage) => { i.pl(&[(0.05, 0.05), (0.95, 0.05), (0.95, 0.95), (0.25, 0.95), (0.05, 0.75), (0.05, 0.05)]); i.pl(&[(0.25, 0.05), (0.25, 0.35), (0.75, 0.35), (0.75, 0.05)]); }
+        Shot => { i.frame_to(0.85); i.ring(0.5, 0.45, 4); i.bar(0.15, 0.05, 0.3, 0.2); }
+        QuickRun => { i.pl(&[(0.65, 0.0), (0.25, 0.55), (0.55, 0.55), (0.35, 1.0)]); }
+        LockAct => { i.frame_from(0.45, 0.2, 0.8, 1.0); i.pl(&[(0.3, 0.45), (0.3, 0.2), (0.5, 0.0), (0.7, 0.2), (0.7, 0.45)]); }
+        Open(M::Utility) => { super::studio::icon_gear(i.cv, x + 9, y + 9, c, bg); }
+        PowerAct => { i.ring(0.5, 0.55, 7); i.cut(0.4, 0.0, 0.6, 0.45); i.l((0.5, 0.0), (0.5, 0.5)); }
+        _ => { i.frame(); }
     }
 }
 
@@ -523,9 +324,7 @@ impl Ic<'_> {
         self.cv.line(p.0, p.1, q.0, q.1, c);
     }
     fn pl(&mut self, pts: &[P]) {
-        for w in pts.windows(2) {
-            self.l(w[0], w[1]);
-        }
+        for w in pts.windows(2) { self.l(w[0], w[1]); }
     }
     fn dot(&mut self, u: f32, v: f32) {
         let p = self.p(u, v);
@@ -559,24 +358,10 @@ impl Ic<'_> {
         self.l((0.55, 0.25), (0.55, 0.75));
     }
     fn wave(&mut self) {
-        self.pl(&[
-            (0.0, 0.5),
-            (0.12, 0.15),
-            (0.25, 0.5),
-            (0.38, 0.85),
-            (0.5, 0.5),
-            (0.62, 0.15),
-            (0.75, 0.5),
-            (0.88, 0.85),
-            (1.0, 0.5),
-        ]);
+        self.pl(&[(0.0, 0.5), (0.12, 0.15), (0.25, 0.5), (0.38, 0.85), (0.5, 0.5), (0.62, 0.15), (0.75, 0.5), (0.88, 0.85), (1.0, 0.5)]);
     }
-    fn frame(&mut self) {
-        self.frame_from(0.0, 0.0, 1.0, 1.0)
-    }
-    fn frame_to(&mut self, v1: f32) {
-        self.frame_from(0.0, 0.0, 1.0, v1)
-    }
+    fn frame(&mut self) { self.frame_from(0.0, 0.0, 1.0, 1.0) }
+    fn frame_to(&mut self, v1: f32) { self.frame_from(0.0, 0.0, 1.0, v1) }
     fn frame_from(&mut self, u0: f32, v0: f32, u1: f32, v1: f32) {
         let (a, b) = (self.p(u0, v0), self.p(u1, v1));
         let c = self.c;

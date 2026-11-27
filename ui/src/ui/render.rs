@@ -97,9 +97,7 @@ impl Ui {
                 }
                 let cv = l.over();
                 self.draw_no_data(cv);
-                if !self.dock_on() {
-                    self.draw_hist(cv);
-                }
+                if !self.dock_on() { self.draw_hist(cv); }
                 self.draw_zones(cv);
                 if self.plot.wins.len() > 1 || i == 0 || self.stacked() {
                     if self.waves_on() {
@@ -166,9 +164,7 @@ impl Ui {
             cv.set_view_clip(self.dock_on().then(|| self.dock_rect(dock::VKind::Pane)).flatten());
             self.draw_pane(cv);
             // in a dock the view's title strip has the close button
-            if !self.dock_on() {
-                self.draw_pane_close(cv);
-            }
+            if !self.dock_on() { self.draw_pane_close(cv); }
             cv.set_view_clip(None);
         }
         self.draw_results(cv);
@@ -262,14 +258,7 @@ impl Ui {
 
     /// `render_view_layers` of the view in place.
     fn render_view_layers_as_is(&mut self, l: &mut Layers) {
-        let keep = (
-            self.scr,
-            self.plot.grid,
-            std::mem::take(&mut self.plot.wins),
-            self.plot.area,
-            self.plot.cur_win,
-            self.counts.frames,
-        );
+        let keep = (self.scr, self.plot.grid, std::mem::take(&mut self.plot.wins), self.plot.area, self.plot.cur_win, self.counts.frames);
         // what Studio keeps of a frame (`studio_frame_start`): the lines of its badge row, counted for the width of
         // the pass, and where it drew badges and labels, for the touch. The panel's stay the panel's. With the
         // monitor's count of lines the plot of the panel changed its height from one frame to the next, and its
@@ -318,8 +307,7 @@ impl Ui {
         // Studio's badge row is counted again for the pass's width (`studio_frame_start`): the panel's count comes
         // back, else the panel's next step lays out a row of another height and its maps are cleared
         let wrap = self.studio.badge_wrap;
-        let keep =
-            (self.scr, self.plot.grid, wins, self.plot.area, self.plot.cur_win, self.counts.frames, self.full.on, wrap);
+        let keep = (self.scr, self.plot.grid, wins, self.plot.area, self.plot.cur_win, self.counts.frames, self.full.on, wrap);
         let hits = (
             self.studio.lane_badges.take(),
             self.studio.dec_labels.take(),
@@ -333,16 +321,7 @@ impl Ui {
         let r = f(self);
         (self.plot.view_pass, self.wave_pass) = (false, false);
         let wrap;
-        (
-            self.scr,
-            self.plot.grid,
-            self.plot.wins,
-            self.plot.area,
-            self.plot.cur_win,
-            self.counts.frames,
-            self.full.on,
-            wrap,
-        ) = keep;
+        (self.scr, self.plot.grid, self.plot.wins, self.plot.area, self.plot.cur_win, self.counts.frames, self.full.on, wrap) = keep;
         self.studio.badge_wrap = wrap;
         self.studio.lane_badges.replace(hits.0);
         self.studio.dec_labels.replace(hits.1);
@@ -449,9 +428,7 @@ impl Ui {
     /// Stacked lanes: where one ends and the next begins, and whose it is. A bar in the source's colour runs down
     /// the left edge of each lane, and a solid line fills the gap between two lanes.
     fn draw_lane_chrome(&self, cv: &mut Canvas) {
-        if !self.stacked() || self.plot.wins.len() < 2 {
-            return;
-        }
+        if !self.stacked() || self.plot.wins.len() < 2 { return; }
         let sources = self.trace_sources();
         for (i, lane) in self.plot.wins.iter().enumerate() {
             let col = match sources.get(i) {
@@ -476,13 +453,9 @@ impl Ui {
     /// Channel `c` is on and its record reaches the end of the ADC range.
     pub fn channel_clipping(&self, c: usize) -> bool {
         let Some(ch) = self.m.ch.get(c).filter(|ch| ch.on) else { return false };
-        if self.record_mode() {
-            return false;
-        }
+        if self.record_mode() { return false; }
         let a = &self.measured.ch[c];
-        if !a.valid {
-            return false;
-        }
+        if !a.valid { return false; }
         let vpd = ch.volts_per_div().max(1e-12) as f64;
         let (top, bottom) = ((a.vmax + ch.offset as f64) / vpd, (a.vmin + ch.offset as f64) / vpd);
         top >= Self::CLIP_DIVS as f64 || bottom <= -(Self::CLIP_DIVS as f64)
@@ -495,23 +468,16 @@ impl Ui {
 
     /// The math channel whose lane holds the point (stacked lanes only).
     pub(crate) fn math_lane_at(&self, x: i32, y: i32) -> Option<usize> {
-        if !self.stacked() {
-            return None;
-        }
+        if !self.stacked() { return None; }
         let lane = self.plot.wins.iter().position(|w| w.contains(x, y))?;
-        match self.trace_sources().get(lane) {
-            Some(workspace::Trace::Math(k)) if self.m.math_ch(*k).op != MathOp::Fft => Some(*k),
-            _ => None,
-        }
+        match self.trace_sources().get(lane) { Some(workspace::Trace::Math(k)) if self.m.math_ch(*k).op != MathOp::Fft => Some(*k), _ => None }
     }
 
     /// The scale of the math channel drawn in this lane: volts per division, offset in volts, unit, colour.
     fn math_axis_source(&self) -> Option<(f32, f32, &'static str, Rgb)> {
         let k = (0..NMATH).find(|&k| self.m.math_shown(k) && self.math_win_of(k) == self.plot.cur_win)?;
         let c = self.m.math_ch(k);
-        if c.op == MathOp::Fft {
-            return None;
-        }
+        if c.op == MathOp::Fft { return None; }
         let vpd = *math_scales().get(c.scale)? as f32;
         Some((vpd, c.offset * vpd, c.op.unit(), MATH_COLORS[k % MATH_COLORS.len()]))
     }
@@ -546,12 +512,8 @@ impl Ui {
             let offset = base_offset - center * base_vpd;
             let span = (VDIV / 2.0 * vpd).abs() + offset.abs();
             let mut taken: Vec<Rect> = Vec::new();
-            if !lanes || (self.plot.cur_win == 0 && self.m.layout != Layout::Studio) {
-                taken.push(Rect::new(a.x, a.y, a.w, 20));
-            }
-            if !lanes || last_lane {
-                taken.push(Rect::new(a.x, a.y + a.h - 22, a.w, 22));
-            }
+            if !lanes || (self.plot.cur_win == 0 && self.m.layout != Layout::Studio) { taken.push(Rect::new(a.x, a.y, a.w, 20)); }
+            if !lanes || last_lane { taken.push(Rect::new(a.x, a.y + a.h - 22, a.w, 22)); }
             if self.m.mask_on && self.mask_sw.mask.is_some() && self.shows(self.m.mask_src) {
                 taken.push(Rect::new(a.x, a.y + 22, a.w, 28));
             }
@@ -573,22 +535,14 @@ impl Ui {
             let mut trigger_tag: Option<Rect> = None;
             if lanes {
                 if self.m.layout == Layout::Studio {
-                    for b in [self.full_btn().0, self.zoom_btn().0] {
-                        right_obstacles.push(Rect::new(b.x - 62, b.y - 2, b.w + 66, b.h + 4));
-                    }
+                    for b in [self.full_btn().0, self.zoom_btn().0] { right_obstacles.push(Rect::new(b.x - 62, b.y - 2, b.w + 66, b.h + 4)); }
                     // the handles of the sources stand at the right edge: a scale label moves left of one, so a named
                     // (wider) handle does not cover the "0 V" of its lane
-                    right_obstacles.extend(
-                        self.studio_handle_rects()
-                            .into_iter()
-                            .map(|(_, h)| Rect::new(h.x - 2, h.y - 2, h.w + 6, h.h + 4)),
-                    );
+                    right_obstacles.extend(self.studio_handle_rects().into_iter().map(|(_, h)| Rect::new(h.x - 2, h.y - 2, h.w + 6, h.h + 4)));
                 }
                 let ts = self.m.trig_src;
                 if self.m.trig_ref.is_none() && self.m.ch[ts].on && self.shows(ts) {
-                    let y = self
-                        .y_of_volts(ts, self.trig_level_shown())
-                        .clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
+                    let y = self.y_of_volts(ts, self.trig_level_shown()).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
                     let x1 = self.trigger_tag_x(a.x + a.w - MARK_W, y);
                     let left = x1 - 8 - f.sb.width(&si_short(self.trig_level_shown() as f64, self.m.unit(ts)));
                     trigger_tag = Some(Rect::new(left, y - 11, a.x + a.w - left, 22));
@@ -598,18 +552,11 @@ impl Ui {
             let x = a.x + 6;
             // a lane: the values of its top and bottom edge first (its full scale), then the centre, the quarters and
             // the rest for as long as they fit between them
-            let order: Vec<i32> =
-                if lanes { vec![0, VDIV as i32, 4, 2, 6, 1, 3, 5, 7] } else { (1..VDIV as i32).collect() };
+            let order: Vec<i32> = if lanes { vec![0, VDIV as i32, 4, 2, 6, 1, 3, 5, 7] } else { (1..VDIV as i32).collect() };
             for j in order {
                 let line = a.y + (j as f32 * a.h as f32 / VDIV).round() as i32;
                 // an edge label sits just inside its edge
-                let y = if j == 0 {
-                    a.y + f.s.size - 2
-                } else if j == VDIV as i32 {
-                    a.y + a.h - 6 - if last_lane { 26 } else { 0 }
-                } else {
-                    line
-                };
+                let y = if j == 0 { a.y + f.s.size - 2 } else if j == VDIV as i32 { a.y + a.h - 6 - if last_lane { 26 } else { 0 } } else { line };
                 let v = (VDIV / 2.0 - j as f32) * vpd - offset;
                 let s = axis_label(v, vpd, offset, span, unit);
                 // an offset that is not on the steps of the scale (a fitted math channel) would spell every digit:
@@ -621,9 +568,7 @@ impl Ui {
                 let mut x = if lanes { a.x + a.w - 6 - w } else { x };
                 let mut r = Rect::new(x - 3, y + 4 - f.s.size, w + 6, f.s.size + 4);
                 if lanes {
-                    if trigger_tag.is_some_and(|t| overlaps(t, r)) {
-                        continue;
-                    }
+                    if trigger_tag.is_some_and(|t| overlaps(t, r)) { continue; }
                     for _ in 0..2 {
                         if let Some(o) = right_obstacles.iter().find(|o| overlaps(**o, r)) {
                             x = o.x - 6 - w;
@@ -650,22 +595,16 @@ impl Ui {
             // trigger, not the window's centre plus whole divisions
             let mut step = tdiv as f64 * every as f64;
             // a lane with a time/div of its own (a fitted record) is not on the 1-2-5 ladder: its labels are
-            if self.studio_lane_has_own_time() {
-                step = nice_step_below(step);
-            }
+            if self.studio_lane_has_own_time() { step = nice_step_below(step); }
             let mut free = i32::MIN;
             for (k, t) in studio_time_ticks_at(tdiv, delay, step) {
-                let x = a.x
-                    + (((t - delay as f64) / tdiv as f64 + HDIV as f64 / 2.0) * a.w as f64 / HDIV as f64).round()
-                        as i32;
+                let x = a.x + (((t - delay as f64) / tdiv as f64 + HDIV as f64 / 2.0) * a.w as f64 / HDIV as f64).round() as i32;
                 let zero = k == 0;
                 let s = if zero { "0 s".to_string() } else { axis_label64(t, step as f32, 0.0, span, "s") };
                 let w = f.s.width(&s);
                 let tx = (x - w / 2).clamp(a.x + 6, a.x + a.w - 6 - w);
                 // a label pushed against an edge must not run into its neighbour
-                if tx < free + 8 {
-                    continue;
-                }
+                if tx < free + 8 { continue; }
                 free = tx + w;
                 backed_text(cv, &f.s, tx, a.y + a.h - 6, &s, if zero { ACCENT } else { AXIS_TEXT });
             }

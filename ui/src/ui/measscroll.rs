@@ -19,16 +19,12 @@ const FLICK_WINDOW: f64 = 0.12;
 
 impl Ui {
     /// Pixels one scroll step is high: a row of the table, a line of cells of the strip, or a row of cards.
-    fn panel_unit(&self) -> i32 {
-        self.studio_panel_row().max(1)
-    }
+    fn panel_unit(&self) -> i32 { self.studio_panel_row().max(1) }
 
     /// The measurements in one scroll step: the columns the strip or the cards are drawn in (`panel_cell_geo`; a
     /// wide panel has more than two columns of cards), one for the table.
     pub(super) fn panel_cols(&self) -> usize {
-        if !self.panel_cells() {
-            return 1;
-        }
+        if !self.panel_cells() { return 1; }
         self.studio_panel_rect().map_or(1, |p| self.panel_cell_geo(p.w - 8).0 as usize)
     }
 
@@ -40,9 +36,7 @@ impl Ui {
     /// The farthest the list scrolls, in pixels, for `total` rows in `g`.
     pub(super) fn panel_scroll_max(&self, total: usize, g: &PanelGeo) -> i32 {
         let unit = self.panel_unit();
-        if self.studio_detailed() {
-            return (total as i32 * unit - g.list.h).max(0);
-        }
+        if self.studio_detailed() { return (total as i32 * unit - g.list.h).max(0); }
         let cols = self.panel_cols();
         let first_max = total.saturating_sub(g.page);
         (first_max.div_ceil(cols)) as i32 * unit
@@ -60,9 +54,7 @@ impl Ui {
 
     /// The list and its geometry when the measurements panel (not the SIM list) is up.
     fn panel_scroll_ctx(&self) -> Option<(PanelGeo, usize)> {
-        if self.m.layout != Layout::Studio || self.studio.view == StudioView::Sim {
-            return None;
-        }
+        if self.m.layout != Layout::Studio || self.studio.view == StudioView::Sim { return None; }
         let g = self.studio_panel_geo()?;
         let rows = self.meas_rows();
         let total = self.studio_listed(&rows).len();
@@ -99,36 +91,22 @@ impl Ui {
     pub(super) fn panel_scroll_end(&mut self) {
         let st = &mut self.studio.panel;
         let fresh = st.last.is_some_and(|(t, _)| self.now - t <= FLICK_WINDOW);
-        if !fresh || st.vel.abs() < FLICK_MIN {
-            st.vel = 0.0;
-        }
+        if !fresh || st.vel.abs() < FLICK_MIN { st.vel = 0.0; }
         st.last = None;
     }
 
     /// Every frame: the coasting of the list after a flick.
     pub(super) fn panel_fling_step(&mut self, dt: f64) {
-        if self.studio.panel.vel == 0.0 {
-            return;
-        }
+        if self.studio.panel.vel == 0.0 { return; }
         // the finger is still on the list: it measures the speed, nothing coasts yet
-        if self.studio.drag.is_some() {
-            return;
-        }
-        if self.touch.down {
-            self.studio.panel.vel = 0.0;
-            return;
-        }
-        let Some((g, total)) = self.panel_scroll_ctx() else {
-            self.studio.panel.vel = 0.0;
-            return;
-        };
+        if self.studio.drag.is_some() { return; }
+        if self.touch.down { self.studio.panel.vel = 0.0; return; }
+        let Some((g, total)) = self.panel_scroll_ctx() else { self.studio.panel.vel = 0.0; return };
         let v = self.studio.panel.vel;
         let at = self.panel_scroll_px();
         // at least a pixel a frame while it is moving, so a slow list still creeps
         let mut step = (v as f64 * dt).round() as i32;
-        if step == 0 {
-            step = v.signum() as i32;
-        }
+        if step == 0 { step = v.signum() as i32; }
         let end = self.panel_scroll_set(at + step, total, &g);
         let v = v * (-DECAY * dt).exp() as f32;
         self.studio.panel.vel = if end || v.abs() < STOP_V { 0.0 } else { v };
@@ -137,9 +115,7 @@ impl Ui {
     /// The mouse wheel over the panel's list. True when it was taken.
     pub(super) fn panel_wheel(&mut self, x: i32, y: i32, steps: i32) -> bool {
         let Some((g, total)) = self.panel_scroll_ctx() else { return false };
-        if !g.list.contains(x, y) {
-            return false;
-        }
+        if !g.list.contains(x, y) { return false; }
         let at = self.panel_scroll_px();
         self.studio.panel.vel = 0.0;
         // a step is a row and a half
@@ -149,9 +125,7 @@ impl Ui {
 
     /// The thin mark at the right edge of the list that shows where it is, in pixels.
     pub(super) fn draw_scroll_mark(cv: &mut Canvas, list: Rect, pos: i32, content: i32) {
-        if content <= list.h {
-            return;
-        }
+        if content <= list.h { return; }
         let x = list.right() - 3;
         let h = ((list.h as i64 * list.h as i64 / content as i64) as i32).max(16);
         let max = (content - list.h).max(1);

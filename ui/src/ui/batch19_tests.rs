@@ -8,9 +8,7 @@ fn studio() -> Ui {
     u.m.layout = Layout::Studio;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -25,9 +23,7 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -49,17 +45,7 @@ fn tap(u: &mut Ui, r: Rect) {
 }
 
 fn a_ref(label: &str) -> RefWave {
-    RefWave {
-        src: 0,
-        color: 0,
-        label: label.into(),
-        t0: 0.0,
-        dt: 1e-6,
-        v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(),
-        vpd: 1.0,
-        offset: 0.0,
-        on: true,
-    }
+    RefWave { src: 0, color: 0, label: label.into(), t0: 0.0, dt: 1e-6, v: (0..100).map(|i| i as f32).collect::<Vec<_>>().into(), vpd: 1.0, offset: 0.0, on: true }
 }
 
 fn row_of(u: &Ui, it: Item) -> Option<Rect> {
@@ -70,16 +56,12 @@ fn row_of(u: &Ui, it: Item) -> Option<Rect> {
 fn store_goes_into_the_selected_slot_and_a_full_one_offers_replace_and_next_free() {
     let mut u = studio();
     u.m.run = RunState::Stop;
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     u.refs[0] = Some(a_ref("R1"));
     // an empty selected slot: Store names it, and no second action is offered
     u.ref_page.sel = 1;
     u.open_menu(MenuId::Ref);
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     assert_eq!(u.ref_store_label(), "Store CH1 as R2");
     assert!(row_of(&u, Item::RefSaveNext).is_none());
     u.activate(Item::RefSave);
@@ -118,9 +100,7 @@ fn the_ref_badge_has_two_rows_and_keeps_clear_of_the_fit_row() {
     let mut u = studio();
     u.refs[0] = Some(a_ref("R1"));
     u.ref_page.sel = 0;
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert!(!u.live_ref_note().is_empty());
     // the Fit row of the note is 48 px above the bottom of the lane; the badge may not go below that
     assert!(u.ref_badge_pad(u.plot.area) >= 48, "pad {}", u.ref_badge_pad(u.plot.area));
@@ -161,12 +141,7 @@ fn the_peaks_list_has_a_fixed_header_row_above_its_first_line() {
     let u = studio();
     for pane in [true, false] {
         let b = u.spec_box(Rect::new(0, 0, 760, 300), pane);
-        assert!(
-            b.list.y - b.sort.bottom() >= super::panes::PEAK_HEAD,
-            "pane {pane}: sort {:?} list {:?}",
-            b.sort,
-            b.list
-        );
+        assert!(b.list.y - b.sort.bottom() >= super::panes::PEAK_HEAD, "pane {pane}: sort {:?} list {:?}", b.sort, b.list);
     }
 }
 
@@ -178,9 +153,7 @@ fn the_histogram_header_starts_right_of_its_volts_axis_and_stays_inside() {
     assert!(r.right() <= a.right(), "inside the view");
     let mut u = studio();
     u.studio_apply_panel(super::sheet::PanelKind::Histogram);
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     shot(&mut u, "histogram-header");
 }
 

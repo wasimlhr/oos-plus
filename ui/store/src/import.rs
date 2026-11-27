@@ -63,9 +63,7 @@ pub(super) fn one_wave_file(bytes: &[u8], name: &str) -> Result<Vec<WaveTrace>, 
     }
     // one half of a waveform kept in two files: without where it lies, the other half cannot be found
     if looks_rs_description(bytes) {
-        return Err(
-            "this describes a Rohde & Schwarz waveform; open it from its folder, where its .Wfm.bin file is".into()
-        );
+        return Err("this describes a Rohde & Schwarz waveform; open it from its folder, where its .Wfm.bin file is".into());
     }
     if looks_wfmx(bytes) {
         return parse_wfmx(bytes);
@@ -135,11 +133,7 @@ pub(super) fn parse_filter_taps(text: &str, name: &str) -> Vec<WaveTrace> {
             t0: 0.0,
             dt: 1.0 / fs,
             v,
-            label: if several {
-                format!("{} {}", stem.chars().take(6).collect::<String>(), si_short_rate(fs))
-            } else {
-                stem.clone()
-            },
+            label: if several { format!("{} {}", stem.chars().take(6).collect::<String>(), si_short_rate(fs)) } else { stem.clone() },
         })
         .collect()
 }
@@ -177,10 +171,7 @@ pub(super) fn rigol_csv_header(text: &str) -> Result<Option<RigolCsv>, String> {
     let mut channels = Vec::new();
     while let Some(cell) = first.get(1 + channels.len()) {
         let plain: String = cell.chars().filter(|c| !c.is_whitespace()).collect();
-        let Some(number) = plain.strip_prefix("CH").and_then(|rest| rest.chars().next()).filter(|c| c.is_ascii_digit())
-        else {
-            break;
-        };
+        let Some(number) = plain.strip_prefix("CH").and_then(|rest| rest.chars().next()).filter(|c| c.is_ascii_digit()) else { break };
         channels.push(format!("CH{number}"));
     }
     if channels.is_empty() {
@@ -230,12 +221,9 @@ fn without_mark(text: &str) -> &str {
 
 /// The header of a Keysight text waveform file, up to its `Data,` line: lines of `Key, value`.
 fn keysight_header_lines(text: &str) -> impl Iterator<Item = (&str, &str)> {
-    without_mark(text)
-        .lines()
-        .take(64)
+    without_mark(text).lines().take(64)
         .take_while(|line| !line.trim_start().starts_with("Data"))
-        .filter_map(|line| line.split_once(','))
-        .map(|(key, value)| (key.trim(), value.trim()))
+        .filter_map(|line| line.split_once(',')).map(|(key, value)| (key.trim(), value.trim()))
 }
 
 /// The value of one header line of a Keysight text waveform file.
@@ -265,12 +253,8 @@ fn parse_keysight_y(text: &str, name: &str) -> Result<WaveTrace, String> {
     for line in data {
         // the number-type line of version 2, a blank line, or an ellipsis: not a sample
         let Ok(x) = line.trim().trim_end_matches(',').parse::<f32>() else { continue };
-        if !x.is_finite() {
-            continue;
-        }
-        if v.len() >= MAX_WAVEFORM_SAMPLES {
-            return Err("waveform exceeds the 32-million-sample import limit".into());
-        }
+        if !x.is_finite() { continue; }
+        if v.len() >= MAX_WAVEFORM_SAMPLES { return Err("waveform exceeds the 32-million-sample import limit".into()); }
         v.push(x);
     }
     if v.len() < 2 {
@@ -299,16 +283,13 @@ fn parse_pwwf(b: &[u8]) -> Result<WaveTrace, String> {
         Some(v) => v.parse::<f64>().ok().filter(|x| x.is_finite()).ok_or_else(unreadable),
     };
     let n = get("nPoints").and_then(|v| v.parse::<usize>().ok()).ok_or_else(unreadable)?;
-    if n > MAX_WAVEFORM_SAMPLES {
-        return Err("waveform exceeds the 32-million-sample import limit".into());
-    }
+    if n > MAX_WAVEFORM_SAMPLES { return Err("waveform exceeds the 32-million-sample import limit".into()); }
     let dt = number("xincr", 0.0)?;
     let t0 = number("xzero", 0.0)? - number("ptOff", 0.0)? * dt;
     if n < 2 || dt <= 0.0 || !t0.is_finite() {
         return Err("that file holds no waveform".into());
     }
-    let (yoff, ymult, yzero) =
-        (number("yoff", 0.0)? as f32, number("ymult", 1.0)? as f32, number("yzero", 0.0)? as f32);
+    let (yoff, ymult, yzero) = (number("yoff", 0.0)? as f32, number("ymult", 1.0)? as f32, number("yzero", 0.0)? as f32);
     let kind = get("sampleType").unwrap_or("");
     let width = match kind {
         "int8" => 1,
@@ -339,34 +320,22 @@ fn parse_pwwf(b: &[u8]) -> Result<WaveTrace, String> {
 /// is never taken for a member. `None` when the text is not one object.
 pub(super) fn json_members(text: &str) -> Option<Vec<(String, String)>> {
     let b = text.as_bytes();
-    let space = |mut i: usize| {
-        while b.get(i).is_some_and(|c| c.is_ascii_whitespace()) {
-            i += 1;
-        }
-        i
-    };
+    let space = |mut i: usize| { while b.get(i).is_some_and(|c| c.is_ascii_whitespace()) { i += 1; } i };
     let mut i = space(0);
-    if b.get(i) != Some(&b'{') {
-        return None;
-    }
+    if b.get(i) != Some(&b'{') { return None; }
     i += 1;
     let mut out = Vec::new();
     loop {
         i = space(i);
         match *b.get(i)? {
             b'}' => return space(i + 1).eq(&b.len()).then_some(out),
-            b',' if !out.is_empty() => {
-                i += 1;
-                continue;
-            }
+            b',' if !out.is_empty() => { i += 1; continue; }
             b'"' => {}
             _ => return None,
         }
         let (key, after) = json_string(text, i)?;
         i = space(after);
-        if b.get(i) != Some(&b':') {
-            return None;
-        }
+        if b.get(i) != Some(&b':') { return None; }
         i = space(i + 1);
         let value = if b.get(i) == Some(&b'"') {
             let (s, after) = json_string(text, i)?;
@@ -376,10 +345,7 @@ pub(super) fn json_members(text: &str) -> Option<Vec<(String, String)>> {
             let (start, mut depth) = (i, 0usize);
             loop {
                 match *b.get(i)? {
-                    b'"' => {
-                        i = json_string(text, i)?.1;
-                        continue;
-                    }
+                    b'"' => { i = json_string(text, i)?.1; continue; }
                     b'{' | b'[' => depth += 1,
                     b'}' | b']' if depth > 0 => depth -= 1,
                     b'}' | b',' if depth == 0 => break,
@@ -389,9 +355,7 @@ pub(super) fn json_members(text: &str) -> Option<Vec<(String, String)>> {
                 i += 1;
             }
             let raw = text[start..i].trim();
-            if raw.is_empty() {
-                return None;
-            }
+            if raw.is_empty() { return None; }
             raw.to_string()
         };
         out.push((key, value));
@@ -413,9 +377,7 @@ fn json_string(text: &str, at: usize) -> Option<(String, usize)> {
                 'f' => out.push(char::from(12u8)),
                 'u' => {
                     let hex: String = (0..4).map(|_| chars.next().map(|(_, h)| h)).collect::<Option<String>>()?;
-                    out.push(
-                        char::from_u32(u32::from_str_radix(&hex, 16).ok()?).unwrap_or(char::REPLACEMENT_CHARACTER),
-                    );
+                    out.push(char::from_u32(u32::from_str_radix(&hex, 16).ok()?).unwrap_or(char::REPLACEMENT_CHARACTER));
                 }
                 other @ ('"' | '\\' | '/') => out.push(other),
                 _ => return None,
@@ -1018,8 +980,7 @@ pub(super) fn parse_ag(b: &[u8]) -> Result<Vec<WaveTrace>, String> {
             let dsize = f.u32(p)? as usize;
             let kind = f.u16(p + 4)?;
             let bpp = f.u16(p + 6)? as usize;
-            let bsize =
-                if wide { usize::try_from(f.u64(p + 8)?).unwrap_or(usize::MAX) } else { f.u32(p + 8)? as usize };
+            let bsize = if wide { usize::try_from(f.u64(p + 8)?).unwrap_or(usize::MAX) } else { f.u32(p + 8)? as usize };
             let end = p.checked_add(dsize).and_then(|data| data.checked_add(bsize));
             if dsize < buffer_header || end.is_none_or(|end| end > b.len()) {
                 return Err("truncated waveform".into());

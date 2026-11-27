@@ -31,42 +31,16 @@ struct Gesture {
 #[derive(Clone)]
 #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
 pub(super) enum Action {
-    Overlay,
-    Stacked,
-    Windows,
-    Sources,
-    Source(WaveId),
-    Trigger(WaveId),
-    Menu(MenuId),
+    Overlay, Stacked, Windows, Sources, Source(WaveId), Trigger(WaveId), Menu(MenuId),
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    ZoomReset,
-    ZoomClose,
-    FitRecord,
-    Live,
-    Single,
-    Run,
-    Panel,
-    EyeRight,
-    EyeLeft,
-    EyeBelow,
-    EyeFloat,
-    EyeClose,
-    RestoreLayout,
+    ZoomReset, ZoomClose, FitRecord, Live, Single, Run, Panel,
+    EyeRight, EyeLeft, EyeBelow, EyeFloat, EyeClose, RestoreLayout,
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    MeasureFloat,
-    MeasureDock(StripDock),
-    Close,
+    MeasureFloat, MeasureDock(StripDock), Close,
     /// the quick actions of a channel (its hold popup)
-    ChCoupling(usize),
-    ChInvert(usize),
-    ChHide(usize),
-    ChZero(usize),
-    Autoset,
+    ChCoupling(usize), ChInvert(usize), ChHide(usize), ChZero(usize), Autoset,
     /// the quick actions of a math or reference chip in the Studio bottom bar
-    MathOff(usize),
-    MathSettings(usize),
-    RefClear(usize),
-    RefSettings(usize),
+    MathOff(usize), MathSettings(usize), RefClear(usize), RefSettings(usize),
     /// Studio: the horizontal scale of a reference (Follow main, or its own; `sharedzoom.rs`)
     RefHorizontal(usize),
     /// a note on a source at the time under a screen column (`callout.rs`)
@@ -639,26 +613,16 @@ mod tests {
 
     #[test]
     fn fit_record_context_action_stays_on_screen_with_all_sources() {
-        let mut ui = mixed();
-        for i in 0..NREF {
-            if ui.refs[i].is_none() {
-                ui.refs[i] = ui.refs[0].clone();
-            }
-        }
-        ui.select_workspace_source(WaveId::Ref(1));
-        ui.m.delay = 1.0;
-        ui.set_zoom(true);
-        ui.context_menu(900, 550);
-        let popup = ui.workspace.popup.as_ref().unwrap();
-        assert!(popup.rect.y >= 0 && popup.rect.y + popup.rect.h <= H);
-        let index = popup.rows.iter().position(|(label, _)| label == "Fit record").unwrap();
-        let r = popup.row_rect(index);
-        let (x, y) = (r.x + 30, r.y + r.h / 2);
-        for phase in [Phase::Down, Phase::Up] {
-            ui.handle(Ev::Touch { id: 0, phase, x, y });
-        }
-        assert!(!ui.m.zoom && ui.m.delay.abs() < 1e-3);
-        assert_eq!((ui.m.run, ui.replay.captures), (RunState::Stop, 0));
+        let mut ui=mixed();
+        for i in 0..NREF {if ui.refs[i].is_none(){ui.refs[i]=ui.refs[0].clone();}}
+        ui.select_workspace_source(WaveId::Ref(1));ui.m.delay=1.0;ui.set_zoom(true);
+        ui.context_menu(900,550);let popup=ui.workspace.popup.as_ref().unwrap();
+        assert!(popup.rect.y>=0 && popup.rect.y+popup.rect.h<=H);
+        let index=popup.rows.iter().position(|(label,_)|label=="Fit record").unwrap();
+        let r=popup.row_rect(index);let (x,y)=(r.x+30,r.y+r.h/2);
+        for phase in [Phase::Down,Phase::Up]{ui.handle(Ev::Touch{id:0,phase,x,y});}
+        assert!(!ui.m.zoom && ui.m.delay.abs()<1e-3);
+        assert_eq!((ui.m.run,ui.replay.captures),(RunState::Stop,0));
     }
 }
 /// Rows of every popup are one finger tall; the title row carries the close.
@@ -671,29 +635,15 @@ pub(super) const POPUP_TITLE: i32 = 40;
 pub(super) const POPUP_COL_W: i32 = 244;
 /// The smallest touch target: what is drawn smaller gets a hit area of this size (`Ui::hit40`).
 pub(super) const TOUCH_MIN: i32 = 40;
-pub(super) struct Popup {
-    pub(super) rect: Rect,
-    pub(super) rows: Vec<(String, Action)>,
-    pub(super) title: String,
-    pub(super) per_col: usize,
-}
+pub(super) struct Popup { pub(super) rect: Rect, pub(super) rows: Vec<(String, Action)>, pub(super) title: String, pub(super) per_col: usize }
 impl Popup {
-    pub(super) fn close_rect(&self) -> Rect {
-        Rect::new(self.rect.right() - POPUP_TITLE - 3, self.rect.y + 3, POPUP_TITLE, POPUP_TITLE)
-    }
-    pub(super) fn cols(&self) -> usize {
-        self.rows.len().div_ceil(self.per_col.max(1)).max(1)
-    }
+    pub(super) fn close_rect(&self) -> Rect { Rect::new(self.rect.right() - POPUP_TITLE - 3, self.rect.y + 3, POPUP_TITLE, POPUP_TITLE) }
+    pub(super) fn cols(&self) -> usize { self.rows.len().div_ceil(self.per_col.max(1)).max(1) }
     /// Rectangle of row `i`: rows fill a column top to bottom, then the next column.
     pub(super) fn row_rect(&self, i: usize) -> Rect {
         let (per, cols) = (self.per_col.max(1), self.cols() as i32);
         let w = (self.rect.w - 10) / cols;
-        Rect::new(
-            self.rect.x + 5 + (i / per) as i32 * w,
-            self.rect.y + 3 + POPUP_TITLE + (i % per) as i32 * POPUP_ROW,
-            w,
-            POPUP_ROW,
-        )
+        Rect::new(self.rect.x + 5 + (i / per) as i32 * w, self.rect.y + 3 + POPUP_TITLE + (i % per) as i32 * POPUP_ROW, w, POPUP_ROW)
     }
 }
 #[derive(Default)]
@@ -839,8 +789,7 @@ impl Ui {
     pub(super) fn trace_sources(&self) -> Vec<Trace> {
         // a record session (SIM, offline) has no live data: its inputs keep their state but get no lane
         // a channel that is on without its trace (Hide trace) has no lane either
-        let mut sources: Vec<_> =
-            (0..n_ch()).filter(|&c| self.m.ch_drawn(c) && !self.record_mode()).map(Trace::Channel).collect();
+        let mut sources: Vec<_> = (0..n_ch()).filter(|&c| self.m.ch_drawn(c) && !self.record_mode()).map(Trace::Channel).collect();
         sources.extend((0..NREF).filter(|&i| self.refs[i].as_ref().is_some_and(|r| r.on)).map(Trace::Reference));
         sources.extend((0..NMATH).filter(|&k| self.m.math_shown(k)).map(Trace::Math));
         sources
@@ -888,26 +837,15 @@ impl Ui {
     pub(super) fn choose_trace_mode(&mut self, stacked: bool) {
         let was = self.trace_stacked();
         self.trace_mode(stacked);
-        if self.m.layout != Layout::Studio || self.trace_stacked() == was {
-            return;
-        }
+        if self.m.layout != Layout::Studio || self.trace_stacked() == was { return; }
         let fitted = self.fit_vertical();
-        let how = if stacked {
-            "Stacked: every signal fitted to its lane"
-        } else {
-            "Overlay: the signals fitted to the plot"
-        };
-        if fitted > 0 {
-            self.toast(how);
-        }
+        let how = if stacked { "Stacked: every signal fitted to its lane" } else { "Overlay: the signals fitted to the plot" };
+        if fitted > 0 { self.toast(how); }
     }
 
     pub(super) fn trace_mode(&mut self, stacked: bool) {
         self.workspace.popup = None;
-        if self.m.layout == Layout::Studio {
-            self.studio.overlay = !stacked;
-            self.m.studio_overlay = !stacked;
-        }
+        if self.m.layout == Layout::Studio { self.studio.overlay = !stacked; self.m.studio_overlay = !stacked; }
         // a split already gives every source its own window: Overlay keeps it, Stacked replaces it
         if !stacked && self.m.win_layout != WinLayout::One {
             self.workspace.stacked = false;
@@ -957,23 +895,16 @@ impl Ui {
         let fit = (room / 44).max(1) as usize;
         if on.len() > fit {
             if let Some(i) = on.iter().position(|p| matches!(p, FootPill::Wave(id) if Some(*id) == active)) {
-                if i >= fit {
-                    on.swap(i, fit - 1);
-                }
+                if i >= fit { on.swap(i, fit - 1); }
             }
             on.truncate(fit);
         }
         let width = (room / on.len().max(1) as i32).clamp(44, 150);
-        let mut pills: Vec<(FootPill, Rect)> = on
-            .into_iter()
-            .enumerate()
-            .map(|(i, p)| (p, Rect::new(r.x + i as i32 * width, r.y, width - 4, r.h)))
-            .collect();
+        let mut pills: Vec<(FootPill, Rect)> =
+            on.into_iter().enumerate().map(|(i, p)| (p, Rect::new(r.x + i as i32 * width, r.y, width - 4, r.h))).collect();
         let mut x = r.x + pills.len() as i32 * width;
         for c in (0..n_ch()).filter(|&c| !self.m.ch[c].on) {
-            if x + 48 > r.x + room {
-                break;
-            }
+            if x + 48 > r.x + room { break; }
             pills.push((FootPill::Off(c), Rect::new(x, r.y, 44, r.h)));
             x += 48;
         }
@@ -997,10 +928,7 @@ impl Ui {
     }
     /// The pills of the sources that are on.
     pub(super) fn source_pills(&self) -> Vec<(WaveId, Rect)> {
-        self.footer_pills()
-            .into_iter()
-            .filter_map(|(p, r)| if let FootPill::Wave(id) = p { Some((id, r)) } else { None })
-            .collect()
+        self.footer_pills().into_iter().filter_map(|(p, r)| if let FootPill::Wave(id) = p { Some((id, r)) } else { None }).collect()
     }
     /// How many sources that are on have no pill, and the plus that lists them, when not every source has one.
     pub(super) fn source_overflow(&self) -> Option<(usize, Rect)> {
@@ -1035,21 +963,11 @@ impl Ui {
                         WaveId::Ch(c) => self.m.ch[c].volts_per_div(),
                         WaveId::Ref(i) => self.refs[i].as_ref().map_or(0.0, |r| r.vpd),
                     };
-                    (
-                        self.wave_name(id),
-                        format!("{}/div", si_short(scale as f64, "V")),
-                        self.wave_color(id),
-                        self.selected_workspace_source() == Some(id),
-                    )
+                    (self.wave_name(id), format!("{}/div", si_short(scale as f64, "V")), self.wave_color(id), self.selected_workspace_source() == Some(id))
                 }
                 FootPill::Dec(k) => {
                     let m = self.m.dec_view(k);
-                    (
-                        self.dec_tag(k),
-                        m.dec_name(),
-                        self.dec_color(&m),
-                        self.menu_open && self.menu_root() == MenuId::Decode && self.m.dec_sel == k,
-                    )
+                    (self.dec_tag(k), m.dec_name(), self.dec_color(&m), self.menu_open && self.menu_root() == MenuId::Decode && self.m.dec_sel == k)
                 }
                 FootPill::Off(c) => {
                     // a channel that is off: its name, dim; a tap switches it on
@@ -1066,20 +984,13 @@ impl Ui {
             // what it stands at, while the pill has the room for it whole (its "/div" goes first)
             let room = rect.right() - 6 - (badge.right() + 6);
             let text = if f.s.width(&text) > room { text.trim_end_matches("/div").to_string() } else { text };
-            if f.s.width(&text) <= room {
-                cv.text_in(&f.s, Rect::new(badge.right() + 6, rect.y, room, rect.h), 0, &text, TEXT);
-            }
+            if f.s.width(&text) <= room { cv.text_in(&f.s, Rect::new(badge.right() + 6, rect.y, room, rect.h), 0, &text, TEXT); }
         }
         let plus = self.footer_plus();
         draw(cv, plus, &self.source_overflow().map_or("+".to_string(), |(n, _)| format!("+{n}")), false);
         let (_, _, time, trigger, live, panel, _) = self.footer_rects();
         let (scale, _) = self.view();
-        draw(
-            cv,
-            time,
-            &format!("{}/div", si_short(scale as f64, "s")),
-            self.menu_open && self.menu_root() == MenuId::Horizontal,
-        );
+        draw(cv, time, &format!("{}/div", si_short(scale as f64, "s")), self.menu_open && self.menu_root() == MenuId::Horizontal);
         self.draw_compact_trigger(cv, trigger);
         if let Some(r) = live {
             draw(cv, r, "Live", false);
@@ -1116,11 +1027,7 @@ impl Ui {
                 FootPill::Dec(k) => {
                     let open = self.menu_open && self.menu_root() == MenuId::Decode && self.m.dec_sel == k;
                     self.m.dec_select(k);
-                    if open {
-                        self.close_menu();
-                    } else {
-                        self.open_menu(MenuId::Decode);
-                    }
+                    if open { self.close_menu(); } else { self.open_menu(MenuId::Decode); }
                 }
                 FootPill::Off(c) => {
                     self.m.ch[c].on = true;
@@ -1137,91 +1044,57 @@ impl Ui {
             return true;
         }
         let (_, _, time, trigger, live, panel, _) = self.footer_rects();
-        if time.contains(x, y) {
-            self.toggle_menu(MenuId::Horizontal);
-        } else if live.is_some_and(|r| r.contains(x, y)) {
-            self.return_to_live();
-        } else if panel.is_some_and(|r| r.contains(x, y)) {
-            self.workspace.desktop_panel = self.workspace.desktop_panel.map(|open| !open);
-        } else {
-            self.compact_trigger_tap(x, y, trigger);
-        }
+        if time.contains(x, y) { self.toggle_menu(MenuId::Horizontal); }
+        else if live.is_some_and(|r| r.contains(x, y)) { self.return_to_live(); }
+        else if panel.is_some_and(|r| r.contains(x, y)) { self.workspace.desktop_panel = self.workspace.desktop_panel.map(|open| !open); }
+        else { self.compact_trigger_tap(x, y, trigger); }
         true
     }
     /// A touch just above or below a chip of the compact bottom bar counts as on it: the chips are 30 px high, the finger
     /// target is 40 (the bar is 36 px; the rest is the 2 px above it and the screen's edge).
     pub(super) fn bar_y(&self, y: i32) -> i32 {
         let bar = self.frame().bottom.y;
-        if self.m.layout != Layout::Default && y >= bar - 2 {
-            y.clamp(bar + 3, bar + 32)
-        } else {
-            y
-        }
+        if self.m.layout != Layout::Default && y >= bar - 2 { y.clamp(bar + 3, bar + 32) } else { y }
     }
     /// The zoom bar's buttons are 28 px high; a touch within 20 px of the bar's middle counts as on the buttons (40 px).
     pub(super) fn zoom_row_y(&self, x: i32, y: i32) -> i32 {
         let row = self.zoom_readout();
         let mid = row.y + row.h / 2;
-        if !self.m.zoom || !(row.x..row.right()).contains(&x) || (y - mid).abs() > TOUCH_MIN / 2 {
-            return y;
-        }
+        if !self.m.zoom || !(row.x..row.right()).contains(&x) || (y - mid).abs() > TOUCH_MIN / 2 { return y; }
         y.clamp(row.y + 4, row.bottom() - 5)
     }
     /// A rectangle grown about its centre to at least `TOUCH_MIN` square: what is drawn small keeps a finger-sized hit area.
     pub(super) fn hit40(r: Rect) -> Rect {
-        if r.w <= 0 || r.h <= 0 {
-            return r;
-        }
+        if r.w <= 0 || r.h <= 0 { return r; }
         let (w, h) = (r.w.max(TOUCH_MIN), r.h.max(TOUCH_MIN));
         Rect::new(r.x + (r.w - w) / 2, r.y + (r.h - h) / 2, w, h)
     }
     /// The channel whose chip, lane badge or ground marker is at the point (a hit area of at least 40 px): the target
     /// of a hold in every layout.
     pub(super) fn channel_hotspot(&self, x: i32, y: i32) -> Option<usize> {
-        if self.full_on() || self.view_on() {
-            return None;
-        }
+        if self.full_on() || self.view_on() { return None; }
         if self.m.layout == Layout::Studio {
-            if let Some(c) =
-                self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(c, _)| c)
-            {
-                return Some(c);
-            }
+            if let Some(c) = self.studio.lane_badges.borrow().iter().find(|(_, r)| Self::hit40(*r).contains(x, y)).map(|&(c, _)| c) { return Some(c); }
         } else {
             for c in 0..n_ch() {
-                if !self.m.ch[c].on {
-                    continue;
-                }
+                if !self.m.ch[c].on { continue; }
                 let a = self.ch_area(c);
                 let my = self.y_of_volts(c, 0.0).clamp(a.y + (a.h / 2).min(9), a.y + a.h - (a.h / 2).min(9));
-                if Self::hit40(Rect::new(a.x + 2, my - 8, 24, 16)).contains(x, y) {
-                    return Some(c);
-                }
+                if Self::hit40(Rect::new(a.x + 2, my - 8, 24, 16)).contains(x, y) { return Some(c); }
             }
         }
         None
     }
     /// Where a finger that is being held stands and how far its ring has filled (0 to 1), when a hold would act.
     pub(super) fn press_ring(&self) -> Option<(i32, i32, f32)> {
-        if let Some(r) = self.md_ring() {
-            return Some(r);
-        }
-        if self.m.touch_lock || self.workspace.popup.is_some() || self.menu_open && self.workspace.gesture.is_none() {
-            return None;
-        }
-        let ring = |x, y, at: f64| {
-            let f = ((self.now - at) / LONG_PRESS) as f32;
-            (f > 0.2 && f < 1.0).then_some((x, y, f))
-        };
-        if let Some(g) = self.workspace.gesture.filter(|g| !g.moved && !g.held) {
-            return ring(g.x, g.y, g.at);
-        }
+        if let Some(r) = self.md_ring() { return Some(r); }
+        if self.m.touch_lock || self.workspace.popup.is_some() || self.menu_open && self.workspace.gesture.is_none() { return None; }
+        let ring = |x, y, at: f64| { let f = ((self.now - at) / LONG_PRESS) as f32; (f > 0.2 && f < 1.0).then_some((x, y, f)) };
+        if let Some(g) = self.workspace.gesture.filter(|g| !g.moved && !g.held) { return ring(g.x, g.y, g.at); }
         let t = &self.touch;
         let near = (t.x - t.x0).abs() <= 12 && (t.y - t.y0).abs() <= 12;
         if t.down && !t.held && near {
-            if let Some((_, at)) = self.input.card {
-                return ring(t.x0, t.y0, at);
-            }
+            if let Some((_, at)) = self.input.card { return ring(t.x0, t.y0, at); }
         }
         None
     }
@@ -1232,13 +1105,9 @@ impl Ui {
         let at = |a: f32| ((x as f32 + r * a.sin()).round() as i32, (y as f32 - r * a.cos()).round() as i32);
         let steps = (f * 48.0).ceil() as i32;
         for k in 0..steps {
-            let (a0, a1) =
-                (k as f32 / 48.0 * std::f32::consts::TAU, ((k + 1) as f32 / 48.0).min(f) * std::f32::consts::TAU);
+            let (a0, a1) = (k as f32 / 48.0 * std::f32::consts::TAU, ((k + 1) as f32 / 48.0).min(f) * std::f32::consts::TAU);
             let ((x0, y0), (x1, y1)) = (at(a0), at(a1));
-            for d in [-1, 0, 1] {
-                cv.line(x0 + d, y0, x1 + d, y1, ACCENT);
-                cv.line(x0, y0 + d, x1, y1 + d, ACCENT);
-            }
+            for d in [-1, 0, 1] { cv.line(x0 + d, y0, x1 + d, y1, ACCENT); cv.line(x0, y0 + d, x1, y1 + d, ACCENT); }
         }
     }
     /// A titled popup with a close in its title row, rows one finger tall, in columns when the plot is not tall enough.
@@ -1251,12 +1120,7 @@ impl Ui {
         let width = (POPUP_COL_W * cols).min(g.w - 8);
         let height = per_col as i32 * POPUP_ROW + POPUP_TITLE + 6;
         let (x0, y0) = (g.x + 4, g.y.max(TOP.h));
-        let rect = Rect::new(
-            x.clamp(x0, (g.right() - width - 4).max(x0)),
-            y.clamp(y0, (g.bottom() - height).max(y0)),
-            width,
-            height,
-        );
+        let rect = Rect::new(x.clamp(x0, (g.right() - width - 4).max(x0)), y.clamp(y0, (g.bottom() - height).max(y0)), width, height);
         self.workspace.popup = Some(Popup { rect, rows, title: title.into(), per_col });
     }
     fn open_sources(&mut self, x: i32, _y: i32) {
@@ -1287,18 +1151,11 @@ impl Ui {
         // opened far above the pill, in the middle of the traces (seen on a unit, 2026-11-18).
         let (x, y) = if self.m.layout == Layout::Studio {
             let b = self.studio_bottom();
-            let pill = match chip {
-                HoldOn::Math(k) => b.math[k],
-                HoldOn::Chan(c) => b.ch[c],
-                HoldOn::Ref(i) => b.refs[i],
-                _ => Rect::new(x, y, 0, 0),
-            };
+            let pill = match chip { HoldOn::Math(k) => b.math[k], HoldOn::Chan(c) => b.ch[c], HoldOn::Ref(i) => b.refs[i], _ => Rect::new(x, y, 0, 0) };
             let (top, bar) = (self.frame().top.bottom(), self.frame().bottom.y);
             self.workspace.popup_area = Some(Rect::new(0, top, self.scr.w, bar - 2 - top));
             (pill.x, bar)
-        } else {
-            (x, y)
-        };
+        } else { (x, y) };
         self.studio_chip_popup_at(chip, x, y);
         self.workspace.popup_area = None;
     }
@@ -1307,24 +1164,16 @@ impl Ui {
         use super::measdrag::HoldOn;
         match chip {
             HoldOn::Math(k) => {
-                let rows = vec![
-                    ("Turn off".to_string(), Action::MathOff(k)),
-                    (format!("M{} settings", k + 1), Action::MathSettings(k)),
-                ];
+                let rows = vec![("Turn off".to_string(), Action::MathOff(k)), (format!("M{} settings", k + 1), Action::MathSettings(k))];
                 self.popup(&format!("M{}", k + 1), x, y, rows);
             }
             HoldOn::Chan(c) => self.channel_popup(c, x, y),
             HoldOn::Ref(i) => {
                 let on = self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on);
-                let mut rows = vec![
-                    (if on { "Hide" } else { "Show" }.to_string(), Action::Source(WaveId::Ref(i))),
-                    ("Clear slot".to_string(), Action::RefClear(i)),
-                    (format!("R{} settings", i + 1), Action::RefSettings(i)),
-                ];
+                let mut rows = vec![(if on { "Hide" } else { "Show" }.to_string(), Action::Source(WaveId::Ref(i))), ("Clear slot".to_string(), Action::RefClear(i)),
+                    (format!("R{} settings", i + 1), Action::RefSettings(i))];
                 if self.m.layout == Layout::Studio && on {
-                    let own = self.studio_ref_own(i).map_or("Horizontal: Follow main".to_string(), |(t, _)| {
-                        format!("Horizontal: Own {}/div", si_short(t as f64, "s"))
-                    });
+                    let own = self.studio_ref_own(i).map_or("Horizontal: Follow main".to_string(), |(t, _)| format!("Horizontal: Own {}/div", si_short(t as f64, "s")));
                     rows.insert(2, (own, Action::RefHorizontal(i)));
                 }
                 self.popup(&format!("R{}", i + 1), x, y, rows);
@@ -1334,65 +1183,42 @@ impl Ui {
     }
     /// The quick actions of a channel: what a hold on its chip, card, lane badge or marker opens, in every layout.
     pub(super) fn channel_popup(&mut self, c: usize, x: i32, y: i32) {
-        if c >= n_ch() || self.m.touch_lock {
-            return;
-        }
+        if c >= n_ch() || self.m.touch_lock { return; }
         let ch = &self.m.ch[c];
         let to = if ch.coupling == Coupling::Ac { Coupling::Dc } else { Coupling::Ac };
         let mut rows = Vec::new();
-        if board().couplings().contains(&to) {
-            rows.push((format!("Coupling to {}", to.name()), Action::ChCoupling(c)));
-        }
+        if board().couplings().contains(&to) { rows.push((format!("Coupling to {}", to.name()), Action::ChCoupling(c))); }
         rows.push((if ch.invert { "Invert off" } else { "Invert on" }.to_string(), Action::ChInvert(c)));
         rows.push((if self.m.ch_hidden[c] { "Show trace" } else { "Hide trace" }.to_string(), Action::ChHide(c)));
         rows.push(("Zero offset".into(), Action::ChZero(c)));
         // Studio: the first row is the one people look for
-        if ch.on {
-            if self.m.layout == Layout::Studio {
-                rows.insert(0, ("Turn off".into(), Action::Source(WaveId::Ch(c))));
-            } else {
-                rows.push(("Turn off".into(), Action::Source(WaveId::Ch(c))));
-            }
-        }
+        if ch.on { if self.m.layout == Layout::Studio { rows.insert(0, ("Turn off".into(), Action::Source(WaveId::Ch(c)))); } else { rows.push(("Turn off".into(), Action::Source(WaveId::Ch(c)))); } }
         rows.push((format!("CH{} settings", c + 1), Action::Menu(MenuId::Channel(c))));
         self.popup(&format!("CH{}", c + 1), x, y, rows);
     }
     /// Mouse right-click and a stationary touch hold take the exact same path.
     /// The zoom overview and the zoom toolbar: where a resting finger is at work, not asking for a menu.
     pub(super) fn zoom_rest_area(&self, x: i32, y: i32) -> bool {
-        if !self.m.zoom || self.xy_over() || self.view_on() {
-            return false;
-        }
+        if !self.m.zoom || self.xy_over() || self.view_on() { return false; }
         let (overview, _) = self.split_zoom(self.plot.grid);
         overview.contains(x, y) || (self.m.layout == Layout::Studio && self.zoom_readout().contains(x, y))
     }
 
     pub fn context_menu(&mut self, x: i32, y: i32) {
-        if self.m.touch_lock {
-            return;
-        }
+        if self.m.touch_lock { return; }
         // The zoom overview and its toolbar are worked with a finger that rests: the window is held and dragged, a
         // chip is held while the eye is on the trace. A long touch there opens no menu (it opened the plot's, in the
         // middle of moving the window, on a unit 2026-11-18). The menu of the plot is in the zoom view and the lanes.
-        if self.zoom_rest_area(x, y) {
-            return;
-        }
-        if let Some(chip) = self.md_chip_at(x, y) {
-            return self.studio_chip_popup(chip, x, y);
-        }
-        let eye = self.eye_open()
-            && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER).contains(x, y);
+        if self.zoom_rest_area(x, y) { return; }
+        if let Some(chip) = self.md_chip_at(x, y) { return self.studio_chip_popup(chip, x, y); }
+        let eye = self.eye_open() && Rect::new(self.eye_pane_rect().x, self.eye_pane_rect().y, self.eye_pane_rect().w, HEADER).contains(x, y);
         let measurements = self.results_rects().is_some_and(|(head, _)| head.contains(x, y));
         // a channel's marker: its quick actions in Minimal and Studio; Default opens the plot's menu, as upstream OOS
         if !eye && !measurements && self.m.layout != Layout::Default {
-            if let Some(c) = self.channel_hotspot(x, y) {
-                return self.channel_popup(c, x, y);
-            }
+            if let Some(c) = self.channel_hotspot(x, y) { return self.channel_popup(c, x, y); }
         }
         // Studio: the plot has a context menu of its own, at the press point (studioctx.rs)
-        if self.m.layout == Layout::Studio && !eye && !measurements {
-            return self.studio_ctx_open(x, y);
-        }
+        if self.m.layout == Layout::Studio && !eye && !measurements { return self.studio_ctx_open(x, y); }
         let rows = if eye {
             vec![
                 ("Dock Eye right".into(), Action::EyeRight),
@@ -1403,13 +1229,9 @@ impl Ui {
                 ("Close Eye".into(), Action::EyeClose),
             ]
         } else if measurements {
-            vec![
-                ("Float measurements".into(), Action::MeasureFloat),
-                ("Dock right".into(), Action::MeasureDock(StripDock::Right)),
-                ("Dock below".into(), Action::MeasureDock(StripDock::Below)),
-                ("Dock left".into(), Action::MeasureDock(StripDock::Left)),
-                ("Add measurements".into(), Action::Menu(MenuId::MeasAdd)),
-            ]
+            vec![("Float measurements".into(), Action::MeasureFloat), ("Dock right".into(), Action::MeasureDock(StripDock::Right)),
+                 ("Dock below".into(), Action::MeasureDock(StripDock::Below)), ("Dock left".into(), Action::MeasureDock(StripDock::Left)),
+                 ("Add measurements".into(), Action::Menu(MenuId::MeasAdd))]
         } else {
             // the plot's menu has the same rows in every layout (Studio's popover has them in two columns)
             let mut rows = vec![
@@ -1431,28 +1253,13 @@ impl Ui {
         };
         let mut rows = rows;
         // a view that fills the area has a way back in every menu of it
-        if self.dock_full_state() {
-            rows.insert(0, ("Restore layout".into(), Action::RestoreLayout));
-        }
-        self.popup(
-            if eye {
-                "Eye"
-            } else if measurements {
-                "Measurements"
-            } else {
-                "Plot"
-            },
-            x,
-            y,
-            rows,
-        );
+        if self.dock_full_state() { rows.insert(0, ("Restore layout".into(), Action::RestoreLayout)); }
+        self.popup(if eye { "Eye" } else if measurements { "Measurements" } else { "Plot" }, x, y, rows);
     }
     pub(super) fn workspace_popup_tap(&mut self, x: i32, y: i32) -> bool {
         let Some(popup) = self.workspace.popup.take() else { return false };
         if popup.rect.contains(x, y) && !popup.close_rect().contains(x, y) {
-            if let Some(i) = (0..popup.rows.len()).find(|&i| popup.row_rect(i).contains(x, y)) {
-                self.workspace_action(popup.rows[i].1.clone());
-            }
+            if let Some(i) = (0..popup.rows.len()).find(|&i| popup.row_rect(i).contains(x, y)) { self.workspace_action(popup.rows[i].1.clone()); }
         }
         true
     }
@@ -1577,29 +1384,17 @@ impl Ui {
                 self.relayout();
             }
             Action::ChCoupling(c) => self.toggle_ac_dc(c),
-            Action::ChInvert(c) => {
-                self.m.ch[c].invert = !self.m.ch[c].invert;
-                self.toast(&format!("CH{}: invert {}", c + 1, if self.m.ch[c].invert { "on" } else { "off" }));
-                self.settings_changed();
-            }
+            Action::ChInvert(c) => { self.m.ch[c].invert = !self.m.ch[c].invert; self.toast(&format!("CH{}: invert {}", c + 1, if self.m.ch[c].invert { "on" } else { "off" })); self.settings_changed(); }
             Action::ChHide(c) => {
                 self.m.ch_hidden[c] = !self.m.ch_hidden[c];
-                self.toast(&format!(
-                    "CH{}: trace {}",
-                    c + 1,
-                    if self.m.ch_hidden[c] { "hidden, the channel stays on" } else { "shown" }
-                ));
+                self.toast(&format!("CH{}: trace {}", c + 1, if self.m.ch_hidden[c] { "hidden, the channel stays on" } else { "shown" }));
                 self.settings_changed();
                 self.relayout();
             }
-            Action::ChZero(c) => {
-                self.m.ch[c].offset = 0.0;
-                self.toast(&format!("CH{}: offset 0", c + 1));
-                self.settings_changed();
-            }
+            Action::ChZero(c) => { self.m.ch[c].offset = 0.0; self.toast(&format!("CH{}: offset 0", c + 1)); self.settings_changed(); }
             Action::Autoset => self.key(key::AUTO),
             Action::Note(id, x) => self.callout_add(id, x),
-            Action::Close => {}
+            Action::Close => {},
         }
     }
     pub(super) fn workspace_draw(&self, cv: &mut Canvas) {
@@ -1607,19 +1402,14 @@ impl Ui {
             cv.round(popup.rect, 5, BTN_BORDER, 255);
             cv.round(popup.rect.inset(1), 4, BAR, 255);
             let title = Rect::new(popup.rect.x + 10, popup.rect.y + 3, popup.rect.w - POPUP_TITLE - 16, POPUP_TITLE);
-            cv.set_clip(title);
-            cv.text_in(&self.fonts().sb, title, 0, &popup.title, ACCENT);
-            cv.no_clip();
+            cv.set_clip(title); cv.text_in(&self.fonts().sb, title, 0, &popup.title, ACCENT); cv.no_clip();
             let x = popup.close_rect();
             let (cx, cy) = (x.x + x.w / 2, x.y + x.h / 2);
-            cv.line(cx - 6, cy - 6, cx + 6, cy + 6, DIM);
-            cv.line(cx - 6, cy + 6, cx + 6, cy - 6, DIM);
+            cv.line(cx - 6, cy - 6, cx + 6, cy + 6, DIM); cv.line(cx - 6, cy + 6, cx + 6, cy - 6, DIM);
             cv.hline(popup.rect.x + 5, popup.rect.right() - 6, popup.rect.y + 3 + POPUP_TITLE - 1, LINE);
             for (index, (label, action)) in popup.rows.iter().enumerate() {
                 let r = popup.row_rect(index);
-                cv.set_clip(r);
-                cv.text_in(&self.fonts().m, Rect::new(r.x + 7, r.y, r.w - 34, r.h), 0, label, TEXT);
-                cv.no_clip();
+                cv.set_clip(r); cv.text_in(&self.fonts().m, Rect::new(r.x + 7, r.y, r.w - 34, r.h), 0, label, TEXT); cv.no_clip();
                 let current = match action {
                     Action::Overlay => self.arrangement() == windows::Arrangement::Overlay,
                     Action::Stacked => self.arrangement() == windows::Arrangement::Stacked,
@@ -1629,8 +1419,7 @@ impl Ui {
                 if current {
                     // a check at the right end marks the mode in force
                     let (cx, cy) = (r.x + r.w - 40, r.y + r.h / 2);
-                    cv.line(cx, cy, cx + 4, cy + 4, ACCENT);
-                    cv.line(cx + 4, cy + 4, cx + 11, cy - 5, ACCENT);
+                    cv.line(cx, cy, cx + 4, cy + 4, ACCENT); cv.line(cx + 4, cy + 4, cx + 11, cy - 5, ACCENT);
                 }
             }
         }
@@ -1654,33 +1443,24 @@ impl Ui {
         }
     }
     /// Another hold took the finger: the plot gesture under it must not open its own menu too.
-    pub(super) fn workspace_drop_gesture(&mut self) {
-        self.workspace.gesture = None;
-    }
+    pub(super) fn workspace_drop_gesture(&mut self) { self.workspace.gesture = None; }
     #[cfg(test)]
-    pub(super) fn workspace_popup_open(&self) -> bool {
-        self.workspace.popup.is_some()
-    }
+    pub(super) fn workspace_popup_open(&self) -> bool { self.workspace.popup.is_some() }
     /// Fit all lanes: the vertical scale and position of every source that is shown, so that each fills about
     /// three quarters of its lane (or of the graticule, in Overlay). Channels step to the V/div that holds their
     /// signal, references and math channels likewise. The time base, the trigger and what is on stay as they are.
     pub(super) fn fit_all_lanes(&mut self) {
         self.workspace.popup = None;
         let range = |v: &[f32]| {
-            let (lo, hi) =
-                v.iter().filter(|x| x.is_finite()).fold((f32::MAX, f32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
+            let (lo, hi) = v.iter().filter(|x| x.is_finite()).fold((f32::MAX, f32::MIN), |(lo, hi), &x| (lo.min(x), hi.max(x)));
             (hi >= lo).then_some((lo, hi))
         };
         let mut fitted = 0;
         // channels: from the record on screen
-        let spans: Vec<Option<(f32, f32)>> = (0..n_ch())
-            .map(|c| {
-                if !self.m.ch[c].on || self.record_mode() {
-                    return None;
-                }
-                self.last[0].as_ref().and_then(|r| r.ch.get(c)).and_then(|v| range(v))
-            })
-            .collect();
+        let spans: Vec<Option<(f32, f32)>> = (0..n_ch()).map(|c| {
+            if !self.m.ch[c].on || self.record_mode() { return None; }
+            self.last[0].as_ref().and_then(|r| r.ch.get(c)).and_then(|v| range(v))
+        }).collect();
         for (c, span) in spans.into_iter().enumerate() {
             let Some((lo, hi)) = span else { continue };
             let ch = &mut self.m.ch[c];
@@ -1705,14 +1485,9 @@ impl Ui {
         }
         // math channels that are shown
         for k in 0..NMATH {
-            if self.m.math_shown(k) {
-                self.math_fit(k);
-                fitted += 1;
-            }
+            if self.m.math_shown(k) { self.math_fit(k); fitted += 1; }
         }
-        if fitted == 0 {
-            return self.toast("Fit all lanes: nothing is shown");
-        }
+        if fitted == 0 { return self.toast("Fit all lanes: nothing is shown"); }
         self.settings_changed();
         self.clear_measurement_statistics();
         self.dirty_map = true;
@@ -1722,19 +1497,13 @@ impl Ui {
 
     /// Turns a source on or off, as its row of the Sources menu does.
     #[cfg_attr(target_os = "linux", allow(dead_code))] // used by the desktop build and the tests
-    pub(super) fn source_toggle(&mut self, id: WaveId) {
-        self.workspace_action(Action::Source(id));
-    }
+    pub(super) fn source_toggle(&mut self, id: WaveId) { self.workspace_action(Action::Source(id)); }
     #[cfg(test)]
-    pub(super) fn workspace_stacked_flag(&self) -> bool {
-        self.workspace.stacked
-    }
+    pub(super) fn workspace_stacked_flag(&self) -> bool { self.workspace.stacked }
     /// Stops the hold of the plot gesture. True when it had already opened its menu, which is closed with it.
     pub(super) fn workspace_cancel_hold(&mut self) -> bool {
         let opened = self.workspace.gesture.is_some_and(|gesture| gesture.held);
-        if opened {
-            self.workspace.popup = None;
-        }
+        if opened { self.workspace.popup = None; }
         self.workspace.gesture = None;
         opened
     }
@@ -1745,16 +1514,10 @@ impl Ui {
     }
     pub(super) fn workspace_hold_tick(&mut self) {
         let Some(mut gesture) = self.workspace.gesture else { return };
-        if gesture.moved || gesture.held || self.now - gesture.at < HOLD {
-            return;
-        }
-        if self.menu_open || self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() || self.m.touch_lock {
-            return;
-        }
+        if gesture.moved || gesture.held || self.now - gesture.at < HOLD { return; }
+        if self.menu_open || self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() || self.m.touch_lock { return; }
         // no hold there at all: the finger goes on to drag the window or to lift as a tap
-        if self.zoom_rest_area(gesture.x, gesture.y) {
-            return;
-        }
+        if self.zoom_rest_area(gesture.x, gesture.y) { return; }
         gesture.held = true;
         self.workspace.gesture = Some(gesture);
         self.context_menu(gesture.x, gesture.y);
@@ -1767,14 +1530,8 @@ impl Ui {
             return false;
         }
         if self.workspace.popup.is_some() && !self.workspace.gesture.is_some_and(|gesture| gesture.held) {
-            if phase == Phase::Up {
-                if std::mem::take(&mut self.workspace.lift_pending) { /* the lift of the hold */
-                } else {
-                    self.workspace_popup_tap(x, y);
-                }
-            } else if phase == Phase::Down {
-                self.workspace.lift_pending = false;
-            }
+            if phase == Phase::Up { if std::mem::take(&mut self.workspace.lift_pending) { /* the lift of the hold */ } else { self.workspace_popup_tap(x, y); } }
+            else if phase == Phase::Down { self.workspace.lift_pending = false; }
             return true;
         }
         if phase == Phase::Down

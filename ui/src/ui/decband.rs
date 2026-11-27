@@ -151,11 +151,7 @@ fn is_char(m: &Model, p: &Packet) -> bool {
 /// What stands between the pieces of two fields: nothing between two characters, a space where one of them is a
 /// number or a mark (an I2C address before its text read "50 ROSP").
 fn glue(m: &Model, before: &Packet, after: &Packet) -> &'static str {
-    if is_char(m, before) && is_char(m, after) {
-        ""
-    } else {
-        " "
-    }
+    if is_char(m, before) && is_char(m, after) { "" } else { " " }
 }
 
 /// The text of a message: its fields in order, as many as fit into `room` pixels, then "...". Characters stand side by
@@ -449,11 +445,8 @@ impl Ui {
     }
 
     pub(super) fn dec_color(&self, m: &Model) -> Rgb {
-        if m.dec_on_la() {
-            la::line_color(m.dec_la[0].unwrap_or(0))
-        } else {
-            decode_wave(m.dec_src).map_or(DIM, |source| self.wave_color(source))
-        }
+        if m.dec_on_la() { la::line_color(m.dec_la[0].unwrap_or(0)) }
+            else { decode_wave(m.dec_src).map_or(DIM, |source| self.wave_color(source)) }
     }
 
     /// One decoder's band at height y; row = its place under the lanes.
@@ -480,14 +473,7 @@ impl Ui {
         };
         // in a plot it stands right of the channel markers at the left edge (Studio: of the lane badges), which are
         // drawn after the band and would cover it
-        let px = a.x
-            + if row.is_some() {
-                4
-            } else if studio {
-                50
-            } else {
-                MARK_W + 2
-            };
+        let px = a.x + if row.is_some() { 4 } else if studio { 50 } else { MARK_W + 2 };
         let (py, ph) = if row.is_some() { (y, h) } else { (y + 2, h - 4) };
         let pill = Rect::new(px, py, f.sb.width(&name) + 12, ph);
         if studio {
@@ -634,10 +620,7 @@ impl Ui {
         }
         // threshold line on the source trace (LA lines have no analog level)
         if !m.dec_on_la() && m.dec_proto != Proto::CPHY {
-            let Some(source) = decode_wave(m.dec_src) else {
-                cv.no_clip();
-                return;
-            };
+            let Some(source) = decode_wave(m.dec_src) else { cv.no_clip(); return; };
             let ty = self.y_of_wave(source, m.dec_thr);
             cv.dashed_hline(a.x + 26, a.x + a.w - 26, ty, 2, 6, scale(col, 160));
             if m.dec_proto.module().is_some_and(|p| p.key() == "Arinc429") {

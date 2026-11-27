@@ -12,43 +12,28 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u
 }
 
-fn tap_in(u: &mut Ui, r: Rect) {
-    u.tap(r.x + r.w / 2, r.y + r.h / 2);
-}
+fn tap_in(u: &mut Ui, r: Rect) { u.tap(r.x + r.w / 2, r.y + r.h / 2); }
 
 fn shot(u: &mut Ui, name: &str) {
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
-    for _ in 0..6 {
-        u.step(0.05);
-    }
+    for _ in 0..6 { u.step(0.05); }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
-        std::fs::write(std::path::Path::new(&dir).join(format!("batch3b-{name}.png")), crate::store::png_of(&cv))
-            .unwrap();
+        std::fs::write(std::path::Path::new(&dir).join(format!("batch3b-{name}.png")), crate::store::png_of(&cv)).unwrap();
     }
 }
 
 /// The menus the sheet converts, with the name their picture gets.
 fn converted() -> Vec<(MenuId, &'static str)> {
     vec![
-        (MenuId::Trigger, "trigger"),
-        (MenuId::Channel(0), "channel"),
-        (MenuId::Measure, "measure"),
-        (MenuId::Display, "display"),
-        (MenuId::Acquire, "acquire"),
-        (MenuId::Horizontal, "horizontal"),
-        (MenuId::Cursor, "cursor"),
-        (MenuId::Ref, "ref"),
-        (MenuId::Decode, "decode"),
-        (MenuId::Math, "math"),
-        (MenuId::Utility, "system"),
+        (MenuId::Trigger, "trigger"), (MenuId::Channel(0), "channel"), (MenuId::Measure, "measure"),
+        (MenuId::Display, "display"), (MenuId::Acquire, "acquire"), (MenuId::Horizontal, "horizontal"), (MenuId::Cursor, "cursor"),
+        (MenuId::Ref, "ref"), (MenuId::Decode, "decode"), (MenuId::Math, "math"), (MenuId::Utility, "system"),
     ]
 }
 
@@ -69,36 +54,21 @@ fn check_geometry(u: &Ui, what: &str) {
     assert!(g.foot.len() <= 2, "{what}: footer");
     let inside = |r: Rect| r.x >= g.r.x && r.right() <= g.r.right() && r.y >= g.r.y && r.bottom() <= g.r.bottom();
     assert!(inside(g.close), "{what}: close inside");
-    if let Some(b) = g.back {
-        assert!(inside(b) && b.h >= 40 && b.w >= 40, "{what}: back");
-    }
+    if let Some(b) = g.back { assert!(inside(b) && b.h >= 40 && b.w >= 40, "{what}: back"); }
     let mut last = g.r.y + SHEET_HEAD;
-    for t in &g.tabs {
-        assert!(inside(*t) && t.h >= 40 && t.w >= 40, "{what}: tab target");
-        assert!(t.y >= last - 0 && t.y == g.r.y + SHEET_HEAD);
-    }
-    if !g.tabs.is_empty() {
-        last += SHEET_TABS;
-    }
+    for t in &g.tabs { assert!(inside(*t) && t.h >= 40 && t.w >= 40, "{what}: tab target"); assert!(t.y >= last - 0 && t.y == g.r.y + SHEET_HEAD); }
+    if !g.tabs.is_empty() { last += SHEET_TABS; }
     for (i, r) in g.rows.iter().enumerate() {
         assert_eq!(r.row.h, SHEET_ROW, "{what}: row height");
         assert_eq!(r.row.y, last + i as i32 * SHEET_ROW, "{what}: row {i} where it always is");
         assert!(inside(r.row) && inside(r.ctrl), "{what}: row {i} inside");
         assert!(r.ctrl.h >= 26 && r.ctrl.w >= 40, "{what}: row {i} control");
-        if r.kind != RowKind::Toggle {
-            assert!(r.ctrl.h >= 40, "{what}: row {i} target {:?}", r.ctrl);
-        }
+        if r.kind != RowKind::Toggle { assert!(r.ctrl.h >= 40, "{what}: row {i} target {:?}", r.ctrl); }
     }
     let foot_top = g.r.bottom() - SHEET_FOOT;
-    if let Some(l) = g.rows.last() {
-        assert!(l.row.bottom() <= foot_top, "{what}: rows end above the footer");
-    }
-    for (_, b) in &g.foot {
-        assert!(inside(*b) && b.h >= 40 && b.y >= foot_top, "{what}: footer button");
-    }
-    if g.foot.len() == 2 {
-        assert!(g.foot[0].1.right() < g.foot[1].1.x, "{what}: footer buttons apart");
-    }
+    if let Some(l) = g.rows.last() { assert!(l.row.bottom() <= foot_top, "{what}: rows end above the footer"); }
+    for (_, b) in &g.foot { assert!(inside(*b) && b.h >= 40 && b.y >= foot_top, "{what}: footer button"); }
+    if g.foot.len() == 2 { assert!(g.foot[0].1.right() < g.foot[1].1.x, "{what}: footer buttons apart"); }
 }
 
 #[test]
@@ -149,9 +119,7 @@ fn every_page_of_every_state_fits_or_falls_back() {
         u.open_menu(MenuId::Trigger);
         let spec = u.sheet_spec(MenuId::Trigger).unwrap_or_else(|| panic!("trigger {:?} fits", t));
         assert_eq!(spec.tabs.len(), 2, "trigger has two tabs");
-        for (i, tab) in spec.tabs.iter().enumerate() {
-            assert!(tab.rows.len() <= SHEET_MAX_ROWS, "{:?} tab {i}", t);
-        }
+        for (i, tab) in spec.tabs.iter().enumerate() { assert!(tab.rows.len() <= SHEET_MAX_ROWS, "{:?} tab {i}", t); }
     }
     // decode protocols: converted, or kept in the classic dialog
     u.m.trig_type = crate::model::TrigType::Edge;
@@ -160,9 +128,7 @@ fn every_page_of_every_state_fits_or_falls_back() {
     for p in &protos {
         u.select_option(Item::DecProto, p);
         u.open_menu(MenuId::Decode);
-        if u.sheet_spec(MenuId::Decode).is_some() {
-            converted_n += 1;
-        }
+        if u.sheet_spec(MenuId::Decode).is_some() { converted_n += 1; }
     }
     assert!(converted_n * 10 >= protos.len() * 7, "most protocols fit: {converted_n} of {}", protos.len());
     // math functions
@@ -344,15 +310,7 @@ fn the_i2c_lane_has_its_own_sheet_and_the_gear_opens_a_short_main_sheet() {
     // Batch 21: the gear sheet is the whole grouped Menu on one scrolling page (menugrid.rs, batch21_tests)
     let n: usize = spec.tabs.iter().map(|t| t.rows.len()).sum();
     assert!((30..=50).contains(&n), "the whole Menu: {n} entries");
-    for must in [
-        Item::RunStop,
-        Item::SingleAct,
-        Item::Open(MenuId::Trigger),
-        Item::Open(MenuId::Acquire),
-        Item::Open(MenuId::Measure),
-        Item::Open(MenuId::Cursor),
-        Item::Open(MenuId::Bus),
-    ] {
+    for must in [Item::RunStop, Item::SingleAct, Item::Open(MenuId::Trigger), Item::Open(MenuId::Acquire), Item::Open(MenuId::Measure), Item::Open(MenuId::Cursor), Item::Open(MenuId::Bus)] {
         assert!(all.contains(&must), "{must:?} is in the Menu");
     }
 }
@@ -376,9 +334,7 @@ fn the_other_layouts_keep_their_menus() {
     for layout in [Layout::Default] {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         u.m.layout = layout;
-        for _ in 0..8 {
-            u.step(0.05);
-        }
+        for _ in 0..8 { u.step(0.05); }
         for (menu, _) in converted() {
             u.open_menu(menu);
             assert!(!u.sheet_active(), "{layout:?}: classic dialog");
@@ -409,12 +365,7 @@ fn the_add_flow_picks_the_source_first_then_one_tap_adds() {
     let entries = u.sheet_add_entries();
     let list = |u: &Ui| u.sheet_add_geo();
     let g = list(&u);
-    let row = g
-        .rows
-        .iter()
-        .find(|r| entries[r.0].name == "Frequency" || entries[r.0].name == "Peak-to-Peak")
-        .expect("a usual one is listed")
-        .1;
+    let row = g.rows.iter().find(|r| entries[r.0].name == "Frequency" || entries[r.0].name == "Peak-to-Peak").expect("a usual one is listed").1;
     tap_in(&mut u, row);
     assert_eq!(u.measurement_count(), n0 + 1, "one tap adds");
     assert!(u.meas_rows().iter().any(|r| r.src == WaveId::Ch(1)), "it is a measurement of CH2");
@@ -437,23 +388,15 @@ fn every_row_of_the_add_list_has_a_preview_and_filters_work() {
     u.sheet_add_open();
     let g = u.sheet_add_geo();
     assert!(g.rows.len() >= 5, "a screenful: {}", g.rows.len());
-    for (_, r) in &g.rows {
-        assert!(r.h >= 60);
-        assert!(r.x >= u.sheet_rect().x && r.right() <= u.sheet_rect().right());
-    }
+    for (_, r) in &g.rows { assert!(r.h >= 60); assert!(r.x >= u.sheet_rect().x && r.right() <= u.sheet_rect().right()); }
     // the categories of the Measure page, in a list the name opens; each has entries (Power needs sources, so it
     // may say why)
-    assert_eq!(
-        super::meascatalog::add_categories().collect::<Vec<_>>(),
-        crate::measures::CATEGORIES.iter().map(|c| c.name).collect::<Vec<_>>()
-    );
+    assert_eq!(super::meascatalog::add_categories().collect::<Vec<_>>(), crate::measures::CATEGORIES.iter().map(|c| c.name).collect::<Vec<_>>());
     for i in 0..g.cat_rows.len() {
         let v = u.sheet_add_geo().cat_value;
         tap_in(&mut u, v);
         assert!(u.sheet.add_cats);
-        if i == 3 {
-            shot(&mut u, "add-category-list");
-        }
+        if i == 3 { shot(&mut u, "add-category-list"); }
         let row = u.sheet_add_geo().cat_rows[i];
         assert!(row.h >= 40, "row {i}");
         tap_in(&mut u, row);
@@ -483,11 +426,7 @@ fn an_unavailable_item_says_why_and_offers_the_fix_in_place() {
     u.sheet.add_group = super::meascatalog::add_categories().position(|n| n == "Power").expect("Power");
     let g = u.sheet_add_geo();
     let entries = u.sheet_add_entries();
-    let (_, row) = *g
-        .rows
-        .iter()
-        .find(|r| super::meascatalog::Preview::Off(1) == u.add_preview(entries[r.0].cat))
-        .expect("an item that needs CH2");
+    let (_, row) = *g.rows.iter().find(|r| super::meascatalog::Preview::Off(1) == u.add_preview(entries[r.0].cat)).expect("an item that needs CH2");
     shot(&mut u, "add-measurement-unavailable");
     let n0 = u.measurement_count();
     // a tap on the tile only says why
@@ -530,9 +469,7 @@ fn each_panel_opens_docked_with_the_pages_that_exist() {
         u.open_menu(MenuId::AddPanel);
         u.studio_add_panel(kind);
         assert!(!u.menu_open, "the sheet closes so the panel is seen");
-        for _ in 0..6 {
-            u.step(0.05);
-        }
+        for _ in 0..6 { u.step(0.05); }
     };
     let mut u = studio();
     open(&mut u, PanelKind::Measurements);
@@ -605,20 +542,8 @@ fn pictures_of_the_converted_pages() {
 fn minimal_opens_the_sheets_and_a_tap_on_a_row_changes_the_setting() {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = Layout::Minimal;
-    for _ in 0..8 {
-        u.step(0.05);
-    }
-    for menu in [
-        MenuId::Channel(0),
-        MenuId::Trigger,
-        MenuId::Horizontal,
-        MenuId::Math,
-        MenuId::Ref,
-        MenuId::Storage,
-        MenuId::Measure,
-        MenuId::Display,
-        MenuId::Cursor,
-    ] {
+    for _ in 0..8 { u.step(0.05); }
+    for menu in [MenuId::Channel(0), MenuId::Trigger, MenuId::Horizontal, MenuId::Math, MenuId::Ref, MenuId::Storage, MenuId::Measure, MenuId::Display, MenuId::Cursor] {
         u.open_menu(menu);
         assert!(u.sheet_active(), "{menu:?} is a sheet in Minimal");
         let g = u.sheet_geo().expect("a sheet");
@@ -642,10 +567,7 @@ fn minimal_opens_the_sheets_and_a_tap_on_a_row_changes_the_setting() {
 
 #[test]
 fn a_long_info_line_breaks_in_two_instead_of_losing_its_start() {
-    assert_eq!(
-        Ui::two_lines("SCPI 5555, VXI-11, SSH 22 (password or key)"),
-        ("SCPI 5555, VXI-11, SSH", "22 (password or key)")
-    );
+    assert_eq!(Ui::two_lines("SCPI 5555, VXI-11, SSH 22 (password or key)"), ("SCPI 5555, VXI-11, SSH", "22 (password or key)"));
     assert_eq!(Ui::two_lines("nospace"), ("nospace", ""));
 }
 
@@ -669,9 +591,7 @@ fn the_channels_a_line_does_not_have_are_dimmed() {
 #[test]
 fn the_trigger_tag_keeps_clear_of_the_windows_button() {
     let mut u = studio();
-    for _ in 0..3 {
-        u.step(0.05);
-    }
+    for _ in 0..3 { u.step(0.05); }
     let b = u.win_btn().1;
     let (g, y) = (u.plot.grid, b.y + b.h / 2);
     let x1 = u.trigger_tag_x(g.x + g.w - MARK_W, y);
@@ -700,9 +620,7 @@ fn the_plot_reaches_the_sheet_where_the_strip_is_docked_under_it() {
     for dock in [crate::model::StripDock::Right, crate::model::StripDock::Left] {
         let mut u = Ui::new(Source::Demo { t: 0.0 });
         (u.m.bar_compact, u.m.strip_dock) = (true, dock);
-        for _ in 0..5 {
-            u.step(0.05);
-        }
+        for _ in 0..5 { u.step(0.05); }
         assert!(u.strip_rows() > 0, "the demo has a measurement in the strip");
         let (x0, w0) = u.plot_span();
         u.open_menu(MenuId::Display);
@@ -735,12 +653,7 @@ fn a_line_of_a_decoder_has_its_source_and_its_threshold_in_one_row() {
     for row in &lines {
         let (thr, r) = row.aux.unwrap();
         assert_eq!(u.sheet_line_thr(row.it), Some(thr));
-        assert!(
-            r.w >= 40 && r.h >= 36 && r.x >= row.ctrl.right() && r.right() <= row.row.right(),
-            "{:?} {:?}",
-            row.ctrl,
-            r
-        );
+        assert!(r.w >= 40 && r.h >= 36 && r.x >= row.ctrl.right() && r.right() <= row.row.right(), "{:?} {:?}", row.ctrl, r);
         assert!(row.label.right() <= row.ctrl.x && row.ctrl.w >= 4 * 40, "{:?} {:?}", row.label, row.ctrl);
     }
     // the threshold of the clock: the second line has its own

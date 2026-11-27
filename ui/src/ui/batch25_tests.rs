@@ -15,9 +15,7 @@ fn studio() -> Ui {
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
     u.files.dir = dir;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Waveform);
@@ -32,9 +30,7 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..4 {
-        frame(u);
-    }
+    for _ in 0..4 { frame(u); }
     let mut cv = Canvas::new(u.scr.w, u.scr.h);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -45,9 +41,7 @@ fn shot(u: &mut Ui, name: &str) {
 
 fn csv_bytes() -> Vec<u8> {
     let mut csv = String::from("Time (s),Voltage (V)\n");
-    for i in 0..4_000 {
-        csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-7, (i as f64 * 0.02).sin()));
-    }
+    for i in 0..4_000 { csv.push_str(&format!("{:e},{}\n", i as f64 * 1e-7, (i as f64 * 0.02).sin())); }
     csv.into_bytes()
 }
 
@@ -72,9 +66,7 @@ fn assert_clear(u: &Ui) {
     all.extend(b.la);
     all.extend(b.gen);
     all.sort_by_key(|r| r.x);
-    for w in all.windows(2) {
-        assert!(w[0].right() <= w[1].x, "{:?} overlaps {:?}", (w[0].x, w[0].w), (w[1].x, w[1].w));
-    }
+    for w in all.windows(2) { assert!(w[0].right() <= w[1].x, "{:?} overlaps {:?}", (w[0].x, w[0].w), (w[1].x, w[1].w)); }
     let last = all.last().unwrap();
     assert!(last.right() <= b.time.x - 5, "the pills run into the time base: {} > {}", last.right(), b.time.x - 5);
 }
@@ -88,18 +80,14 @@ fn sim_hides_the_live_channel_pills_and_live_restores_them() {
     assert!(u.sim_slot_set(1));
     u.activate(Item::SimAddRef);
     u.wait_sim_generation();
-    for _ in 0..3 {
-        frame(&mut u);
-    }
+    for _ in 0..3 { frame(&mut u); }
     u.refs[0].as_mut().unwrap().on = true;
     let before = u.studio_bottom();
     assert!(before.ch[0].w > 0 && before.ch[1].w > 0, "the live pills are on the bar in Live");
     let live_rects = (before.ch[0], before.ch[1]);
     u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0, 1]);
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     let b = u.studio_bottom();
     assert!(b.ch.iter().all(|r| r.w == 0), "CH pills are off the bar while SIM plays refs");
     assert!(b.refs[0].w > 0 && b.refs[1].w > 0, "the playing R pills stay");
@@ -127,14 +115,8 @@ fn pills_share_the_bar_by_count_and_never_reach_the_right_controls() {
     shot(&mut u, "bar-2-pills");
     let mut last = two[0].w;
     for n in 2..=10 {
-        for i in 0..n {
-            if u.refs[i].is_none() {
-                load_csv(&mut u, i, &format!("wave{}.csv", i + 1));
-            }
-        }
-        for r in u.refs.iter_mut().flatten() {
-            r.on = true;
-        }
+        for i in 0..n { if u.refs[i].is_none() { load_csv(&mut u, i, &format!("wave{}.csv", i + 1)); } }
+        for r in u.refs.iter_mut().flatten() { r.on = true; }
         let p = pills(&u);
         assert_eq!(p.len(), n + 1);
         assert!(p.iter().all(|r| r.w == p[0].w), "equal widths");
@@ -145,19 +127,13 @@ fn pills_share_the_bar_by_count_and_never_reach_the_right_controls() {
         assert_clear(&u);
     }
     // every channel and every ref: the smallest pills still clear the controls
-    for c in 0..n_ch() {
-        u.m.ch[c].on = true;
-    }
+    for c in 0..n_ch() { u.m.ch[c].on = true; }
     assert_clear(&u);
     assert!(pills(&u)[0].w >= 18 && pills(&u)[0].w < 60);
     shot(&mut u, "bar-full");
     // about 8 pills for the picture
-    for i in 5..NREF {
-        u.refs[i] = None;
-    }
-    for c in 0..n_ch() {
-        u.m.ch[c].on = c < 3;
-    }
+    for i in 5..NREF { u.refs[i] = None; }
+    for c in 0..n_ch() { u.m.ch[c].on = c < 3; }
     assert_eq!(pills(&u).len(), 8);
     assert_clear(&u);
     shot(&mut u, "bar-8-pills");
@@ -200,9 +176,7 @@ fn the_reference_and_sim_sheets_carry_a_load_file_row() {
 fn load_file_on_the_scope_lists_the_storage_files_and_loads_the_tapped_one() {
     let mut u = studio();
     assert!(u.workspace.desktop_panel.is_none());
-    for n in ["alpha.csv", "beta.csv", "gamma.csv"] {
-        std::fs::write(u.files.dir.join(n), csv_bytes()).unwrap();
-    }
+    for n in ["alpha.csv", "beta.csv", "gamma.csv"] { std::fs::write(u.files.dir.join(n), csv_bytes()).unwrap(); }
     std::fs::write(u.files.dir.join("notes.txt"), b"not a waveform").unwrap();
     u.ref_page.sel = 2;
     u.open_menu(MenuId::Ref);
@@ -232,9 +206,7 @@ fn a_file_loaded_while_sim_plays_refs_joins_the_playback() {
     u.refs[0].as_mut().unwrap().on = true;
     u.activate(Item::SimPlayRefs);
     assert_eq!(u.sim_refs, vec![0]);
-    for _ in 0..10 {
-        frame(&mut u);
-    }
+    for _ in 0..10 { frame(&mut u); }
     std::fs::write(u.files.dir.join("second.csv"), csv_bytes()).unwrap();
     std::fs::write(u.files.dir.join("third.csv"), csv_bytes()).unwrap();
     u.open_menu(MenuId::Sim);
@@ -245,9 +217,7 @@ fn a_file_loaded_while_sim_plays_refs_joins_the_playback() {
     u.activate(Item::PickOpt(k));
     assert!(u.sim_mode() && u.record_mode(), "SIM keeps playing");
     assert_eq!(u.sim_refs, vec![0, 1], "R2 is in the playback");
-    for _ in 0..30 {
-        frame(&mut u);
-    }
+    for _ in 0..30 { frame(&mut u); }
     assert!(u.replay.captures > 1);
     let b = u.studio_bottom();
     assert!(b.ch.iter().all(|r| r.w == 0) && b.refs[0].w > 0 && b.refs[1].w > 0);

@@ -765,9 +765,7 @@ fn the_studio_bar_has_a_sim_button_in_live_with_a_reference_shown() {
     let mut u = ui();
     u.m.layout = Layout::Studio;
     u.studio.enter = true;
-    for _ in 0..5 {
-        u.step(0.05);
-    }
+    for _ in 0..5 { u.step(0.05); }
     assert!(!u.record_mode() && u.studio_top().sim.w == 0, "nothing to play: no button");
     let csv: String = std::iter::once("Time (s),Volts\n".to_string())
         .chain((0..400).map(|i| format!("{:.12e},{}\n", i as f64 * 1e-9, ((i / 5) % 2) as f64 * 0.5)))
@@ -778,18 +776,14 @@ fn the_studio_bar_has_a_sim_button_in_live_with_a_reference_shown() {
     assert!(!u.record_mode() && sim.w >= 40, "live with R1 shown: a button {sim:?}");
     u.tap(sim.x + sim.w / 2, sim.y + sim.h / 2);
     u.wait_sim_generation();
-    for _ in 0..5 {
-        u.step(0.05);
-    }
+    for _ in 0..5 { u.step(0.05); }
     assert!(u.sim_mode() && u.record_mode(), "a tap plays the reference");
     assert!(u.studio_top().badge.w > 0, "and the bar has Live");
     u.activate(Item::SimLive);
     u.step(0.05);
     assert!(!u.record_mode() && u.studio_top().sim.w >= 40, "Live brings the SIM button back");
     // a reference that is not shown takes the button away
-    for r in u.refs.iter_mut().flatten() {
-        r.on = false;
-    }
+    for r in u.refs.iter_mut().flatten() { r.on = false; }
     assert_eq!(u.studio_top().sim.w, 0);
 }
 
@@ -802,9 +796,7 @@ fn a_reference_with_its_own_scale_follows_the_replay_and_the_horizontal_controls
     u.m.layout = Layout::Studio;
     u.studio.enter = true;
     u.workspace.stacked = true;
-    for _ in 0..5 {
-        u.step(0.05);
-    }
+    for _ in 0..5 { u.step(0.05); }
     let csv: String = std::iter::once("Time (s),Volts\n".to_string())
         .chain((0..20_000).map(|i| format!("{:.12e},{}\n", i as f64 * 1e-9, ((i / 7) % 2) as f64 * 0.5)))
         .collect();
@@ -816,18 +808,12 @@ fn a_reference_with_its_own_scale_follows_the_replay_and_the_horizontal_controls
     u.activate(Item::SimPlayRefs);
     u.m.tscale = nearest_tscale(1e-7);
     u.m.tfine = 1.0;
-    for _ in 0..5 {
-        u.step(0.05);
-    }
+    for _ in 0..5 { u.step(0.05); }
     assert!(u.sim_plays_ref(0));
     assert_eq!(u.studio_ref_own(0), None, "played: it follows the main time base");
     // the window moves with the replay, and the lane is drawn from it
     let (d0, tdiv) = (u.m.delay, u.m.time_per_div());
-    for _ in 0..30 {
-        u.step(0.05);
-        let mut c = Canvas::new(1024, 600);
-        u.render(&mut c);
-    }
+    for _ in 0..30 { u.step(0.05); let mut c = Canvas::new(1024, 600); u.render(&mut c); }
     assert!(u.m.delay != d0 && tdiv == u.m.time_per_div(), "the replay scrolls: {d0} -> {}", u.m.delay);
     assert_eq!(u.studio_lane_view((u.m.time_per_div(), u.m.delay)), (u.m.time_per_div(), u.m.delay));
     u.activate(Item::SimLive);

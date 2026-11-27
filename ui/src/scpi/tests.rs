@@ -933,23 +933,12 @@ fn a_client_that_reads_nothing_does_not_hold_the_frame_loop() {
 #[test]
 fn a_zone_is_a_box_or_a_shape_on_one_channel() {
     let (mut s, mut ui, cv) = session();
-    line(
-        &mut s,
-        &mut ui,
-        &cv,
-        ":TRIG:ZONE1:STAT ON;:TRIG:ZONE1:SOUR CHAN2;:TRIG:ZONE1:MODE NOT;:TRIG:ZONE1:PLAC -1E-3,0,1E-3,1",
-    );
+    line(&mut s, &mut ui, &cv, ":TRIG:ZONE1:STAT ON;:TRIG:ZONE1:SOUR CHAN2;:TRIG:ZONE1:MODE NOT;:TRIG:ZONE1:PLAC -1E-3,0,1E-3,1");
     assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:ZONE1:STAT?;:TRIG:ZONE1:SOUR?;:TRIG:ZONE1:MODE?"), "1;CHAN2;NOT");
     let place = line(&mut s, &mut ui, &cv, ":TRIG:ZONE1:PLAC?");
     let nums: Vec<f64> = place.split(',').map(|s| s.parse().unwrap()).collect();
     assert_eq!(nums.len(), 4);
-    assert!(
-        (nums[0] + 1e-3).abs() < 1e-9
-            && nums[1].abs() < 1e-9
-            && (nums[2] - 1e-3).abs() < 1e-9
-            && (nums[3] - 1.0).abs() < 1e-6,
-        "{place}"
-    );
+    assert!((nums[0] + 1e-3).abs() < 1e-9 && nums[1].abs() < 1e-9 && (nums[2] - 1e-3).abs() < 1e-9 && (nums[3] - 1.0).abs() < 1e-6, "{place}");
     line(&mut s, &mut ui, &cv, ":TRIG:ZONE2:POIN -1E-3,0,0,1,1E-3,0");
     assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:ZONE2:STAT?;:TRIG:ZONE2:MODE?"), "0;INT");
     assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:ZONE2:PLAC?"), "9.9E37");
@@ -969,42 +958,17 @@ fn a_zone_is_a_box_or_a_shape_on_one_channel() {
 #[test]
 fn the_added_trigger_search_and_measure_commands_answer() {
     let (mut s, mut ui, cv) = session();
-    for _ in 0..4 {
-        ui.step(0.05);
-    }
-    for q in [
-        ":TRIG:DEL:SA?",
-        ":TRIG:DEL:ASL?",
-        ":TRIG:DEL:SB?",
-        ":TRIG:DEL:TYPE?",
-        ":TRIG:DUR:TYPE?",
-        ":TRIG:SLOP:POL?",
-        ":TRIG:SLOP:WIND?",
-        ":TRIG:VID:POL?",
-        ":TRIG:SHOL:DSRC?",
-        ":TRIG:SET:CSRC?",
-        ":TRIG:SHOL:TYPE?",
-        ":MEAS:AMP:TYPE?",
-        ":MEAS:AMP:MAN:TOP?",
-        ":MEAS:AMP:MAN:BASE?",
-        ":MEAS:SET:MID?",
-        ":MEAS:THR:TYPE?",
-        ":MEAS:AREA?",
-        ":MEAS:STR:DOCK?",
-        ":CURS:TRAC:MODE?",
-        ":REC:CURR?",
-        ":REC:WREP:FCUR?",
-        ":REC:WREP:FMAX?",
-        ":MEAS:COUN:VAL?",
-    ] {
+    for _ in 0..4 { ui.step(0.05); }
+    for q in [":TRIG:DEL:SA?", ":TRIG:DEL:ASL?", ":TRIG:DEL:SB?", ":TRIG:DEL:TYPE?", ":TRIG:DUR:TYPE?", ":TRIG:SLOP:POL?",
+        ":TRIG:SLOP:WIND?", ":TRIG:VID:POL?", ":TRIG:SHOL:DSRC?", ":TRIG:SET:CSRC?", ":TRIG:SHOL:TYPE?", ":MEAS:AMP:TYPE?",
+        ":MEAS:AMP:MAN:TOP?", ":MEAS:AMP:MAN:BASE?", ":MEAS:SET:MID?", ":MEAS:THR:TYPE?", ":MEAS:AREA?", ":MEAS:STR:DOCK?",
+        ":CURS:TRAC:MODE?", ":REC:CURR?", ":REC:WREP:FCUR?", ":REC:WREP:FMAX?", ":MEAS:COUN:VAL?"] {
         let r = line(&mut s, &mut ui, &cv, &format!("*CLS;{q};:SYST:ERR?"));
         assert!(r.ends_with("0,\"No error\"") && r.len() > "0,\"No error\"".len() + 1, "{q}: {r}");
     }
     line(&mut s, &mut ui, &cv, "*CLS;:TRIG:DEL:TYPE GOUT;:TRIG:SLOP:POL RFAL;:MEAS:STR:DOCK LEFT");
-    assert_eq!(
-        line(&mut s, &mut ui, &cv, ":TRIG:DEL:TYPE?;:TRIG:SLOP:POL?;:MEAS:STR:DOCK?;:SYST:ERR?"),
-        "GOUT;RFAL;LEFT;0,\"No error\""
-    );
+    assert_eq!(line(&mut s, &mut ui, &cv, ":TRIG:DEL:TYPE?;:TRIG:SLOP:POL?;:MEAS:STR:DOCK?;:SYST:ERR?"),
+        "GOUT;RFAL;LEFT;0,\"No error\"");
     line(&mut s, &mut ui, &cv, ":MEAS:SET:MID 89");
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-224,"), "the middle stays at half the amplitude");
     line(&mut s, &mut ui, &cv, ":SEAR:STAT ON");

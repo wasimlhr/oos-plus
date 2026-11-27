@@ -238,11 +238,7 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
 
 /// Height the Events pane wants for `rows` rows.
 pub(super) fn want_h(rows: usize) -> i32 {
-    if rows == 0 {
-        EMPTY_H
-    } else {
-        HEAD + TITLES + rows as i32 * tables::ROW_H
-    }
+    if rows == 0 { EMPTY_H } else { HEAD + TITLES + rows as i32 * tables::ROW_H }
 }
 
 /// What the last column says of a row: how many of its fields failed a check. A row without one says nothing: an "OK"
@@ -398,11 +394,7 @@ impl Ui {
 
     /// The height of the row of buttons in the pane: none while they are in the strip.
     fn events_head_h(&self) -> i32 {
-        if self.events_strip().is_some() {
-            0
-        } else {
-            HEAD
-        }
+        if self.events_strip().is_some() { 0 } else { HEAD }
     }
 
     /// Where the rows are, and how many fit.
@@ -871,8 +863,7 @@ mod tests {
         (u.m.dec_proto, u.m.dec_src, u.m.dec_src2, u.m.dec_cs) = (m.dec_proto, m.dec_src, m.dec_src2, m.dec_cs);
         (u.m.dec_bits, u.m.dec_mode, u.m.dec_on) = (8, 0, true);
         let (triggered, partial, pairs) = (true, false, false);
-        u.last[0] =
-            Some(Record { t0: 0.0, dt, ch: ch.clone(), triggered, partial, raw: None, la: None, pairs, peak: false });
+        u.last[0] = Some(Record { t0: 0.0, dt, ch: ch.clone(), triggered, partial, raw: None, la: None, pairs, peak: false });
         let items = u.decode_items();
         let lines: Vec<usize> = (1..4).filter(|&r| items.contains(&Item::DecThrLine(r))).collect();
         assert_eq!(lines, [1, 2], "a threshold for the clock and the chip select, none for a fourth line");
@@ -912,12 +903,9 @@ mod tests {
     #[test]
     fn spi_frames_are_messages_and_miso_is_read() {
         // three words a frame, a frame every 50 us, mode 0
-        let [cs, clk, mosi, miso] =
-            oos_dsp::sim::spi_logic(&[(0x9f, 0xff), (0x00, 0x1f), (0x00, 0x40)], 8, 0, 2e6, 0.0, 3.3);
+        let [cs, clk, mosi, miso] = oos_dsp::sim::spi_logic(&[(0x9f, 0xff), (0x00, 0x1f), (0x00, 0x40)], 8, 0, 2e6, 0.0, 3.3);
         let (dt, period) = (25e-9, 50e-6);
-        let wave = |l: &oos_dsp::sim::Logic| -> Vec<f32> {
-            oos_dsp::sim::sample(|t| l.v(t.rem_euclid(period)), 0.0, dt, 6400)
-        };
+        let wave = |l: &oos_dsp::sim::Logic| -> Vec<f32> { oos_dsp::sim::sample(|t| l.v(t.rem_euclid(period)), 0.0, dt, 6400) };
         let ch: [Vec<f32>; NCH] = [wave(&mosi), wave(&clk), wave(&cs), wave(&miso)];
         let mut m = Model::default();
         m.dec_proto = Proto::SPI;
@@ -1063,9 +1051,8 @@ mod tests {
         if let Some(proto) = Proto::from_key("Mil1553") {
             use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_STATUS};
             m.dec_proto = proto;
-            let word = |t: f64, cmd: bool, v: u32, role: Option<u32>| Packet {
-                value2: role,
-                ..at(t, DecKind::Word { cmd }, v)
+            let word = |t: f64, cmd: bool, v: u32, role: Option<u32>| {
+                Packet { value2: role, ..at(t, DecKind::Word { cmd }, v) }
             };
             let p = [
                 word(0.0, true, 0x8842, Some(MIL1553_COMMAND)),

@@ -51,9 +51,7 @@ impl Protocol for Jtag {
     /// the identification read "DR 0", the zeros that were shifted in).
     fn text(&self, p: &Packet, _: &[usize; OPTS]) -> Option<String> {
         match (p.kind, p.value2) {
-            (Kind::Field(l @ ("IR" | "DR" | "IR+" | "DR+")), Some(out)) => {
-                Some(format!("{} {:X} > {:X}", l, p.value, out))
-            }
+            (Kind::Field(l @ ("IR" | "DR" | "IR+" | "DR+")), Some(out)) => Some(format!("{} {:X} > {:X}", l, p.value, out)),
             _ => None,
         }
     }
@@ -84,13 +82,8 @@ mod tests {
     /// A JTAG scan with TDO says both directions; without TDO it keeps the text of its kind.
     #[test]
     fn a_jtag_scan_says_what_came_out() {
-        let scan = |label: &'static str, value2: Option<u32>| Packet {
-            t0: 0.0,
-            t1: 1.0,
-            kind: Kind::Field(label),
-            value: 0,
-            value2,
-            ok: true,
+        let scan = |label: &'static str, value2: Option<u32>| {
+            Packet { t0: 0.0, t1: 1.0, kind: Kind::Field(label), value: 0, value2, ok: true }
         };
         assert_eq!(Jtag.text(&scan("DR", Some(0x4ba0_0477)), &[0; OPTS]).as_deref(), Some("DR 0 > 4BA00477"));
         assert_eq!(Jtag.text(&scan("IR", Some(1)), &[0; OPTS]).as_deref(), Some("IR 0 > 1"));

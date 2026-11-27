@@ -9,14 +9,8 @@ fn layout(l: Layout) -> Ui {
     let mut u = Ui::new(Source::Demo { t: 0.0 });
     u.m.layout = l;
     u.m.ch[1].on = true;
-    if l == Layout::Studio {
-        u.studio.enter = true;
-        u.m.studio_zoom_tab = false;
-        u.m.studio_detail = false;
-    }
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    if l == Layout::Studio { u.studio.enter = true; u.m.studio_zoom_tab = false; u.m.studio_detail = false; }
+    for _ in 0..8 { u.step(0.05); }
     u.render(&mut Canvas::new(W, H));
     u
 }
@@ -28,9 +22,7 @@ fn zoomed(l: Layout) -> Ui {
     u.m.zscale = u.m.tscale.saturating_sub(3);
     u.m.zdelay = 0.0;
     u.relayout();
-    for _ in 0..4 {
-        u.step(0.05);
-    }
+    for _ in 0..4 { u.step(0.05); }
     u.render(&mut Canvas::new(W, H));
     u
 }
@@ -42,9 +34,7 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 
 fn drag(u: &mut Ui, (x0, y0): (i32, i32), (x1, y1): (i32, i32)) {
     touch(u, Phase::Down, x0, y0);
-    for k in 1..=6 {
-        touch(u, Phase::Move, x0 + (x1 - x0) * k / 6, y0 + (y1 - y0) * k / 6);
-    }
+    for k in 1..=6 { touch(u, Phase::Move, x0 + (x1 - x0) * k / 6, y0 + (y1 - y0) * k / 6); }
     touch(u, Phase::Up, x1, y1);
 }
 
@@ -80,11 +70,7 @@ fn the_overview_box_pans_resizes_and_is_drawn_anew() {
     assert!(u.m.zscale < z2, "dragging the left edge in narrows it");
     // empty overview: a new box from where the finger went down to where it is
     let (xa, xb) = u.zoom_window_x(o);
-    let (from, to) = if xa - o.x > o.right() - xb {
-        (o.x + 8, o.x + 8 + (xa - o.x) / 2)
-    } else {
-        (xb + 20, xb + 20 + (o.right() - xb - 20) / 2)
-    };
+    let (from, to) = if xa - o.x > o.right() - xb { (o.x + 8, o.x + 8 + (xa - o.x) / 2) } else { (xb + 20, xb + 20 + (o.right() - xb - 20) / 2) };
     drag(&mut u, (from, y), (to, y));
     let (na, nb) = u.zoom_window_x(o);
     // the width snaps to the 1-2-5 steps: the finest window that holds the drawn box
@@ -106,9 +92,7 @@ fn the_wheel_over_the_zoomed_view_no_longer_zooms() {
     assert_eq!((u.m.tscale, u.m.delay), (tscale, delay));
 }
 
-fn shown(u: &Ui) -> Vec<WaveId> {
-    u.meas_rows().iter().filter(|r| !u.meas_row_hidden(r)).map(|r| r.src).collect()
-}
+fn shown(u: &Ui) -> Vec<WaveId> { u.meas_rows().iter().filter(|r| !u.meas_row_hidden(r)).map(|r| r.src).collect() }
 
 #[test]
 fn a_measurement_of_a_channel_that_is_off_is_not_shown_and_returns_with_it() {
@@ -121,9 +105,7 @@ fn a_measurement_of_a_channel_that_is_off_is_not_shown_and_returns_with_it() {
         assert_eq!(u.meas_rows().len(), 3);
         assert_eq!(u.meas_shown_count(), 3, "{l:?}");
         u.m.ch[0].on = false;
-        for _ in 0..3 {
-            u.step(0.05);
-        }
+        for _ in 0..3 { u.step(0.05); }
         assert_eq!(u.meas_rows().len(), 3, "{l:?}: it stays configured");
         assert_eq!(shown(&u), vec![WaveId::Ch(1)], "{l:?}");
         assert_eq!(u.meas_shown_count(), 1, "{l:?}");
@@ -134,9 +116,7 @@ fn a_measurement_of_a_channel_that_is_off_is_not_shown_and_returns_with_it() {
         }
         shot(&mut u, &format!("b6-meas-ch1-off-{l:?}"));
         u.m.ch[0].on = true;
-        for _ in 0..3 {
-            u.step(0.05);
-        }
+        for _ in 0..3 { u.step(0.05); }
         assert_eq!(u.meas_shown_count(), 3, "{l:?}: back with the channel");
         assert!(u.meas_groups().contains(&WaveId::Ch(0)));
     }
@@ -146,17 +126,7 @@ fn a_measurement_of_a_channel_that_is_off_is_not_shown_and_returns_with_it() {
 fn a_hidden_ref_measurement_is_not_shown() {
     // Minimal: Default keeps upstream's rows, also of a ref that is not drawn
     let mut u = layout(Layout::Minimal);
-    u.refs[0] = Some(RefWave {
-        src: 0,
-        color: 0,
-        label: String::new(),
-        t0: 0.0,
-        dt: 1e-6,
-        v: vec![0.0; 64].into(),
-        vpd: 0.5,
-        offset: 0.0,
-        on: false,
-    });
+    u.refs[0] = Some(RefWave { src: 0, color: 0, label: String::new(), t0: 0.0, dt: 1e-6, v: vec![0.0; 64].into(), vpd: 0.5, offset: 0.0, on: false });
     u.m.meas = vec![(Meas::Vpp, WaveId::Ref(0)), (Meas::Vpp, WaveId::Ch(0))];
     u.m.meas2.clear();
     u.m.cat.clear();
@@ -173,24 +143,13 @@ fn deep_zoom_time_labels_never_repeat() {
             // Studio: whole steps from the trigger
             let ticks = studio_time_ticks(tdiv, delay, 1);
             let span = (HDIV / 2.0 * tdiv).abs() + delay.abs();
-            let labels: Vec<String> = ticks
-                .iter()
-                .map(|&(k, t)| if k == 0 { "0 s".into() } else { axis_label64(t, tdiv, 0.0, span, "s") })
-                .collect();
+            let labels: Vec<String> = ticks.iter().map(|&(k, t)| if k == 0 { "0 s".into() } else { axis_label64(t, tdiv, 0.0, span, "s") }).collect();
             let mut seen = std::collections::HashSet::new();
-            for s in &labels {
-                assert!(seen.insert(s.clone()), "studio {tdiv} at {delay}: {s} repeats in {labels:?}");
-            }
+            for s in &labels { assert!(seen.insert(s.clone()), "studio {tdiv} at {delay}: {s} repeats in {labels:?}"); }
             // the other layouts: the window's own divisions
-            let labels: Vec<String> = (0..=HDIV as i32)
-                .map(|i| {
-                    axis_label64(delay as f64 + (i as f64 - HDIV as f64 / 2.0) * tdiv as f64, tdiv, delay, span, "s")
-                })
-                .collect();
+            let labels: Vec<String> = (0..=HDIV as i32).map(|i| axis_label64(delay as f64 + (i as f64 - HDIV as f64 / 2.0) * tdiv as f64, tdiv, delay, span, "s")).collect();
             let mut seen = std::collections::HashSet::new();
-            for s in &labels {
-                assert!(seen.insert(s.clone()), "{tdiv} at {delay}: {s} repeats in {labels:?}");
-            }
+            for s in &labels { assert!(seen.insert(s.clone()), "{tdiv} at {delay}: {s} repeats in {labels:?}"); }
         }
     }
 }

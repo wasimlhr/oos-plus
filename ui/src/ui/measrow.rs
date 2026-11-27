@@ -3,10 +3,10 @@
 //! rows, at most seven per tab) or a dialog with 40 px controls in Minimal and Default. Every field starts as
 //! "Shared": it follows the Measure menu until the row sets its own. The card is made of `Item::RowF` rows that read
 //! and write `Model::row_cfg` for the row `meas_own.dialog` points at (single, pair or catalogue rows).
-use super::sheet::SheetTab;
-use super::tools::PairKind;
 use super::*;
+use super::sheet::SheetTab;
 use crate::model::{RowCfg, RowKey};
+use super::tools::PairKind;
 use oos_dsp::measure::{BaseTop, EdgeSel, PairOpts, SearchDir, ToSel};
 
 /// A field of the card.
@@ -128,18 +128,13 @@ impl Ui {
         let refs = (matches!(key, RowKey::One(..)) && !self.m.meas_lv.absolute).then_some(it(RF::Refs));
         let with = |rows: Vec<Item>| -> Vec<Item> { source.into_iter().chain(refs).chain(rows).collect() };
         let Some(group) = group_of(key) else { return self.measrow_cat_plan(key) };
-        let stats = (
-            "Stats",
-            vec![it(RF::StMean), it(RF::StRange), it(RF::StN), Item::MeasPop, Item::MeasStatReset, it(RF::Trend)],
-        );
+        let stats = ("Stats", vec![it(RF::StMean), it(RF::StRange), it(RF::StN), Item::MeasPop, Item::MeasStatReset, it(RF::Trend)]);
         let mut plan = match group {
             Group::Amp { overshoot } => {
                 let mut rows = vec![it(RF::BaseTop)];
                 if overshoot {
                     rows.push(it(RF::OsRef));
-                    if cfg.os_top.is_some() || cfg.os_base.is_some() {
-                        rows.extend([it(RF::OsTop), it(RF::OsBase)]);
-                    }
+                    if cfg.os_top.is_some() || cfg.os_base.is_some() { rows.extend([it(RF::OsTop), it(RF::OsBase)]); }
                 }
                 rows.push(it(RF::Gate));
                 vec![("Amplitude", with(rows))]
@@ -147,17 +142,13 @@ impl Ui {
             Group::Level => vec![("Gate", with(vec![it(RF::Gate)]))],
             Group::Timing { polarity } => {
                 let mut rows = Vec::new();
-                if polarity {
-                    rows.push(it(RF::Pol));
-                }
+                if polarity { rows.push(it(RF::Pol)); }
                 rows.extend([it(RF::Off), it(RF::Step), it(RF::Gate)]);
                 vec![("Cycles", with(rows)), ("Levels", vec![it(RF::Low), it(RF::High), it(RF::Hyst), it(RF::BaseTop)])]
             }
             Group::Edges { used } => {
                 let mut rows = vec![it(RF::Low), it(RF::High)];
-                if used {
-                    rows.push(it(RF::Used));
-                }
+                if used { rows.push(it(RF::Used)); }
                 rows.push(it(RF::Gate));
                 vec![("Edges", with(rows)), ("Levels", vec![it(RF::Hyst), it(RF::BaseTop)])]
             }
@@ -166,15 +157,11 @@ impl Ui {
                 ("Counting", with(vec![it(RF::N), it(RF::NEdge), it(RF::NOff), it(RF::NStep), it(RF::Gate)])),
                 ("Levels", vec![it(RF::Hyst)]),
             ],
-            Group::Outside => {
-                vec![("Counting", with(vec![it(RF::Side), it(RF::OutVolts), it(RF::Low), it(RF::High), it(RF::Gate)]))]
-            }
+            Group::Outside => vec![("Counting", with(vec![it(RF::Side), it(RF::OutVolts), it(RF::Low), it(RF::High), it(RF::Gate)]))],
             Group::Pair(kind) => {
                 let delay = kind == PairKind::Delay;
                 let mut rows = vec![it(RF::From), it(RF::To)];
-                if delay {
-                    rows.push(it(RF::Dir));
-                }
+                if delay { rows.push(it(RF::Dir)); }
                 rows.extend([it(RF::WMin), it(RF::WMax)]);
                 vec![("Edges", rows)]
             }
@@ -198,9 +185,7 @@ impl Ui {
     /// Every item of the card, for the dialog of Minimal and Default.
     pub(super) fn measrow_items(&self) -> Vec<Item> {
         let mut v: Vec<Item> = self.measrow_plan().into_iter().flat_map(|(_, rows)| rows).collect();
-        if !matches!(self.rowf_key(), Some(RowKey::Cat(..))) {
-            v.push(Item::RowF(RF::Reset));
-        }
+        if !matches!(self.rowf_key(), Some(RowKey::Cat(..))) { v.push(Item::RowF(RF::Reset)); }
         v
     }
 
@@ -227,18 +212,7 @@ impl Ui {
         let Item::RowF(f) = it else { return None };
         Some(match f {
             RF::Reset => Kind::Action,
-            RF::Source
-            | RF::Refs
-            | RF::BaseTop
-            | RF::OsRef
-            | RF::Gate
-            | RF::Pol
-            | RF::BurstPol
-            | RF::NEdge
-            | RF::Side
-            | RF::From
-            | RF::To
-            | RF::Dir => Kind::Choice,
+            RF::Source | RF::Refs | RF::BaseTop | RF::OsRef | RF::Gate | RF::Pol | RF::BurstPol | RF::NEdge | RF::Side | RF::From | RF::To | RF::Dir => Kind::Choice,
             RF::Used | RF::StMean | RF::StRange | RF::StN | RF::Trend => Kind::Action,
             _ => Kind::Value,
         })
@@ -291,13 +265,7 @@ impl Ui {
             }
             Item::RowF(f @ (RF::StMean | RF::StRange | RF::StN)) => {
                 let (st, row) = self.rowf_stat()?;
-                if st.n == 0 {
-                    return Some(match f {
-                        RF::StN => "Population: none yet".into(),
-                        RF::StMean => "Mean: waiting for a value".into(),
-                        _ => "Range: none yet".into(),
-                    });
-                }
+                if st.n == 0 { return Some(match f { RF::StN => "Population: none yet".into(), RF::StMean => "Mean: waiting for a value".into(), _ => "Range: none yet".into() }); }
                 let mean = st.sum / st.n as f64;
                 let sd = (st.sumsq / st.n as f64 - mean * mean).max(0.0).sqrt();
                 Some(match f {
@@ -311,10 +279,7 @@ impl Ui {
     }
 
     fn rowf_pair_kind(&self) -> Option<PairKind> {
-        match self.rowf_key()? {
-            RowKey::Pair(k, ..) => Some(tools::PAIRS[k.min(tools::PAIRS.len() - 1)].1),
-            _ => None,
-        }
+        match self.rowf_key()? { RowKey::Pair(k, ..) => Some(tools::PAIRS[k.min(tools::PAIRS.len() - 1)].1), _ => None }
     }
 
     /// Setup and hold choose a clock edge and a data edge: no Same or Opposite, no direction.
@@ -327,12 +292,8 @@ impl Ui {
         let RowKey::Pair(k, a, b) = self.rowf_key()? else { return None };
         let (_, pk, ea, eb) = tools::PAIRS[k.min(tools::PAIRS.len() - 1)];
         let shared = match pk {
-            PairKind::SetupBoth | PairKind::HoldBoth | PairKind::SetupAndHoldBoth => {
-                PairOpts { from: EdgeSel::Both, to: ToSel::Both, dir: SearchDir::First, min: None, max: None }
-            }
-            PairKind::Setup | PairKind::Hold | PairKind::SetupAndHold => {
-                PairOpts { to: ToSel::Both, ..PairOpts::rise_fall(ea, eb) }
-            }
+            PairKind::SetupBoth | PairKind::HoldBoth | PairKind::SetupAndHoldBoth => PairOpts { from: EdgeSel::Both, to: ToSel::Both, dir: SearchDir::First, min: None, max: None },
+            PairKind::Setup | PairKind::Hold | PairKind::SetupAndHold => PairOpts { to: ToSel::Both, ..PairOpts::rise_fall(ea, eb) },
             _ => PairOpts::rise_fall(ea, eb),
         };
         Some((self.pair_opts(k, a, b), shared))
@@ -345,10 +306,7 @@ impl Ui {
         let pct = |x: f64| format!("{:.0}%", x * 100.0);
         let lv = |x: f64| if m.meas_lv.absolute { si_short(x, "V") } else { pct(x) };
         Some(match f {
-            RF::Source => match self.rowf_key() {
-                Some(RowKey::One(_, id)) => self.wave_name(id),
-                _ => String::new(),
-            },
+            RF::Source => match self.rowf_key() { Some(RowKey::One(_, id)) => self.wave_name(id), _ => String::new() },
             RF::Refs => match (c.lo, c.hi) {
                 (None, None) => format!("Shared ({:.0}/{:.0})", m.meas_lpct * 100.0, m.meas_hpct * 100.0),
                 (lo, hi) => {
@@ -356,24 +314,11 @@ impl Ui {
                     format!("{:.0}/{:.0}", lo * 100.0, hi * 100.0)
                 }
             },
-            RF::BaseTop => match c.base_top {
-                Some(b) => b.label().into(),
-                None => self.rowf_shared_base_top(),
-            },
-            RF::OsRef => {
-                if c.os_top.is_some() || c.os_base.is_some() {
-                    "Manual".into()
-                } else {
-                    "Auto".into()
-                }
-            }
+            RF::BaseTop => match c.base_top { Some(b) => b.label().into(), None => self.rowf_shared_base_top() },
+            RF::OsRef => if c.os_top.is_some() || c.os_base.is_some() { "Manual".into() } else { "Auto".into() },
             RF::OsTop => si_short(c.os_top.unwrap_or(1.0), "V"),
             RF::OsBase => si_short(c.os_base.unwrap_or(0.0), "V"),
-            RF::Gate => match c.gate_full {
-                None => "Shared".into(),
-                Some(true) => "Full record".into(),
-                Some(false) => "Screen".into(),
-            },
+            RF::Gate => match c.gate_full { None => "Shared".into(), Some(true) => "Full record".into(), Some(false) => "Screen".into() },
             RF::Pol => ["First", "Rising", "Falling"][c.pol.unwrap_or(0).min(2) as usize].into(),
             RF::Off => c.off.unwrap_or(0).to_string(),
             RF::Step => c.step.unwrap_or(1).to_string(),
@@ -381,65 +326,19 @@ impl Ui {
             RF::High => c.hi.map_or("Shared".into(), lv),
             RF::Hyst => c.hyst.map_or("Shared".into(), |h| if m.meas_lv.absolute { si_short(h, "V") } else { pct(h) }),
             RF::Used | RF::StMean | RF::StRange | RF::StN | RF::Trend => String::new(),
-            RF::Idle => match c.idle {
-                None => "Shared".into(),
-                Some(x) if x > 0.0 => si_short(x, "s"),
-                Some(_) => "period".into(),
-            },
-            RF::BurstPol => {
-                if c.burst_fall == Some(true) {
-                    "Falling".into()
-                } else {
-                    "Rising".into()
-                }
-            }
+            RF::Idle => match c.idle { None => "Shared".into(), Some(x) if x > 0.0 => si_short(x, "s"), Some(_) => "period".into() },
+            RF::BurstPol => if c.burst_fall == Some(true) { "Falling".into() } else { "Rising".into() },
             RF::N => c.n.map_or("Shared".into(), |n| n.to_string()),
             RF::NOff => c.n_off.unwrap_or(0).to_string(),
             RF::NStep => c.n_step.unwrap_or(1).to_string(),
-            RF::NEdge => match c.n_edge {
-                None => "Shared".into(),
-                Some(x) => ["Rising", "Falling", "Both"][x.min(2) as usize].into(),
-            },
-            RF::Side => match c.side {
-                None => "Shared".into(),
-                Some(x) => ["High", "Low", "Both"][x.min(2) as usize].into(),
-            },
+            RF::NEdge => match c.n_edge { None => "Shared".into(), Some(x) => ["Rising", "Falling", "Both"][x.min(2) as usize].into() },
+            RF::Side => match c.side { None => "Shared".into(), Some(x) => ["High", "Low", "Both"][x.min(2) as usize].into() },
             RF::OutVolts => c.out_volts.map_or("Reference".into(), |v| si_short(v, "V")),
-            RF::From => {
-                let (now, _) = self.rowf_pair()?;
-                FROM_NAMES[match now.from {
-                    EdgeSel::Rise => 0,
-                    EdgeSel::Fall => 1,
-                    _ => 2,
-                }]
-                .into()
-            }
-            RF::To => {
-                let (now, _) = self.rowf_pair()?;
-                TO_NAMES[match now.to {
-                    ToSel::Rise => 0,
-                    ToSel::Fall => 1,
-                    ToSel::Both => 2,
-                    ToSel::Same => 3,
-                    _ => 4,
-                }]
-                .into()
-            }
-            RF::Dir => {
-                if self.rowf_pair()?.0.dir == SearchDir::Last {
-                    "Last".into()
-                } else {
-                    "First".into()
-                }
-            }
-            RF::WMin => {
-                let (now, _) = self.rowf_pair()?;
-                now.min.or(self.rowf_window_default(true)).map_or("Off".into(), |x| si_short(x, "s"))
-            }
-            RF::WMax => {
-                let (now, _) = self.rowf_pair()?;
-                now.max.or(self.rowf_window_default(false)).map_or("Off".into(), |x| si_short(x, "s"))
-            }
+            RF::From => { let (now, _) = self.rowf_pair()?; FROM_NAMES[match now.from { EdgeSel::Rise => 0, EdgeSel::Fall => 1, _ => 2 }].into() }
+            RF::To => { let (now, _) = self.rowf_pair()?; TO_NAMES[match now.to { ToSel::Rise => 0, ToSel::Fall => 1, ToSel::Both => 2, ToSel::Same => 3, _ => 4 }].into() }
+            RF::Dir => if self.rowf_pair()?.0.dir == SearchDir::Last { "Last".into() } else { "First".into() },
+            RF::WMin => { let (now, _) = self.rowf_pair()?; now.min.or(self.rowf_window_default(true)).map_or("Off".into(), |x| si_short(x, "s")) }
+            RF::WMax => { let (now, _) = self.rowf_pair()?; now.max.or(self.rowf_window_default(false)).map_or("Off".into(), |x| si_short(x, "s")) }
             RF::Reset => String::new(),
         })
     }
@@ -453,14 +352,10 @@ impl Ui {
         let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
         Some(match f {
             RF::Source => self.wave_names(),
-            RF::Refs => {
-                std::iter::once(format!("Shared ({:.0}/{:.0})", self.m.meas_lpct * 100.0, self.m.meas_hpct * 100.0))
-                    .chain(REFS.iter().map(|(l, h)| format!("{:.0}/{:.0}", l * 100.0, h * 100.0)))
-                    .collect()
-            }
-            RF::BaseTop => std::iter::once(self.rowf_shared_base_top())
-                .chain(BaseTop::ALL.iter().map(|b| b.label().to_string()))
+            RF::Refs => std::iter::once(format!("Shared ({:.0}/{:.0})", self.m.meas_lpct * 100.0, self.m.meas_hpct * 100.0))
+                .chain(REFS.iter().map(|(l, h)| format!("{:.0}/{:.0}", l * 100.0, h * 100.0)))
                 .collect(),
+            RF::BaseTop => std::iter::once(self.rowf_shared_base_top()).chain(BaseTop::ALL.iter().map(|b| b.label().to_string())).collect(),
             RF::OsRef => s(&["Auto", "Manual"]),
             RF::Gate => s(&["Shared", "Screen", "Full record"]),
             RF::Pol => s(&["First", "Rising", "Falling"]),
@@ -468,13 +363,7 @@ impl Ui {
             RF::NEdge => s(&["Shared", "Rising", "Falling", "Both"]),
             RF::Side => s(&["Shared", "High", "Low", "Both"]),
             RF::From => s(&FROM_NAMES),
-            RF::To => {
-                if self.rowf_is_clocked() {
-                    s(&FROM_NAMES)
-                } else {
-                    s(&TO_NAMES)
-                }
-            }
+            RF::To => if self.rowf_is_clocked() { s(&FROM_NAMES) } else { s(&TO_NAMES) },
             RF::Dir => s(&["First", "Last"]),
             _ => return None,
         })
@@ -492,10 +381,7 @@ impl Ui {
                 let near = |a: Option<f64>, b: f64| a.is_some_and(|a| (a - b).abs() < 1e-9);
                 let cur = REFS.iter().position(|&(l, h)| near(c.lo, l) && near(c.hi, h)).map_or(0, |i| i + 1) as i32;
                 let next = (cur + d).rem_euclid(REFS.len() as i32 + 1) as usize;
-                self.rowf_edit(|c| {
-                    (c.lo, c.hi) =
-                        if next == 0 { (None, None) } else { (Some(REFS[next - 1].0), Some(REFS[next - 1].1)) }
-                });
+                self.rowf_edit(|c| (c.lo, c.hi) = if next == 0 { (None, None) } else { (Some(REFS[next - 1].0), Some(REFS[next - 1].1)) });
             }
             RF::BaseTop => {
                 // Shared, then the methods
@@ -513,82 +399,39 @@ impl Ui {
                         Some(RowKey::One(_, id)) => self.meas_analysis(id).map_or((1.0, 0.0), |(a, _)| (a.top, a.base)),
                         _ => (1.0, 0.0),
                     };
-                    self.rowf_edit(|c| {
-                        if manual {
-                            (c.os_top, c.os_base) = (None, None)
-                        } else {
-                            (c.os_top, c.os_base) = (Some(top), Some(base))
-                        }
-                    });
+                    self.rowf_edit(|c| if manual { (c.os_top, c.os_base) = (None, None) } else { (c.os_top, c.os_base) = (Some(top), Some(base)) });
                 }
             }
             RF::OsTop => self.rowf_edit(|c| c.os_top = Some(tools::ladder(c.os_top.unwrap_or(1.0), d, false))),
             RF::OsBase => self.rowf_edit(|c| c.os_base = Some(tools::ladder(c.os_base.unwrap_or(0.0), d, false))),
             RF::Gate => {
-                let cur = match c.gate_full {
-                    None => 0,
-                    Some(false) => 1,
-                    Some(true) => 2,
-                };
+                let cur = match c.gate_full { None => 0, Some(false) => 1, Some(true) => 2 };
                 let next = (cur + d).rem_euclid(3);
-                self.rowf_edit(|c| {
-                    c.gate_full = match next {
-                        0 => None,
-                        1 => Some(false),
-                        _ => Some(true),
-                    }
-                });
+                self.rowf_edit(|c| c.gate_full = match next { 0 => None, 1 => Some(false), _ => Some(true) });
             }
             RF::Pol => {
                 let next = (c.pol.unwrap_or(0) as i32 + d).rem_euclid(3) as u8;
                 self.rowf_edit(|c| c.pol = (next != 0).then_some(next));
             }
-            RF::Off => self.rowf_edit(|c| {
-                let v = step(c.off.unwrap_or(0), d, 0, 1000);
-                c.off = (v != 0).then_some(v);
-            }),
-            RF::Step => self.rowf_edit(|c| {
-                let v = step(c.step.unwrap_or(1), d, 1, 1000);
-                c.step = (v != 1).then_some(v);
-            }),
+            RF::Off => self.rowf_edit(|c| { let v = step(c.off.unwrap_or(0), d, 0, 1000); c.off = (v != 0).then_some(v); }),
+            RF::Step => self.rowf_edit(|c| { let v = step(c.step.unwrap_or(1), d, 1, 1000); c.step = (v != 1).then_some(v); }),
             RF::Low | RF::High => {
                 let low = f == RF::Low;
                 let sh = &self.m;
-                let shared = if abs {
-                    sh.meas_lv.volts[if low { 0 } else { 2 }]
-                } else if low {
-                    sh.meas_lpct
-                } else {
-                    sh.meas_hpct
-                };
+                let shared = if abs { sh.meas_lv.volts[if low { 0 } else { 2 }] } else if low { sh.meas_lpct } else { sh.meas_hpct };
                 let cur = if low { c.lo } else { c.hi }.unwrap_or(shared);
                 let new = if abs { tools::ladder(cur, d, false) } else { ((cur * 100.0).round() + d as f64) / 100.0 };
-                let (lo, mid, hi) = if abs {
-                    (sh.meas_lv.volts[0], sh.meas_lv.volts[1], sh.meas_lv.volts[2])
-                } else {
-                    (sh.meas_lpct, sh.meas_lv.mid, sh.meas_hpct)
-                };
+                let (lo, mid, hi) = if abs { (sh.meas_lv.volts[0], sh.meas_lv.volts[1], sh.meas_lv.volts[2]) } else { (sh.meas_lpct, sh.meas_lv.mid, sh.meas_hpct) };
                 let (lo, hi) = (if low { new } else { c.lo.unwrap_or(lo) }, if low { c.hi.unwrap_or(hi) } else { new });
                 let ordered = lo < mid && mid < hi && (abs || (lo >= 0.01 && hi <= 0.99));
                 if ordered {
-                    self.rowf_edit(|c| {
-                        let v = (new - shared).abs() > 1e-9;
-                        if low {
-                            c.lo = v.then_some(new)
-                        } else {
-                            c.hi = v.then_some(new)
-                        }
-                    });
+                    self.rowf_edit(|c| { let v = (new - shared).abs() > 1e-9; if low { c.lo = v.then_some(new) } else { c.hi = v.then_some(new) } });
                 }
             }
             RF::Hyst => {
                 let shared = if abs { self.m.meas_lv.vhyst } else { self.m.meas_lv.hyst };
                 let cur = c.hyst.unwrap_or(shared);
-                let new = if abs {
-                    tools::ladder(cur, d, true).max(1e-4)
-                } else {
-                    (((cur * 100.0).round() + d as f64).clamp(1.0, 50.0)) / 100.0
-                };
+                let new = if abs { tools::ladder(cur, d, true).max(1e-4) } else { (((cur * 100.0).round() + d as f64).clamp(1.0, 50.0)) / 100.0 };
                 self.rowf_edit(|c| c.hyst = ((new - shared).abs() > 1e-9).then_some(new));
             }
             RF::Idle => {
@@ -597,24 +440,14 @@ impl Ui {
                 let shared = self.m.meas_idle;
                 self.rowf_edit(|c| c.idle = ((v - shared).abs() > 1e-15).then_some(v));
             }
-            RF::BurstPol => {
-                if d.rem_euclid(2) != 0 {
-                    self.rowf_edit(|c| c.burst_fall = if c.burst_fall == Some(true) { None } else { Some(true) })
-                }
-            }
+            RF::BurstPol => if d.rem_euclid(2) != 0 { self.rowf_edit(|c| c.burst_fall = if c.burst_fall == Some(true) { None } else { Some(true) }) },
             RF::N => {
                 let v = step(c.n.unwrap_or(self.m.meas_n), d, 1, 32);
                 let shared = self.m.meas_n;
                 self.rowf_edit(|c| c.n = (v != shared).then_some(v));
             }
-            RF::NOff => self.rowf_edit(|c| {
-                let v = step(c.n_off.unwrap_or(0), d, 0, 1000);
-                c.n_off = (v != 0).then_some(v);
-            }),
-            RF::NStep => self.rowf_edit(|c| {
-                let v = step(c.n_step.unwrap_or(1), d, 1, 1000);
-                c.n_step = (v != 1).then_some(v);
-            }),
+            RF::NOff => self.rowf_edit(|c| { let v = step(c.n_off.unwrap_or(0), d, 0, 1000); c.n_off = (v != 0).then_some(v); }),
+            RF::NStep => self.rowf_edit(|c| { let v = step(c.n_step.unwrap_or(1), d, 1, 1000); c.n_step = (v != 1).then_some(v); }),
             RF::NEdge => {
                 let cur = c.n_edge.map_or(0, |x| x as i32 + 1);
                 let next = (cur + d).rem_euclid(4);
@@ -628,9 +461,7 @@ impl Ui {
             RF::OutVolts => {
                 // from the reference: the row's upper level
                 let start = match self.rowf_key() {
-                    Some(RowKey::One(_, id)) => {
-                        self.meas_analysis(id).map_or(0.0, |(a, _)| a.get(oos_dsp::measure::Meas::Vupper))
-                    }
+                    Some(RowKey::One(_, id)) => self.meas_analysis(id).map_or(0.0, |(a, _)| a.get(oos_dsp::measure::Meas::Vupper)),
                     _ => 0.0,
                 };
                 let cur = c.out_volts.unwrap_or(start);
@@ -645,18 +476,8 @@ impl Ui {
 
     fn rowf_adjust_pair(&mut self, f: RF, d: i32) -> bool {
         let Some((now, shared)) = self.rowf_pair() else { return true };
-        let code_from = |s: EdgeSel| match s {
-            EdgeSel::Rise => 0u8,
-            EdgeSel::Fall => 1,
-            EdgeSel::Both => 2,
-        };
-        let code_to = |s: ToSel| match s {
-            ToSel::Rise => 0u8,
-            ToSel::Fall => 1,
-            ToSel::Both => 2,
-            ToSel::Same => 3,
-            ToSel::Opposite => 4,
-        };
+        let code_from = |s: EdgeSel| match s { EdgeSel::Rise => 0u8, EdgeSel::Fall => 1, EdgeSel::Both => 2 };
+        let code_to = |s: ToSel| match s { ToSel::Rise => 0u8, ToSel::Fall => 1, ToSel::Both => 2, ToSel::Same => 3, ToSel::Opposite => 4 };
         let clocked = self.rowf_is_clocked();
         match f {
             RF::From => {
@@ -668,25 +489,16 @@ impl Ui {
                 let next = (code_to(now.to) as i32 + d).rem_euclid(n) as u8;
                 self.rowf_edit(|c| c.to = (next != code_to(shared.to)).then_some(next));
             }
-            RF::Dir => {
-                if d.rem_euclid(2) != 0 {
-                    let last = now.dir != SearchDir::Last;
-                    self.rowf_edit(|c| c.dir = last.then_some(1));
-                }
-            }
+            RF::Dir => if d.rem_euclid(2) != 0 {
+                let last = now.dir != SearchDir::Last;
+                self.rowf_edit(|c| c.dir = last.then_some(1));
+            },
             RF::WMin | RF::WMax => {
                 let low = f == RF::WMin;
-                let cur = if low {
-                    now.min.or(self.rowf_window_default(true))
-                } else {
-                    now.max.or(self.rowf_window_default(false))
-                };
+                let cur = if low { now.min.or(self.rowf_window_default(true)) } else { now.max.or(self.rowf_window_default(false)) };
                 // a window that is off starts at the usual 0 to 10 ns
                 let start = if low { 0.0 } else { 10e-9 };
-                let new = match cur {
-                    Some(x) => time_ladder(x, d),
-                    None => start,
-                };
+                let new = match cur { Some(x) => time_ladder(x, d), None => start };
                 let default = if low { shared.min } else { shared.max };
                 let skew_like = default.is_none() && self.rowf_pair_kind() != Some(PairKind::Delay);
                 let _ = skew_like;
@@ -694,11 +506,7 @@ impl Ui {
                 let base = self.rowf_window_default(low);
                 self.rowf_edit(|c| {
                     let v = base.is_none_or(|b| (b - new).abs() > 1e-18).then_some(new);
-                    if low {
-                        c.wmin = v
-                    } else {
-                        c.wmax = v
-                    }
+                    if low { c.wmin = v } else { c.wmax = v }
                 });
             }
             _ => {}
@@ -741,14 +549,10 @@ impl Ui {
         let Some(index) = self.meas_own.dialog.map(|i| i as usize) else { return };
         let mut sources: Vec<WaveId> = (0..n_ch()).map(WaveId::Ch).collect();
         sources.extend((0..NREF).filter(|&i| self.refs[i].is_some()).map(WaveId::Ref));
-        if sources.is_empty() {
-            return;
-        }
+        if sources.is_empty() { return; }
         let at = sources.iter().position(|s| *s == id).unwrap_or(0);
         let next = sources[(at as i32 + d).rem_euclid(sources.len() as i32) as usize];
-        if next == id {
-            return;
-        }
+        if next == id { return; }
         if self.m.meas.iter().enumerate().any(|(j, e)| j != index && *e == (kind, next)) {
             self.toast("That measurement is already on this source");
             return;
@@ -757,15 +561,12 @@ impl Ui {
         let own = self.meas_own.rows.remove(&(kind, id));
         self.m.meas[index].1 = next;
         self.m.set_row_cfg(RowKey::One(kind, id), RowCfg::default());
-        if let Some(cfg) = cfg {
-            self.m.set_row_cfg(RowKey::One(kind, next), cfg);
-        }
-        if let Some(own) = own {
-            self.meas_own.rows.insert((kind, next), own);
-        }
+        if let Some(cfg) = cfg { self.m.set_row_cfg(RowKey::One(kind, next), cfg); }
+        if let Some(own) = own { self.meas_own.rows.insert((kind, next), own); }
         self.clear_measurement_statistics();
     }
 }
+
 
 impl Ui {
     /// The card of a catalogue row (eye, jitter, power): the settings its readings use. They are the shared settings of
@@ -773,18 +574,7 @@ impl Ui {
     fn measrow_cat_plan(&self, key: RowKey) -> Vec<(&'static str, Vec<Item>)> {
         let RowKey::Cat(id, ..) = key else { return Vec::new() };
         match super::meascatalog::backend::card_group(id) {
-            1 => vec![(
-                "Jitter",
-                vec![
-                    Item::EyeRate,
-                    Item::EyeBer,
-                    Item::EyePll,
-                    Item::EyePnLo,
-                    Item::EyePnHi,
-                    Item::EyeNotch,
-                    Item::EyeHp,
-                ],
-            )],
+            1 => vec![("Jitter", vec![Item::EyeRate, Item::EyeBer, Item::EyePll, Item::EyePnLo, Item::EyePnHi, Item::EyeNotch, Item::EyeHp])],
             2 => vec![("Power", vec![Item::PowFline, Item::PowFsw, Item::PowRef])],
             3 => vec![("Common mode", vec![Item::EyeHp])],
             _ => Vec::new(),

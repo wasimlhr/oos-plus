@@ -304,10 +304,7 @@ fn waveform_word_is_little_endian_and_page_metadata_has_the_page_origin() {
     assert!((values[4].parse::<f64>().unwrap() - 5e-12).abs() < 1e-18);
     assert!((values[5].parse::<f64>().unwrap() - (-2e-9 + 5e-12)).abs() < 1e-15);
     // each scaling field has its own query
-    for (k, q) in [":WAV:XINC?", ":WAV:XOR?", ":WAV:XREF?", ":WAV:YINC?", ":WAV:YOR?", ":WAVeform:YREFerence?"]
-        .into_iter()
-        .enumerate()
-    {
+    for (k, q) in [":WAV:XINC?", ":WAV:XOR?", ":WAV:XREF?", ":WAV:YINC?", ":WAV:YOR?", ":WAVeform:YREFerence?"].into_iter().enumerate() {
         assert_eq!(line(&mut scpi, &mut ui, &canvas, q), values[4 + k], "{}", q);
     }
     line(&mut scpi, &mut ui, &canvas, ":WAV:MODE MAX;:STOP");

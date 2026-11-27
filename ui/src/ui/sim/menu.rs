@@ -35,13 +35,9 @@ impl Ui {
             items = vec![Item::SimPreset, Item::SimSlot, Item::SimAddRef, Item::SimPlay, Item::SimShow];
         }
         // Studio only: the sheet offers a file for the SIM slot
-        if self.m.layout == Layout::Studio {
-            items.insert(items.iter().position(|it| *it == Item::SimAddRef).map_or(0, |i| i + 1), Item::SimLoad);
-        }
+        if self.m.layout == Layout::Studio { items.insert(items.iter().position(|it| *it == Item::SimAddRef).map_or(0, |i| i + 1), Item::SimLoad); }
         // Run plays the signal of the knobs; the references that are shown (files, added signals) have a play of their own
-        if self.sim_can_play_refs() {
-            items.insert(items.iter().position(|it| *it == Item::SimPlay).map_or(0, |i| i + 1), Item::SimPlayRefs);
-        }
+        if self.sim_can_play_refs() { items.insert(items.iter().position(|it| *it == Item::SimPlay).map_or(0, |i| i + 1), Item::SimPlayRefs); }
         if self.record_mode() {
             items.insert(0, Item::SimLive);
         }
@@ -63,9 +59,7 @@ impl Ui {
 
     pub(in crate::ui) fn sim_kind(it: Item) -> Option<Kind> {
         Some(match it {
-            Item::SimPlay | Item::SimPlayRefs | Item::SimAddRef | Item::SimLoad | Item::SimLive | Item::SimDefaults => {
-                Kind::Action
-            }
+            Item::SimPlay | Item::SimPlayRefs | Item::SimAddRef | Item::SimLoad | Item::SimLive | Item::SimDefaults => Kind::Action,
             Item::SimPreset | Item::SimPat | Item::SimSsc | Item::SimSscCenter | Item::SimSlot | Item::SimShow => {
                 Kind::Choice
             }
@@ -207,10 +201,7 @@ impl Ui {
                     self.m.sim_bus = Some(buses[next - LANES.len()].0);
                 }
             }
-            Item::SimRate => {
-                let v = self.ladder_eng(it, self.m.sim_rate.max(ranges::SIM_RATE.0), d, ranges::SIM_RATE);
-                self.m.sim_rate = v;
-            }
+            Item::SimRate => { let v = self.ladder_eng(it, self.m.sim_rate.max(ranges::SIM_RATE.0), d, ranges::SIM_RATE); self.m.sim_rate = v; }
             Item::SimPat => {
                 let i = PRBS.iter().position(|&p| p == self.m.sim_prbs).unwrap_or(0);
                 self.m.sim_prbs = PRBS[(i as i32 + d).rem_euclid(PRBS.len() as i32) as usize];
@@ -240,8 +231,8 @@ impl Ui {
             Item::SimSsc => self.m.sim_ssc = !self.m.sim_ssc,
             Item::SimSscCenter => self.m.sim_ssc_center = !self.m.sim_ssc_center,
             Item::SimSscDeviation => {
-                self.m.sim_ssc_deviation =
-                    (self.m.sim_ssc_deviation + d as f64 * 0.0005).clamp(ranges::SIM_SSC_DEV.0, ranges::SIM_SSC_DEV.1)
+                self.m.sim_ssc_deviation = (self.m.sim_ssc_deviation + d as f64 * 0.0005)
+                    .clamp(ranges::SIM_SSC_DEV.0, ranges::SIM_SSC_DEV.1)
             }
             Item::SimSscHz => {
                 let v = self.ladder_eng(it, self.m.sim_ssc_hz, d, ranges::SIM_SSC_HZ);

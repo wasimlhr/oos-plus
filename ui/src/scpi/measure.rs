@@ -156,11 +156,7 @@ fn slot_list(ui: &Ui) -> String {
     if ui.m.meas_slots.is_empty() {
         return String::new();
     }
-    ui.slots_in_use()
-        .into_iter()
-        .map(|(n, key)| format!("{n},{},{}", slot_item(key), e(ui.slot_value(key))))
-        .collect::<Vec<_>>()
-        .join(";")
+    ui.slots_in_use().into_iter().map(|(n, key)| format!("{n},{},{}", slot_item(key), e(ui.slot_value(key)))).collect::<Vec<_>>().join(";")
 }
 
 pub(crate) fn meas_kind(item: &str) -> Option<Meas> {
@@ -373,9 +369,7 @@ impl Scpi {
                 if nodes.len() == 3 && query && kw(nodes[2], "LIST") {
                     return t(&slot_list(ui));
                 }
-                self.push_err(format!(
-                    "-224,\"Illegal parameter value; a slot is MEAS1 to MEAS{SLOTS}: :MEASure:SLOT<n>\""
-                ));
+                self.push_err(format!("-224,\"Illegal parameter value; a slot is MEAS1 to MEAS{SLOTS}: :MEASure:SLOT<n>\""));
                 return None;
             }
         };
@@ -563,18 +557,11 @@ impl Scpi {
             if query {
                 return t(if ui.m.meas_pop_current { "CURR" } else { "ACC" });
             }
-            let want = if kw(arg.trim(), "CURRent") {
-                true
-            } else if kw(arg.trim(), "ACCumulated") {
-                false
-            } else {
+            let want = if kw(arg.trim(), "CURRent") { true } else if kw(arg.trim(), "ACCumulated") { false } else {
                 self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
                 return None;
             };
-            if want != ui.m.meas_pop_current {
-                ui.m.meas_pop_current = want;
-                ui.stats_reset();
-            }
+            if want != ui.m.meas_pop_current { ui.m.meas_pop_current = want; ui.stats_reset(); }
             ui.mark_changed();
             return None;
         }
@@ -582,19 +569,13 @@ impl Scpi {
         if kw(which, "SHOW") {
             if query {
                 let s = ui.m.meas_show;
-                let v: Vec<&str> =
-                    [(s[0], "SDEV"), (s[1], "MIN"), (s[2], "MAX")].into_iter().filter(|x| x.0).map(|x| x.1).collect();
+                let v: Vec<&str> = [(s[0], "SDEV"), (s[1], "MIN"), (s[2], "MAX")].into_iter().filter(|x| x.0).map(|x| x.1).collect();
                 return t(&if v.is_empty() { "NONE".to_string() } else { v.join(",") });
             }
             let mut show = [false; 3];
             for part in arg.split(',').map(str::trim).filter(|p| !p.is_empty()) {
-                if kw(part, "SDEViation") {
-                    show[0] = true;
-                } else if kw(part, "MINimum") {
-                    show[1] = true;
-                } else if kw(part, "MAXimum") {
-                    show[2] = true;
-                } else if !kw(part, "NONE") {
+                if kw(part, "SDEViation") { show[0] = true; } else if kw(part, "MINimum") { show[1] = true; } else if kw(part, "MAXimum") { show[2] = true; }
+                else if !kw(part, "NONE") {
                     self.push_err(format!("-224,\"Illegal parameter value\" {}", arg));
                     return None;
                 }
@@ -804,10 +785,7 @@ impl Scpi {
             // a math channel is not a measurement source of the screen: the item is taken over its whole record
             return match meas_kind(item) {
                 Some(kind) => t(&shown(ui.fact_meas_math(kind, k))),
-                None => {
-                    self.push_err("-224,\"Illegal parameter value\"".into());
-                    t("9.9E37")
-                }
+                None => { self.push_err("-224,\"Illegal parameter value\"".into()); t("9.9E37") }
             };
         }
         let src = match word {

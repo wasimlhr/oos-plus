@@ -6,9 +6,7 @@ use super::*;
 impl Ui {
     /// The pill and the exit chip of full screen; None when the layout is not in full screen.
     pub(super) fn full_chrome_rects(&self) -> Option<(Rect, Rect)> {
-        if self.m.layout != Layout::Studio || !self.full_on() {
-            return None;
-        }
+        if self.m.layout != Layout::Studio || !self.full_on() { return None; }
         let y = self.scr.h - 40;
         let pill = Rect::new(8, y, 112, 32);
         Some((pill, Rect::new(pill.right() + 8, y, 156, 32)))
@@ -35,14 +33,8 @@ impl Ui {
     /// A tap on the pill or the exit chip. True when it was on one.
     pub(super) fn full_chrome_tap(&mut self, x: i32, y: i32) -> bool {
         let Some((pill, exit)) = self.full_chrome_rects() else { return false };
-        if Self::hit40(exit).contains(x, y) {
-            self.toggle_expand();
-            return true;
-        }
-        if Self::hit40(pill).contains(x, y) {
-            self.studio_run_stop();
-            return true;
-        }
+        if Self::hit40(exit).contains(x, y) { self.toggle_expand(); return true; }
+        if Self::hit40(pill).contains(x, y) { self.studio_run_stop(); return true; }
         false
     }
 }

@@ -281,8 +281,7 @@ pub enum StripDock {
 }
 
 impl StripDock {
-    pub const ALL: [StripDock; 5] =
-        [StripDock::Below, StripDock::Left, StripDock::Right, StripDock::Above, StripDock::Hidden];
+    pub const ALL: [StripDock; 5] = [StripDock::Below, StripDock::Left, StripDock::Right, StripDock::Above, StripDock::Hidden];
 
     pub fn label(self) -> &'static str {
         match self {
@@ -298,3 +297,4 @@ impl StripDock {
 /// Persistence: name, seconds (0 = minimum, <0 = infinite).
 pub const PERSIST: [(&str, f32); 7] =
     [("Min", 0.0), ("100 ms", 0.1), ("500 ms", 0.5), ("1 s", 1.0), ("5 s", 5.0), ("10 s", 10.0), ("Infinite", -1.0)];
+

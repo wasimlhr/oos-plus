@@ -53,19 +53,10 @@ const CAP: i32 = 26;
 /// Only what adds something to the screen: the zoom bar style is on the Zoom tab of Horizontal, the measurement
 /// strip is View > Show pinned badges, and the measurement settings are Menu > Measure.
 pub(super) const ADD_MENU: [Option<AddRow>; 13] = [
-    Some(AddRow::Measurement),
-    Some(AddRow::ResultsTable),
-    None,
-    Some(AddRow::Plot),
-    Some(AddRow::Cursors),
-    Some(AddRow::Search),
-    None,
-    Some(AddRow::Math),
-    Some(AddRow::Reference),
-    Some(AddRow::Bus),
-    None,
-    Some(AddRow::Zoom),
-    Some(AddRow::ZoomBox),
+    Some(AddRow::Measurement), Some(AddRow::ResultsTable), None,
+    Some(AddRow::Plot), Some(AddRow::Cursors), Some(AddRow::Search), None,
+    Some(AddRow::Math), Some(AddRow::Reference), Some(AddRow::Bus), None,
+    Some(AddRow::Zoom), Some(AddRow::ZoomBox),
 ];
 
 impl Ui {
@@ -133,10 +124,7 @@ impl Ui {
         let mut out = Vec::new();
         for r in ADD_MENU {
             match r {
-                Some(row) => {
-                    out.push((row, Rect::new(p.x + 4, y, MENU_W - 8, ROW)));
-                    y += ROW;
-                }
+                Some(row) => { out.push((row, Rect::new(p.x + 4, y, MENU_W - 8, ROW))); y += ROW; }
                 None => y += SEP,
             }
         }
@@ -147,9 +135,7 @@ impl Ui {
     }
 
     pub(super) fn studio_add_open(&mut self) {
-        if self.menu_open {
-            self.close_menu();
-        }
+        if self.menu_open { self.close_menu(); }
         self.studio.popup = None;
         self.studio.add_menu = true;
     }
@@ -157,94 +143,29 @@ impl Ui {
     fn add_row_icon(&self, cv: &mut Canvas, row: AddRow, cx: i32, cy: i32, c: Rgb) {
         let f = self.fonts();
         match row {
-            AddRow::Measurement => {
-                for (i, h) in [6, 11, 8].into_iter().enumerate() {
-                    cv.fill(Rect::new(cx - 7 + i as i32 * 5, cy + 6 - h, 3, h), c);
-                }
-            }
-            AddRow::ResultsTable => {
-                cv.rect(Rect::new(cx - 7, cy - 6, 14, 12), c);
-                cv.hline(cx - 7, cx + 6, cy, c);
-                cv.vline(cx, cy - 6, cy + 5, c);
-            }
-            AddRow::Plot => {
-                cv.line(cx - 7, cy + 5, cx - 2, cy - 3, c);
-                cv.line(cx - 2, cy - 3, cx + 2, cy + 3, c);
-                cv.line(cx + 2, cy + 3, cx + 7, cy - 5, c);
-            }
+            AddRow::Measurement => { for (i, h) in [6, 11, 8].into_iter().enumerate() { cv.fill(Rect::new(cx - 7 + i as i32 * 5, cy + 6 - h, 3, h), c); } }
+            AddRow::ResultsTable => { cv.rect(Rect::new(cx - 7, cy - 6, 14, 12), c); cv.hline(cx - 7, cx + 6, cy, c); cv.vline(cx, cy - 6, cy + 5, c); }
+            AddRow::Plot => { cv.line(cx - 7, cy + 5, cx - 2, cy - 3, c); cv.line(cx - 2, cy - 3, cx + 2, cy + 3, c); cv.line(cx + 2, cy + 3, cx + 7, cy - 5, c); }
             AddRow::Cursors => icon_cursors(cv, cx - 5, cy, c),
-            AddRow::Search => {
-                cv.circle(cx - 2, cy - 2, 5, c);
-                cv.circle(cx - 2, cy - 2, 3, PANEL_BG);
-                cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c);
-            }
+            AddRow::Search => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, PANEL_BG); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); }
             AddRow::Math => cv.text_in(&f.sb, Rect::new(cx - 10, cy - 9, 20, 18), 1, "fx", c),
             AddRow::Reference => cv.text_in(&f.sb, Rect::new(cx - 10, cy - 9, 20, 18), 1, "R", c),
-            AddRow::Bus => {
-                for dy in [-5, 0, 5] {
-                    cv.hline(cx - 7, cx + 7, cy + dy, c);
-                }
-                cv.vline(cx - 3, cy - 7, cy + 7, c);
-                cv.vline(cx + 3, cy - 7, cy + 7, c);
-            }
-            AddRow::ZoomBox => {
-                cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c);
-                cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c);
-            }
-            AddRow::Spectrum => {
-                for (i, h) in [4, 10, 6, 12, 3].into_iter().enumerate() {
-                    cv.vline(cx - 8 + i as i32 * 4, cy + 6 - h, cy + 6, c);
-                }
-            }
-            AddRow::Trend => {
-                cv.line(cx - 7, cy + 4, cx - 2, cy - 1, c);
-                cv.line(cx - 2, cy - 1, cx + 1, cy + 2, c);
-                cv.line(cx + 1, cy + 2, cx + 7, cy - 5, c);
-            }
-            AddRow::Histogram => {
-                for (i, h) in [4, 8, 12, 7].into_iter().enumerate() {
-                    cv.fill(Rect::new(cx - 8 + i as i32 * 4, cy + 6 - h, 3, h), c);
-                }
-            }
-            AddRow::Xy => {
-                cv.vline(cx - 6, cy - 6, cy + 6, c);
-                cv.hline(cx - 6, cx + 6, cy + 6, c);
-                cv.line(cx - 4, cy + 4, cx + 5, cy - 5, c);
-            }
-            AddRow::Eye => {
-                cv.circle(cx, cy, 6, c);
-                cv.circle(cx, cy, 4, PANEL_BG);
-                cv.circle(cx, cy, 2, c);
-            }
-            AddRow::Events => {
-                for dy in [-5, 0, 5] {
-                    cv.hline(cx - 7, cx + 7, cy + dy, c);
-                }
-                cv.fill(Rect::new(cx - 7, cy - 6, 3, 3), c);
-            }
-            AddRow::BusView => {
-                cv.hline(cx - 7, cx + 7, cy - 3, c);
-                cv.hline(cx - 7, cx + 7, cy + 3, c);
-                cv.vline(cx - 2, cy - 6, cy + 6, c);
-            }
-            AddRow::Filter => {
-                cv.hline(cx - 7, cx - 1, cy - 4, c);
-                cv.line(cx - 1, cy - 4, cx + 6, cy + 5, c);
-            }
-            AddRow::Zoom => {
-                cv.circle(cx - 2, cy - 2, 5, c);
-                cv.circle(cx - 2, cy - 2, 3, PANEL_BG);
-                cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c);
-                cv.hline(cx - 4, cx, cy - 2, c);
-                cv.vline(cx - 2, cy - 4, cy, c);
-            }
+            AddRow::Bus => { for dy in [-5, 0, 5] { cv.hline(cx - 7, cx + 7, cy + dy, c); } cv.vline(cx - 3, cy - 7, cy + 7, c); cv.vline(cx + 3, cy - 7, cy + 7, c); }
+            AddRow::ZoomBox => { cv.round_outline(Rect::new(cx - 7, cy - 5, 14, 10), 1, c); cv.fill(Rect::new(cx - 7, cy - 5, 4, 2), c); }
+            AddRow::Spectrum => { for (i, h) in [4, 10, 6, 12, 3].into_iter().enumerate() { cv.vline(cx - 8 + i as i32 * 4, cy + 6 - h, cy + 6, c); } }
+            AddRow::Trend => { cv.line(cx - 7, cy + 4, cx - 2, cy - 1, c); cv.line(cx - 2, cy - 1, cx + 1, cy + 2, c); cv.line(cx + 1, cy + 2, cx + 7, cy - 5, c); }
+            AddRow::Histogram => { for (i, h) in [4, 8, 12, 7].into_iter().enumerate() { cv.fill(Rect::new(cx - 8 + i as i32 * 4, cy + 6 - h, 3, h), c); } }
+            AddRow::Xy => { cv.vline(cx - 6, cy - 6, cy + 6, c); cv.hline(cx - 6, cx + 6, cy + 6, c); cv.line(cx - 4, cy + 4, cx + 5, cy - 5, c); }
+            AddRow::Eye => { cv.circle(cx, cy, 6, c); cv.circle(cx, cy, 4, PANEL_BG); cv.circle(cx, cy, 2, c); }
+            AddRow::Events => { for dy in [-5, 0, 5] { cv.hline(cx - 7, cx + 7, cy + dy, c); } cv.fill(Rect::new(cx - 7, cy - 6, 3, 3), c); }
+            AddRow::BusView => { cv.hline(cx - 7, cx + 7, cy - 3, c); cv.hline(cx - 7, cx + 7, cy + 3, c); cv.vline(cx - 2, cy - 6, cy + 6, c); }
+            AddRow::Filter => { cv.hline(cx - 7, cx - 1, cy - 4, c); cv.line(cx - 1, cy - 4, cx + 6, cy + 5, c); }
+            AddRow::Zoom => { cv.circle(cx - 2, cy - 2, 5, c); cv.circle(cx - 2, cy - 2, 3, PANEL_BG); cv.line(cx + 2, cy + 2, cx + 7, cy + 7, c); cv.hline(cx - 4, cx, cy - 2, c); cv.vline(cx - 2, cy - 4, cy, c); }
         }
     }
 
     pub(super) fn draw_studio_add_menu(&self, cv: &mut Canvas) {
-        if !self.studio.add_menu {
-            return;
-        }
+        if !self.studio.add_menu { return; }
         let f = self.fonts();
         let p = self.studio_add_rect();
         cv.round(p, 8, BTN_BORDER, 255);
@@ -257,10 +178,7 @@ impl Ui {
         for r in ADD_MENU {
             match r {
                 Some(_) => sep_y += ROW,
-                None => {
-                    cv.hline(p.x + 10, p.x + MENU_W - 11, sep_y + SEP / 2, LINE);
-                    sep_y += SEP;
-                }
+                None => { cv.hline(p.x + 10, p.x + MENU_W - 11, sep_y + SEP / 2, LINE); sep_y += SEP; }
             }
         }
         cv.vline(p.x + MENU_W, p.y + 10, p.bottom() - 10, LINE);
@@ -271,32 +189,18 @@ impl Ui {
             cv.set_clip(Rect::new(r.x + 34, r.y, r.w - 70, r.h));
             cv.text_in(&f.m, Rect::new(r.x + 36, r.y, r.w - 70, r.h), 0, self.add_row_label(row), TEXT);
             cv.no_clip();
-            if on && row != AddRow::Measurement {
-                cv.text_in(&f.sb, Rect::new(r.right() - 40, r.y, 34, r.h), 2, "On", ACCENT);
-            }
-            if row == AddRow::Measurement && self.measurement_count() > 0 {
-                cv.text_in(
-                    &f.sb,
-                    Rect::new(r.right() - 44, r.y, 38, r.h),
-                    2,
-                    &self.measurement_count().to_string(),
-                    DIM,
-                );
-            }
+            if on && row != AddRow::Measurement { cv.text_in(&f.sb, Rect::new(r.right() - 40, r.y, 34, r.h), 2, "On", ACCENT); }
+            if row == AddRow::Measurement && self.measurement_count() > 0 { cv.text_in(&f.sb, Rect::new(r.right() - 44, r.y, 38, r.h), 2, &self.measurement_count().to_string(), DIM); }
         }
     }
 
     /// A tap while the Add menu is open: a row does its action, a tap outside closes it. Always taken.
     pub(super) fn studio_add_tap(&mut self, x: i32, y: i32) -> bool {
-        if !self.studio.add_menu {
-            return false;
-        }
+        if !self.studio.add_menu { return false; }
         let p = self.studio_add_rect();
         let chip = self.top_hit(self.studio_top().add);
         self.studio.add_menu = false;
-        if chip.contains(x, y) || !p.contains(x, y) {
-            return true;
-        }
+        if chip.contains(x, y) || !p.contains(x, y) { return true; }
         let Some((row, _)) = self.studio_add_rows().into_iter().find(|(_, r)| r.contains(x, y)) else { return true };
         match row {
             AddRow::Measurement => self.open_meas_list(),
@@ -309,10 +213,7 @@ impl Ui {
             AddRow::Math => self.add_open_kind(AddKind::Math),
             AddRow::Reference => self.add_open_kind(AddKind::Ref),
             AddRow::Bus => self.add_open_kind(AddKind::Bus),
-            AddRow::Zoom => {
-                let on = !self.m.zoom;
-                self.set_zoom(on);
-            }
+            AddRow::Zoom => { let on = !self.m.zoom; self.set_zoom(on); }
             AddRow::ZoomBox => self.arm_zoom_area(),
             AddRow::Spectrum => self.rail_plot_toggle(3),
             AddRow::Trend => self.rail_plot_toggle(4),
@@ -353,7 +254,6 @@ impl Ui {
     }
 
     /// The chip of the Add button: lit while its menu is open.
-    pub(super) fn studio_add_chip_on(&self) -> bool {
-        self.studio.add_menu || (self.menu_open && self.menu == MenuId::AddPanel)
-    }
+    pub(super) fn studio_add_chip_on(&self) -> bool { self.studio.add_menu || (self.menu_open && self.menu == MenuId::AddPanel) }
 }
+

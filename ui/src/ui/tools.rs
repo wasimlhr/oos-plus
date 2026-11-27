@@ -86,14 +86,9 @@ impl MeasRow {
     }
 
     fn fmt_digits(&self, v: f64, digits: usize) -> String {
-        if self.computing {
-            "Computing".into()
-        } else if !v.is_finite() {
-            if self.reason.is_empty() {
-                "----".into()
-            } else {
-                self.reason.clone()
-            }
+        if self.computing { "Computing".into() }
+        else if !v.is_finite() {
+            if self.reason.is_empty() { "----".into() } else { self.reason.clone() }
         } else if self.unit == "\u{b0}" {
             format!("{:.1}\u{b0}", v)
         } else if self.unit.is_empty() && v.fract() == 0.0 && v.abs() < 1e6 {
@@ -103,21 +98,12 @@ impl MeasRow {
             // a ratio, and the units that are not SI: no prefix ("498 m" for a power factor of 0.498, "nppm", "krpm")
             let a = v.abs();
             let number = if a != 0.0 && !(1e-4..1e7).contains(&a) {
-                if a < 1e-4 {
-                    "0".to_string()
-                } else {
-                    format!("{:.*e}", digits - 1, v)
-                }
+                if a < 1e-4 { "0".to_string() } else { format!("{:.*e}", digits - 1, v) }
             } else {
-                let decimals =
-                    (digits as i32 - 1 - if a > 0.0 { a.log10().floor() as i32 } else { 0 }).clamp(0, 6) as usize;
+                let decimals = (digits as i32 - 1 - if a > 0.0 { a.log10().floor() as i32 } else { 0 }).clamp(0, 6) as usize;
                 format!("{:.*}", decimals, v)
             };
-            if self.unit.is_empty() {
-                number
-            } else {
-                format!("{} {}", number, self.unit)
-            }
+            if self.unit.is_empty() { number } else { format!("{} {}", number, self.unit) }
         } else {
             meas_digits(v, self.unit, digits)
         }
@@ -167,9 +153,7 @@ impl Ui {
     }
 
     pub(super) fn selected_measurement_label(&self, index: usize) -> String {
-        if let Some(&(kind, source)) = self.m.meas.get(index) {
-            return format!("{} {}", self.wave_name(source), super::meascatalog::meas_display_name(kind));
-        }
+        if let Some(&(kind, source)) = self.m.meas.get(index) { return format!("{} {}", self.wave_name(source), super::meascatalog::meas_display_name(kind)); }
         let index = index.saturating_sub(self.m.meas.len());
         if let Some(&(kind, a, b)) = self.m.meas2.get(index) {
             return format!("{}-{} {}", self.wave_name(a), self.wave_name(b), meascatalog::pair_long_name(kind));
@@ -193,9 +177,7 @@ impl Ui {
         }
         self.meas_own.dialog = None;
         // the card of the measurement that is gone closes with it
-        if self.menu_open && self.menu == MenuId::MeasRow {
-            self.close_menu();
-        }
+        if self.menu_open && self.menu == MenuId::MeasRow { self.close_menu(); }
         self.clear_measurement_statistics();
         self.relayout();
     }
@@ -293,9 +275,7 @@ impl Ui {
         }
     }
 
-    pub(super) fn meas_row_hidden(&self, row: &MeasRow) -> bool {
-        self.meas_source_hidden(row.src)
-    }
+    pub(super) fn meas_row_hidden(&self, row: &MeasRow) -> bool { self.meas_source_hidden(row.src) }
 
     /// The readouts as stock OOS has them (Default): the short names of the scope (+Duty, Upper), "----" for a value
     /// that cannot be computed, every row shown, and the band paged with a row of its own. Minimal and Studio keep the
@@ -318,14 +298,7 @@ impl Ui {
             .map(|&(k, id)| {
                 let val = self.meas_number(id, k);
                 let name = if self.stock_readouts() { k.name() } else { super::meascatalog::meas_display_name(k) };
-                MeasRow {
-                    name: name.to_string(),
-                    src: id,
-                    v: val,
-                    unit: self.meas_unit(id, k),
-                    computing: !val.is_finite() && self.meas_number_computing(id, k) && !self.last_answer_stands_in(id),
-                    reason: String::new(),
-                }
+                MeasRow { name: name.to_string(), src: id, v: val, unit: self.meas_unit(id, k), computing: !val.is_finite() && self.meas_number_computing(id, k) && !self.last_answer_stands_in(id), reason: String::new() }
             })
             .collect();
         for &(k, a, b) in &self.m.meas2 {
@@ -340,25 +313,12 @@ impl Ui {
                 PairKind::SetupAndHold | PairKind::SetupAndHoldBoth => "",
                 _ => "s",
             };
-            let computing = self.measurement_computing(a)
-                || self.measurement_computing(b)
-                || self.pair_measurement_computing(k, a, b);
+            let computing = self.measurement_computing(a) || self.measurement_computing(b) || self.pair_measurement_computing(k, a, b);
             // skew, setup and hold only pair edges inside their window (nanoseconds unless the row sets another): say so
             // when no pair is, a bare "----" reads as a fault
-            let windowed = !matches!(
-                kind,
-                PairKind::Delay | PairKind::Phase | PairKind::SetupAndHold | PairKind::SetupAndHoldBoth
-            );
-            let reason =
-                if windowed && !computing && !val.is_finite() { "none in window".to_string() } else { String::new() };
-            v.push(MeasRow {
-                name: format!("{} {}-{}", name, tag(a), tag(b)),
-                src: a,
-                v: val,
-                unit,
-                computing,
-                reason,
-            });
+            let windowed = !matches!(kind, PairKind::Delay | PairKind::Phase | PairKind::SetupAndHold | PairKind::SetupAndHoldBoth);
+            let reason = if windowed && !computing && !val.is_finite() { "none in window".to_string() } else { String::new() };
+            v.push(MeasRow { name: format!("{} {}-{}", name, tag(a), tag(b)), src: a, v: val, unit, computing, reason });
         }
         for &(id, a, b, c, d) in &self.m.cat {
             if let Some(row) = self.cat_row(id, a, b, c, d) {
@@ -432,21 +392,8 @@ impl Ui {
     pub(super) fn meas_kind(it: Item) -> Option<Kind> {
         Some(match it {
             Item::MeasIdle | Item::MeasN | Item::MeasTsetup | Item::MeasThold => Kind::Value,
-            Item::MeasLow
-            | Item::MeasMid
-            | Item::MeasHigh
-            | Item::MeasHyst
-            | Item::MeasFallLow
-            | Item::MeasFallMid
-            | Item::MeasFallHigh => Kind::Value,
-            Item::MeasOutside
-            | Item::MeasEdges
-            | Item::MeasRefs
-            | Item::MeasGate
-            | Item::BadgeStyle
-            | Item::MeasLvType
-            | Item::MeasBaseTop
-            | Item::MeasSepFall => Kind::Choice,
+            Item::MeasLow | Item::MeasMid | Item::MeasHigh | Item::MeasHyst | Item::MeasFallLow | Item::MeasFallMid | Item::MeasFallHigh => Kind::Value,
+            Item::MeasOutside | Item::MeasEdges | Item::MeasRefs | Item::MeasGate | Item::BadgeStyle | Item::MeasLvType | Item::MeasBaseTop | Item::MeasSepFall => Kind::Choice,
             Item::MeasPop | Item::MeasShowSd | Item::MeasShowMin | Item::MeasShowMax => Kind::Choice,
             Item::MeasStatReset => Kind::Action,
             _ => return None,
@@ -495,74 +442,24 @@ impl Ui {
             }
             Item::MeasOutside => format!("{:?}", m.meas_out),
             Item::MeasN => m.meas_n.to_string(),
-            Item::MeasEdges => {
-                if m.meas_data {
-                    "Data".into()
-                } else {
-                    "Clock".into()
-                }
-            }
-            Item::MeasRefs => {
-                if m.meas_lv.absolute {
-                    "-".into()
-                } else {
-                    meas_preset_name(m).into()
-                }
-            }
-            Item::MeasLvType => {
-                if m.meas_lv.absolute {
-                    "Volts".into()
-                } else {
-                    "Percent".into()
-                }
-            }
-            Item::MeasLow
-            | Item::MeasMid
-            | Item::MeasHigh
-            | Item::MeasFallLow
-            | Item::MeasFallMid
-            | Item::MeasFallHigh => {
+            Item::MeasEdges => if m.meas_data { "Data".into() } else { "Clock".into() },
+            Item::MeasRefs => if m.meas_lv.absolute { "-".into() } else { meas_preset_name(m).into() },
+            Item::MeasLvType => if m.meas_lv.absolute { "Volts".into() } else { "Percent".into() },
+            Item::MeasLow | Item::MeasMid | Item::MeasHigh | Item::MeasFallLow | Item::MeasFallMid | Item::MeasFallHigh => {
                 let (fall, i) = level_slot(it);
                 let l = &m.meas_lv;
-                if l.absolute {
-                    si_short(if fall { l.fall_volts[i] } else { l.volts[i] }, "V")
-                } else {
-                    let v = if fall {
-                        l.fall[i]
-                    } else if i == 0 {
-                        m.meas_lpct
-                    } else if i == 1 {
-                        l.mid
-                    } else {
-                        m.meas_hpct
-                    };
+                if l.absolute { si_short(if fall { l.fall_volts[i] } else { l.volts[i] }, "V") }
+                else {
+                    let v = if fall { l.fall[i] } else if i == 0 { m.meas_lpct } else if i == 1 { l.mid } else { m.meas_hpct };
                     format!("{:.0}%", v * 100.0)
                 }
             }
-            Item::MeasHyst => {
-                if m.meas_lv.absolute {
-                    si_short(m.meas_lv.vhyst, "V")
-                } else {
-                    format!("{:.0}%", m.meas_lv.hyst * 100.0)
-                }
-            }
+            Item::MeasHyst => if m.meas_lv.absolute { si_short(m.meas_lv.vhyst, "V") } else { format!("{:.0}%", m.meas_lv.hyst * 100.0) },
             Item::MeasBaseTop => m.meas_lv.base_top.label().into(),
-            Item::MeasSepFall => {
-                if m.meas_lv.sep_fall {
-                    "Separate".into()
-                } else {
-                    "Same as rise".into()
-                }
-            }
+            Item::MeasSepFall => if m.meas_lv.sep_fall { "Separate".into() } else { "Same as rise".into() },
             Item::MeasGate => self.measurement_gate_label().into(),
             Item::BadgeStyle => (if m.studio_classic { "Classic" } else { "Studio" }).into(),
-            Item::MeasPop => {
-                if m.meas_pop_current {
-                    "Current".into()
-                } else {
-                    "Accumulated".into()
-                }
-            }
+            Item::MeasPop => if m.meas_pop_current { "Current".into() } else { "Accumulated".into() },
             Item::MeasShowSd => (if m.meas_show[0] { "On" } else { "Off" }).into(),
             Item::MeasShowMin => (if m.meas_show[1] { "On" } else { "Off" }).into(),
             Item::MeasShowMax => (if m.meas_show[2] { "On" } else { "Off" }).into(),
@@ -578,9 +475,7 @@ impl Ui {
             Item::MeasEdges => vec!["Clock".into(), "Data".into()],
             Item::MeasRefs => {
                 let mut v = vec!["10/90".into(), "20/80".into()];
-                if self.refs_custom_offered() {
-                    v.push("Custom".into());
-                }
+                if self.refs_custom_offered() { v.push("Custom".into()); }
                 v
             }
             Item::MeasLvType => vec!["Percent".into(), "Volts".into()],
@@ -605,11 +500,7 @@ impl Ui {
             }
             Item::MeasShowSd | Item::MeasShowMin | Item::MeasShowMax => {
                 if d.rem_euclid(2) != 0 {
-                    let i = match it {
-                        Item::MeasShowSd => 0,
-                        Item::MeasShowMin => 1,
-                        _ => 2,
-                    };
+                    let i = match it { Item::MeasShowSd => 0, Item::MeasShowMin => 1, _ => 2 };
                     self.m.meas_show[i] = !self.m.meas_show[i];
                     self.relayout();
                 }
@@ -621,9 +512,7 @@ impl Ui {
             }
             Item::BadgeStyle => {
                 // through the one setter: it also closes the popup of a badge and puts the row back to its start
-                if d.rem_euclid(2) != 0 {
-                    self.studio_set_classic(!self.m.studio_classic);
-                }
+                if d.rem_euclid(2) != 0 { self.studio_set_classic(!self.m.studio_classic); }
             }
             Item::MeasIdle => {
                 let cur = if self.m.meas_idle > 0.0 { self.m.meas_idle } else { 0.0 };
@@ -650,33 +539,18 @@ impl Ui {
             Item::MeasN => self.m.meas_n = (self.m.meas_n as i32 + d).clamp(1, 32) as u32,
             Item::MeasEdges => self.m.meas_data = !self.m.meas_data,
             Item::MeasRefs => {
-                if self.m.meas_lv.absolute {
-                    return true;
-                }
-                let cur = match meas_preset_name(&self.m) {
-                    "10/90" => 0,
-                    "20/80" => 1,
-                    _ => 2,
-                };
+                if self.m.meas_lv.absolute { return true; }
+                let cur = match meas_preset_name(&self.m) { "10/90" => 0, "20/80" => 1, _ => 2 };
                 let n = if self.refs_custom_offered() { 3 } else { 2 };
                 match (cur + d).rem_euclid(n) {
-                    0 => {
-                        (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) =
-                            (0.1, 0.9, 0.5, false)
-                    }
-                    1 => {
-                        (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) =
-                            (0.2, 0.8, 0.5, false)
-                    }
+                    0 => (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) = (0.1, 0.9, 0.5, false),
+                    1 => (self.m.meas_lpct, self.m.meas_hpct, self.m.meas_lv.mid, self.m.meas_lv.custom) = (0.2, 0.8, 0.5, false),
                     _ => self.m.meas_lv.custom = true,
                 }
                 self.measure_last();
             }
             Item::MeasLvType => {
-                if d.rem_euclid(2) != 0 {
-                    self.m.meas_lv.absolute = !self.m.meas_lv.absolute;
-                    self.measure_last();
-                }
+                if d.rem_euclid(2) != 0 { self.m.meas_lv.absolute = !self.m.meas_lv.absolute; self.measure_last(); }
             }
             Item::MeasBaseTop => {
                 let all = oos_dsp::measure::BaseTop::ALL;
@@ -697,51 +571,25 @@ impl Ui {
             }
             Item::MeasHyst => {
                 let l = &mut self.m.meas_lv;
-                if l.absolute {
-                    l.vhyst = ladder(l.vhyst, d, true).max(1e-4);
-                } else {
-                    l.hyst = ((l.hyst * 100.0).round() + d as f64).clamp(1.0, 50.0) / 100.0;
-                }
+                if l.absolute { l.vhyst = ladder(l.vhyst, d, true).max(1e-4); } else { l.hyst = ((l.hyst * 100.0).round() + d as f64).clamp(1.0, 50.0) / 100.0; }
                 self.measure_last();
             }
-            Item::MeasLow
-            | Item::MeasMid
-            | Item::MeasHigh
-            | Item::MeasFallLow
-            | Item::MeasFallMid
-            | Item::MeasFallHigh => {
+            Item::MeasLow | Item::MeasMid | Item::MeasHigh | Item::MeasFallLow | Item::MeasFallMid | Item::MeasFallHigh => {
                 let (fall, i) = level_slot(it);
                 let absolute = self.m.meas_lv.absolute;
-                let mut t = if absolute {
-                    if fall {
-                        self.m.meas_lv.fall_volts
-                    } else {
-                        self.m.meas_lv.volts
-                    }
-                } else if fall {
-                    self.m.meas_lv.fall
-                } else {
-                    [self.m.meas_lpct, self.m.meas_lv.mid, self.m.meas_hpct]
-                };
+                let mut t = if absolute { if fall { self.m.meas_lv.fall_volts } else { self.m.meas_lv.volts } }
+                    else if fall { self.m.meas_lv.fall } else { [self.m.meas_lpct, self.m.meas_lv.mid, self.m.meas_hpct] };
                 t[i] = if absolute { ladder(t[i], d, false) } else { ((t[i] * 100.0).round() + d as f64) / 100.0 };
                 // low < mid < high, and percent levels stay inside 1..99 %
                 let ordered = t[0] < t[1] && t[1] < t[2] && (absolute || (t[0] >= 0.01 && t[2] <= 0.99));
-                if !ordered {
-                    return true;
-                }
+                if !ordered { return true; }
                 if absolute {
-                    if fall {
-                        self.m.meas_lv.fall_volts = t
-                    } else {
-                        self.m.meas_lv.volts = t
-                    }
+                    if fall { self.m.meas_lv.fall_volts = t } else { self.m.meas_lv.volts = t }
                 } else if fall {
                     self.m.meas_lv.fall = t;
                 } else {
                     (self.m.meas_lpct, self.m.meas_lv.mid, self.m.meas_hpct) = (t[0], t[1], t[2]);
-                    if i != 1 {
-                        self.m.meas_lv.custom = true;
-                    }
+                    if i != 1 { self.m.meas_lv.custom = true; }
                 }
                 self.measure_last();
             }
@@ -753,75 +601,34 @@ impl Ui {
     /// A shared level in percent (0..100), or in volts when the levels are volts. Hysteresis is a level item too.
     pub(super) fn meas_level_get(&self, it: Item) -> f64 {
         let l = &self.m.meas_lv;
-        if it == Item::MeasHyst {
-            return if l.absolute { l.vhyst } else { l.hyst * 100.0 };
-        }
+        if it == Item::MeasHyst { return if l.absolute { l.vhyst } else { l.hyst * 100.0 }; }
         let (fall, i) = level_slot(it);
-        if l.absolute {
-            return if fall { l.fall_volts[i] } else { l.volts[i] };
-        }
-        100.0
-            * if fall {
-                l.fall[i]
-            } else if i == 0 {
-                self.m.meas_lpct
-            } else if i == 1 {
-                l.mid
-            } else {
-                self.m.meas_hpct
-            }
+        if l.absolute { return if fall { l.fall_volts[i] } else { l.volts[i] }; }
+        100.0 * if fall { l.fall[i] } else if i == 0 { self.m.meas_lpct } else if i == 1 { l.mid } else { self.m.meas_hpct }
     }
 
     /// Sets a shared level (percent 1..99 or volts). False when the value would break low < mid < high.
     pub(super) fn meas_level_set(&mut self, it: Item, v: f64) -> bool {
-        if !v.is_finite() {
-            return false;
-        }
+        if !v.is_finite() { return false; }
         let absolute = self.m.meas_lv.absolute;
         if it == Item::MeasHyst {
-            if absolute {
-                if v <= 0.0 {
-                    return false;
-                }
-                self.m.meas_lv.vhyst = v;
-            } else {
-                if !(1.0..=50.0).contains(&v) {
-                    return false;
-                }
-                self.m.meas_lv.hyst = v / 100.0;
-            }
+            if absolute { if v <= 0.0 { return false; } self.m.meas_lv.vhyst = v; }
+            else { if !(1.0..=50.0).contains(&v) { return false; } self.m.meas_lv.hyst = v / 100.0; }
             self.measure_last();
             return true;
         }
         let (fall, i) = level_slot(it);
-        let mut t = if absolute {
-            if fall {
-                self.m.meas_lv.fall_volts
-            } else {
-                self.m.meas_lv.volts
-            }
-        } else if fall {
-            self.m.meas_lv.fall
-        } else {
-            [self.m.meas_lpct, self.m.meas_lv.mid, self.m.meas_hpct]
-        };
+        let mut t = if absolute { if fall { self.m.meas_lv.fall_volts } else { self.m.meas_lv.volts } }
+            else if fall { self.m.meas_lv.fall } else { [self.m.meas_lpct, self.m.meas_lv.mid, self.m.meas_hpct] };
         t[i] = if absolute { v } else { v / 100.0 };
-        if !(t[0] < t[1] && t[1] < t[2] && (absolute || (t[0] >= 0.01 && t[2] <= 0.99))) {
-            return false;
-        }
+        if !(t[0] < t[1] && t[1] < t[2] && (absolute || (t[0] >= 0.01 && t[2] <= 0.99))) { return false; }
         if absolute {
-            if fall {
-                self.m.meas_lv.fall_volts = t
-            } else {
-                self.m.meas_lv.volts = t
-            }
+            if fall { self.m.meas_lv.fall_volts = t } else { self.m.meas_lv.volts = t }
         } else if fall {
             self.m.meas_lv.fall = t;
         } else {
             (self.m.meas_lpct, self.m.meas_lv.mid, self.m.meas_hpct) = (t[0], t[1], t[2]);
-            if i != 1 {
-                self.m.meas_lv.custom = true;
-            }
+            if i != 1 { self.m.meas_lv.custom = true; }
         }
         self.measure_last();
         true
@@ -834,25 +641,13 @@ impl Ui {
         let t = |s: &str| Ok(Some(s.to_string()));
         let a = arg.trim();
         let bad = || Err(format!("-224,\"Illegal parameter value\" {}", arg));
-        let (fall, w) = if n.len() == 2 && crate::scpi::kw(n[0], "FALL") {
-            (true, n[1])
-        } else if n.len() == 1 {
-            (false, n[0])
-        } else {
+        let (fall, w) = if n.len() == 2 && crate::scpi::kw(n[0], "FALL") { (true, n[1]) } else if n.len() == 1 { (false, n[0]) } else {
             return Err("-113,\"Undefined header\"".into());
         };
         if fall && crate::scpi::kw(w, "SEParate") {
-            if query {
-                return t(if self.m.meas_lv.sep_fall { "1" } else { "0" });
-            }
-            let on = match a.to_ascii_uppercase().as_str() {
-                "ON" | "1" => true,
-                "OFF" | "0" => false,
-                _ => return bad(),
-            };
-            if on != self.m.meas_lv.sep_fall {
-                self.meas_adjust(Item::MeasSepFall, 1);
-            }
+            if query { return t(if self.m.meas_lv.sep_fall { "1" } else { "0" }); }
+            let on = match a.to_ascii_uppercase().as_str() { "ON" | "1" => true, "OFF" | "0" => false, _ => return bad() };
+            if on != self.m.meas_lv.sep_fall { self.meas_adjust(Item::MeasSepFall, 1); }
             self.mark_changed();
             return Ok(None);
         }
@@ -867,77 +662,32 @@ impl Ui {
             _ => None,
         };
         if let Some(it) = level {
-            if query {
-                return t(&format!("{}", self.meas_level_get(it)));
-            }
+            if query { return t(&format!("{}", self.meas_level_get(it))); }
             let Some(v) = a.parse::<f64>().ok() else { return bad() };
-            if !self.meas_level_set(it, v) {
-                return bad();
-            }
+            if !self.meas_level_set(it, v) { return bad(); }
             self.mark_changed();
             return Ok(None);
         }
-        if fall {
-            return bad();
-        }
+        if fall { return bad(); }
         if crate::scpi::kw(w, "TYPE") {
-            if query {
-                return t(if self.m.meas_lv.absolute { "VOLT" } else { "PERC" });
-            }
-            let want = if crate::scpi::kw(a, "PERCent") {
-                false
-            } else if crate::scpi::kw(a, "VOLTs") {
-                true
-            } else {
-                return bad();
-            };
-            if want != self.m.meas_lv.absolute {
-                self.meas_adjust(Item::MeasLvType, 1);
-            }
+            if query { return t(if self.m.meas_lv.absolute { "VOLT" } else { "PERC" }); }
+            let want = if crate::scpi::kw(a, "PERCent") { false } else if crate::scpi::kw(a, "VOLTs") { true } else { return bad() };
+            if want != self.m.meas_lv.absolute { self.meas_adjust(Item::MeasLvType, 1); }
             self.mark_changed();
             return Ok(None);
         }
         if crate::scpi::kw(w, "PRESet") {
-            if query {
-                return t(&self.meas_value(Item::MeasRefs).unwrap_or_default().to_ascii_uppercase());
-            }
-            let i = match a.replace(' ', "").to_ascii_uppercase().as_str() {
-                "10/90" | "1090" => 0,
-                "20/80" | "2080" => 1,
-                "CUSTOM" | "CUST" => 2,
-                _ => return bad(),
-            };
-            let cur = self.meas_value(Item::MeasRefs).map_or(2, |v| match v.as_str() {
-                "10/90" => 0,
-                "20/80" => 1,
-                _ => 2,
-            });
+            if query { return t(&self.meas_value(Item::MeasRefs).unwrap_or_default().to_ascii_uppercase()); }
+            let i = match a.replace(' ', "").to_ascii_uppercase().as_str() { "10/90" | "1090" => 0, "20/80" | "2080" => 1, "CUSTOM" | "CUST" => 2, _ => return bad() };
+            let cur = self.meas_value(Item::MeasRefs).map_or(2, |v| match v.as_str() { "10/90" => 0, "20/80" => 1, _ => 2 });
             self.meas_adjust(Item::MeasRefs, i - cur);
             self.mark_changed();
             return Ok(None);
         }
         if crate::scpi::kw(w, "BASEtop") {
-            if query {
-                return t(match self.m.meas_lv.base_top {
-                    oos_dsp::measure::BaseTop::Auto => "AUTO",
-                    oos_dsp::measure::BaseTop::MinMax => "MINM",
-                    oos_dsp::measure::BaseTop::Mean => "MEAN",
-                    oos_dsp::measure::BaseTop::Mode => "MODE",
-                });
-            }
-            let want = if crate::scpi::kw(a, "AUTO") {
-                0
-            } else if crate::scpi::kw(a, "MINMax") {
-                1
-            } else if crate::scpi::kw(a, "MEAN") {
-                2
-            } else if crate::scpi::kw(a, "MODE") {
-                3
-            } else {
-                return bad();
-            };
-            let cur =
-                oos_dsp::measure::BaseTop::ALL.iter().position(|&b| b == self.m.meas_lv.base_top).unwrap_or(0) as i32;
+            if query { return t(match self.m.meas_lv.base_top { oos_dsp::measure::BaseTop::Auto => "AUTO", oos_dsp::measure::BaseTop::MinMax => "MINM", oos_dsp::measure::BaseTop::Mean => "MEAN", oos_dsp::measure::BaseTop::Mode => "MODE" }); }
+            let want = if crate::scpi::kw(a, "AUTO") { 0 } else if crate::scpi::kw(a, "MINMax") { 1 } else if crate::scpi::kw(a, "MEAN") { 2 } else if crate::scpi::kw(a, "MODE") { 3 } else { return bad() };
+            let cur = oos_dsp::measure::BaseTop::ALL.iter().position(|&b| b == self.m.meas_lv.base_top).unwrap_or(0) as i32;
             self.meas_adjust(Item::MeasBaseTop, want - cur);
             self.mark_changed();
             return Ok(None);
@@ -1274,16 +1024,9 @@ impl Ui {
         let now = (self.m.zoom, tpd, delay);
         let was = std::mem::replace(&mut self.cursor_view, Some(now));
         let Some((was_zoom, wtpd, wdelay)) = was else { return };
-        if (was_zoom, wtpd, wdelay) == now
-            || !(was_zoom || self.m.zoom)
-            || !matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy)
-        {
-            return;
-        }
+        if (was_zoom, wtpd, wdelay) == now || !(was_zoom || self.m.zoom) || !matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy) { return; }
         let (old_span, new_span) = (HDIV as f64 * wtpd as f64, HDIV as f64 * tpd as f64);
-        if !(old_span > 0.0 && new_span > 0.0 && old_span.is_finite() && new_span.is_finite()) {
-            return;
-        }
+        if !(old_span > 0.0 && new_span > 0.0 && old_span.is_finite() && new_span.is_finite()) { return; }
         for frac in [&mut self.m.cur_a, &mut self.m.cur_b] {
             let t = (*frac as f64 - 0.5) * old_span + wdelay as f64;
             *frac = (((t - delay as f64) / new_span + 0.5).clamp(-2.0e4, 2.0e4)) as f32;
@@ -1313,15 +1056,7 @@ impl Ui {
         let (tpd, _) = self.view();
         let span = ((HDIV as f64 * tpd as f64 / 4.0 / dt) as usize).clamp(2, 1 << 22);
         let rising = snap != CursorSnap::Falling;
-        let k = oos_dsp::edges::edge_near(
-            w,
-            at as usize,
-            level,
-            (hi - lo) * 0.05,
-            rising,
-            snap == CursorSnap::Either,
-            span,
-        )?;
+        let k = oos_dsp::edges::edge_near(w, at as usize, level, (hi - lo) * 0.05, rising, snap == CursorSnap::Either, span)?;
         Some(self.cursor_frac_time(t0 + k * dt))
     }
 
@@ -1330,14 +1065,9 @@ impl Ui {
         if !matches!(self.m.cursor, CursorMode::Time | CursorMode::Track | CursorMode::Xy) {
             return false;
         }
-        let (frac, source) =
-            if a { (self.m.cur_a, self.cursor_source()) } else { (self.m.cur_b, self.cursor_b_source()) };
+        let (frac, source) = if a { (self.m.cur_a, self.cursor_source()) } else { (self.m.cur_b, self.cursor_b_source()) };
         let Some(to) = self.cursor_snap_frac(frac, source, snap) else { return false };
-        if a {
-            self.m.cur_a = to
-        } else {
-            self.m.cur_b = to
-        }
+        if a { self.m.cur_a = to } else { self.m.cur_b = to }
         true
     }
 
@@ -1371,9 +1101,7 @@ impl Ui {
             WaveId::Ch(c) => c < n_ch(),
             WaveId::Ref(i) => self.refs.get(i).is_some_and(Option::is_some),
         };
-        if !available {
-            return false;
-        }
+        if !available { return false; }
         // only the cursors move to it: the active channel and the measurement source stay
         self.cursor_pin = Some(source);
         self.relayout();
@@ -1674,9 +1402,7 @@ impl Ui {
         self.setup_path().with_file_name(format!("mask{}.txt", self.files.slot))
     }
 
-    pub(super) fn mask_save(&mut self) {
-        self.mask_save_to(None)
-    }
+    pub(super) fn mask_save(&mut self) { self.mask_save_to(None) }
 
     /// `mask_save` to a file of the caller (SCPI `:MASK:SAVE "path"`), or to the slot and the save folder.
     pub(super) fn mask_save_to(&mut self, path: Option<std::path::PathBuf>) {
@@ -1695,9 +1421,7 @@ impl Ui {
         self.toast_saved(&p, res);
     }
 
-    pub(super) fn mask_load(&mut self) {
-        self.mask_load_from(None)
-    }
+    pub(super) fn mask_load(&mut self) { self.mask_load_from(None) }
 
     /// `mask_load` from a file of the caller (SCPI `:MASK:LOAD "path"`), or the slot and the save folder.
     pub(super) fn mask_load_from(&mut self, path: Option<std::path::PathBuf>) {
@@ -1771,12 +1495,9 @@ impl Ui {
 
     /// Name of a math trace: its label, or Mn.
     pub(super) fn math_name(&self, k: usize) -> String {
-        if self.m.math_label[k].is_empty() {
-            format!("M{}", k + 1)
-        } else {
-            self.m.math_label[k].clone()
-        }
+        if self.m.math_label[k].is_empty() { format!("M{}", k + 1) } else { self.m.math_label[k].clone() }
     }
+
 }
 
 /// One knob step of a measurement time (burst idle, setup, hold): off, then 1-2-5 from 1 ns to 5 s. A longer time
@@ -1942,15 +1663,10 @@ fn level_slot(it: Item) -> (bool, usize) {
 /// The preset the percent levels are at: 10/90, 20/80 or Custom.
 fn meas_preset_name(m: &Model) -> &'static str {
     let (l, h) = (m.meas_lpct, m.meas_hpct);
-    if m.meas_lv.custom {
-        "Custom"
-    } else if (l - 0.1).abs() < 1e-9 && (h - 0.9).abs() < 1e-9 {
-        "10/90"
-    } else if (l - 0.2).abs() < 1e-9 && (h - 0.8).abs() < 1e-9 {
-        "20/80"
-    } else {
-        "Custom"
-    }
+    if m.meas_lv.custom { "Custom" }
+    else if (l - 0.1).abs() < 1e-9 && (h - 0.9).abs() < 1e-9 { "10/90" }
+    else if (l - 0.2).abs() < 1e-9 && (h - 0.8).abs() < 1e-9 { "20/80" }
+    else { "Custom" }
 }
 
 /// `v` moved `d` steps along 1-2-5 values from 0.1 mV to 500 V (positive only when `positive`, else both signs and 0).

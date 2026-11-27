@@ -66,35 +66,16 @@ pub fn draw(cv: &mut Canvas, ui: &Ui, hover: Option<(i32, i32)>) {
     for c in controls() {
         let on = (c.command == "key runstop" && ui.m.run == RunState::Run)
             || (c.command == "key single" && ui.m.trig_mode == TrigMode::Single && ui.m.run == RunState::Run);
-        let border = if on {
-            ACCENT
-        } else if hover.is_some_and(|(x, y)| c.rect.contains(x, y)) {
-            DIM
-        } else {
-            BORDER
-        };
+        let border = if on { ACCENT } else if hover.is_some_and(|(x, y)| c.rect.contains(x, y)) { DIM } else { BORDER };
         cv.round(c.rect, 5, border, 255);
         cv.round(c.rect.inset(1), 4, BUTTON, 255);
-        let label = if c.command == "key runstop" {
-            if ui.m.run == RunState::Run {
-                "Stop"
-            } else {
-                "Run"
-            }
-        } else {
-            c.label
-        };
+        let label = if c.command == "key runstop" { if ui.m.run == RunState::Run { "Stop" } else { "Run" } } else { c.label };
         cv.text_in(&ui.fonts().sb, c.rect, 1, label, if on { ACCENT } else { TEXT });
     }
-    for (i, label) in
-        ["V scale", "V position", "H scale", "H position", "Trigger", "Multi 1", "Multi 2"].iter().enumerate()
-    {
+    for (i, label) in ["V scale", "V position", "H scale", "H position", "Trigger", "Multi 1", "Multi 2"].iter().enumerate() {
         cv.text(&ui.fonts().s, x, 355 + i as i32 * 31, label, TEXT);
     }
-    let status = ui
-        .lan_web_port
-        .map(|port| format!("Web :{port}  |  Ctrl+O load"))
-        .unwrap_or_else(|| "Web unavailable  |  Ctrl+O load".into());
+    let status = ui.lan_web_port.map(|port| format!("Web :{port}  |  Ctrl+O load")).unwrap_or_else(|| "Web unavailable  |  Ctrl+O load".into());
     cv.text(&ui.fonts().s, x, 581, &status, DIM);
 }
 
@@ -112,15 +93,7 @@ mod tests {
         for (i, c) in items.iter().enumerate() {
             assert!(c.rect.x > W && c.rect.x + c.rect.w <= W + WIDTH && c.rect.y > 0 && c.rect.y + c.rect.h <= 600);
             for other in items.iter().skip(i + 1) {
-                assert!(
-                    c.rect.x + c.rect.w <= other.rect.x
-                        || other.rect.x + other.rect.w <= c.rect.x
-                        || c.rect.y + c.rect.h <= other.rect.y
-                        || other.rect.y + other.rect.h <= c.rect.y,
-                    "{} overlaps {}",
-                    c.label,
-                    other.label
-                );
+                assert!(c.rect.x + c.rect.w <= other.rect.x || other.rect.x + other.rect.w <= c.rect.x || c.rect.y + c.rect.h <= other.rect.y || other.rect.y + other.rect.h <= c.rect.y, "{} overlaps {}", c.label, other.label);
             }
         }
     }

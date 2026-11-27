@@ -200,9 +200,7 @@ impl Ui {
             // all bits of the entry count, above it every bit
             Item::SerMask => s.mask = if v == BUS_VAL_MAX { u64::MAX } else { v },
             Item::SrchBusVal => {
-                if let Some(sp) = self.studio.search() {
-                    self.studio.search_put(super::addrail::SearchSpec { val: v, ..sp })
-                }
+                if let Some(sp) = self.studio.search() { self.studio.search_put(super::addrail::SearchSpec { val: v, ..sp }) }
             }
             _ => self.m.trig_bus_val = v,
         }

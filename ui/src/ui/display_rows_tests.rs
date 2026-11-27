@@ -68,8 +68,7 @@ fn autoset_with_zoom_on_draws() {
 #[test]
 fn display_is_three_tabs_in_one_order() {
     for hdmi in [HdmiMode::Mirror, HdmiMode::Waveform, HdmiMode::Layout] {
-        for arrangement in [windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows]
-        {
+        for arrangement in [windows::Arrangement::Overlay, windows::Arrangement::Stacked, windows::Arrangement::Windows] {
             let mut u = studio();
             u.m.hdmi = hdmi;
             u.set_arrangement(arrangement);
@@ -78,31 +77,12 @@ fn display_is_three_tabs_in_one_order() {
             let spec = u.sheet_spec(MenuId::Display).expect("Display is a sheet");
             let names: Vec<_> = spec.tabs.iter().map(|t| t.name).collect();
             assert_eq!(names, ["Traces", "Look", "Screen", "Lower"], "{hdmi:?} {arrangement:?}");
-            assert_eq!(
-                spec.tabs[0].rows,
-                [Item::Layout, Item::Traces, Item::Views, Item::XyMode, Item::ZInput, Item::Histogram],
-                "{hdmi:?} {arrangement:?}"
-            );
+            assert_eq!(spec.tabs[0].rows, [Item::Layout, Item::Traces, Item::Views, Item::XyMode, Item::ZInput, Item::Histogram], "{hdmi:?} {arrangement:?}");
             assert_eq!(spec.tabs[3].rows, [Item::PaneSel], "{hdmi:?} {arrangement:?}");
             // the page of the window numbers is under Traces while the traces are in windows, and not before
-            let link = if arrangement == windows::Arrangement::Windows {
-                vec![Item::Open(MenuId::Windows)]
-            } else {
-                Vec::new()
-            };
+            let link = if arrangement == windows::Arrangement::Windows { vec![Item::Open(MenuId::Windows)] } else { Vec::new() };
             assert_eq!(spec.tabs[0].foot, link, "{hdmi:?} {arrangement:?}");
-            assert_eq!(
-                spec.tabs[1].rows,
-                [
-                    Item::Persist,
-                    Item::Intensity,
-                    Item::ColorGrade,
-                    Item::Dots,
-                    Item::GridStyle,
-                    Item::GridBright,
-                    Item::GridFrame
-                ]
-            );
+            assert_eq!(spec.tabs[1].rows, [Item::Persist, Item::Intensity, Item::ColorGrade, Item::Dots, Item::GridStyle, Item::GridBright, Item::GridFrame]);
             assert_eq!(spec.tabs[1].foot, [Item::ClearDisp]);
             for t in &spec.tabs {
                 assert!(t.rows.len() <= 7, "{}: {} rows", t.name, t.rows.len());
@@ -120,15 +100,10 @@ fn display_is_three_tabs_in_one_order() {
 fn the_default_dialog_has_the_rows_of_the_sheet_in_its_order() {
     let mut a = Ui::new(Source::Demo { t: 0.0 });
     a.m.layout = Layout::Default;
-    let dialog: Vec<Item> =
-        a.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::BottomBar | Item::StripPos)).collect();
+    let dialog: Vec<Item> = a.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::BottomBar | Item::StripPos)).collect();
     let mut s = studio();
     s.m.hdmi = a.m.hdmi;
-    let studio_rows: Vec<Item> = s
-        .items(MenuId::Display)
-        .into_iter()
-        .filter(|it| !matches!(it, Item::StudioBadges | Item::StudioCompact | Item::StudioReset | Item::BottomBar))
-        .collect();
+    let studio_rows: Vec<Item> = s.items(MenuId::Display).into_iter().filter(|it| !matches!(it, Item::StudioBadges | Item::StudioCompact | Item::StudioReset | Item::BottomBar)).collect();
     assert_eq!(dialog, studio_rows);
 }
 
@@ -162,8 +137,7 @@ fn the_plot_menu_names_the_arrangements_alike_in_every_layout() {
     frame(&mut d);
     let g = d.plot.grid;
     d.context_menu(g.x + g.w / 2, g.y + g.h / 2);
-    let default: Vec<String> =
-        d.workspace.popup.as_ref().expect("Default's popup").rows.iter().map(|r| r.0.clone()).collect();
+    let default: Vec<String> = d.workspace.popup.as_ref().expect("Default's popup").rows.iter().map(|r| r.0.clone()).collect();
     let mut s = studio();
     let w = s.plot.wins[0];
     s.context_menu(w.x + w.w / 2, w.y + w.h / 2);
@@ -173,22 +147,8 @@ fn the_plot_menu_names_the_arrangements_alike_in_every_layout() {
         assert!(default.iter().any(|l| l == name), "Default: {default:?}");
         assert!(studio_rows.iter().any(|l| l == name), "Studio: {studio_rows:?}");
     }
-    for gone in [
-        "Overlay traces",
-        "Stacked traces",
-        "Four windows",
-        "Autoset",
-        "Single acquisition",
-        "Run / Stop",
-        "Sources",
-        "Trigger settings",
-        "Float measurements",
-        "Center trigger",
-    ] {
-        assert!(
-            !default.iter().any(|l| l == gone) && !studio_rows.iter().any(|l| l == gone),
-            "{gone} is not in the plot's menu"
-        );
+    for gone in ["Overlay traces", "Stacked traces", "Four windows", "Autoset", "Single acquisition", "Run / Stop", "Sources", "Trigger settings", "Float measurements", "Center trigger"] {
+        assert!(!default.iter().any(|l| l == gone) && !studio_rows.iter().any(|l| l == gone), "{gone} is not in the plot's menu");
     }
 }
 
@@ -207,11 +167,7 @@ fn every_row_of_the_plot_menu_does_what_its_label_says() {
     let lines = plot_menu_lines(&st);
     assert!(lines.len() > 60, "the menu was pressed: {} rows", lines.len());
     let bad: Vec<&String> = lines.iter().filter(|l| l.split('\t').nth(5) != Some("OK")).collect();
-    assert!(
-        bad.is_empty(),
-        "rows that do not do what they say:\n{}",
-        bad.iter().map(|l| l.as_str()).collect::<Vec<_>>().join("\n")
-    );
+    assert!(bad.is_empty(), "rows that do not do what they say:\n{}", bad.iter().map(|l| l.as_str()).collect::<Vec<_>>().join("\n"));
 }
 
 /// With the trend pane open Display is still a sheet (the two charts are on the Lower tab); Monitor view is a row
@@ -227,12 +183,7 @@ fn display_stays_a_sheet_with_the_trend_pane_and_monitor_view_has_its_conditions
     assert_eq!(lower.rows, [Item::PaneSel, Item::TrendSel(0), Item::TrendSel(1)]);
     assert!(spec.tabs.iter().all(|t| t.rows.len() <= 7));
     u.close_menu();
-    for (hdmi, views, offered) in [
-        (HdmiMode::Mirror, 4, false),
-        (HdmiMode::Waveform, 4, false),
-        (HdmiMode::Layout, 1, false),
-        (HdmiMode::Layout, 2, true),
-    ] {
+    for (hdmi, views, offered) in [(HdmiMode::Mirror, 4, false), (HdmiMode::Waveform, 4, false), (HdmiMode::Layout, 1, false), (HdmiMode::Layout, 2, true)] {
         let mut u = studio();
         u.m.hdmi = hdmi;
         u.views_set(views);

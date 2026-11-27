@@ -205,13 +205,7 @@ pub fn session_view(offline_ref: usize) -> [u8; 12] {
 /// u32 1 or 0 and then an OOSW blob (`wave_bin`) when 1, u32 number of reference slots, and per slot u32 slot (0-based),
 /// u32 source channel, f64 t0, f64 dt, u64 samples and the samples as f32 volts. The blob is `memory` when given: the
 /// samples the acquisition kept (`wave_bin_of`), where `rec` has the points of the screen.
-pub fn session_bin(
-    setup: &str,
-    rec: Option<&impl Samples>,
-    memory: Option<&[u8]>,
-    m: &Model,
-    refs: &[SessionRef],
-) -> Vec<u8> {
+pub fn session_bin(setup: &str, rec: Option<&impl Samples>, memory: Option<&[u8]>, m: &Model, refs: &[SessionRef]) -> Vec<u8> {
     let mut b = Vec::new();
     b.extend_from_slice(b"OOSS");
     b.extend_from_slice(&1u32.to_le_bytes());
@@ -304,9 +298,7 @@ pub fn parse_session<R: Samples>(b: &[u8], slots: usize) -> Result<Session<R>, S
         refs.push(SessionRef { slot, src, t0, dt, v });
     }
     // the view the session was saved in, when the file says so and names a slot it holds
-    let offline_ref = b
-        .get(at..at + 12)
-        .filter(|end| &end[..4] == b"VIEW" && end[4..8] == 1u32.to_le_bytes())
+    let offline_ref = b.get(at..at + 12).filter(|end| &end[..4] == b"VIEW" && end[4..8] == 1u32.to_le_bytes())
         .map(|end| u32::from_le_bytes(end[8..12].try_into().unwrap()) as usize)
         .filter(|slot| refs.iter().any(|r| r.slot == *slot));
     Ok(Session { setup, record, refs, offline_ref, note: String::new() })

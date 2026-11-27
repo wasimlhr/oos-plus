@@ -38,9 +38,7 @@ impl Services {
             cmd::run(ui, &command);
         }
         self.announce.poll();
-        if Instant::now() < self.next_status {
-            return;
-        }
+        if Instant::now() < self.next_status { return; }
         self.next_status = Instant::now() + Duration::from_secs(1);
         ui.lan_web_port = self.web.port();
         let bound = |port: Option<u16>| port.map_or_else(|| "unavailable".into(), |p| p.to_string());
@@ -49,47 +47,22 @@ impl Services {
             ui.net.iface = "lo".into();
             ui.net.eth_link = false;
             ui.net.ifs = vec![("lo".into(), ui.net.addr.clone())];
-            ui.lan_status = format!(
-                "SCPI {} / HiSLIP {} on this PC only (start with --lan for the network)",
-                bound(self.scpi.port()),
-                bound(self.hislip.port())
-            );
+            ui.lan_status = format!("SCPI {} / HiSLIP {} on this PC only (start with --lan for the network)", bound(self.scpi.port()), bound(self.hislip.port()));
             return;
         }
         let addresses = self.announce.local_addresses();
         // A UDP connect selects the default route without transmitting any packet.
-        let routed = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0))
-            .ok()
-            .and_then(|socket| {
-                socket.connect((Ipv4Addr::new(192, 0, 2, 1), 9)).ok()?;
-                match socket.local_addr().ok()?.ip() {
-                    std::net::IpAddr::V4(ip) => Some(ip.octets()),
-                    _ => None,
-                }
-            })
-            .filter(|ip| addresses.contains(ip));
+        let routed = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).ok().and_then(|socket| {
+            socket.connect((Ipv4Addr::new(192, 0, 2, 1), 9)).ok()?;
+            match socket.local_addr().ok()?.ip() { std::net::IpAddr::V4(ip) => Some(ip.octets()), _ => None }
+        }).filter(|ip| addresses.contains(ip));
         let primary = routed.or_else(|| addresses.first().copied());
         ui.net.addr = primary.map(|a| Ipv4Addr::from(a).to_string()).unwrap_or_default();
         ui.net.iface = "eth0".into();
         ui.net.eth_link = primary.is_some();
-        ui.net.ifs = primary
-            .into_iter()
-            .map(|ip| ("eth0".into(), Ipv4Addr::from(ip).to_string()))
-            .chain(
-                addresses
-                    .iter()
-                    .copied()
-                    .filter(|a| Some(*a) != primary)
-                    .enumerate()
-                    .map(|(i, ip)| (format!("LAN{}", i + 2), Ipv4Addr::from(ip).to_string())),
-            )
-            .collect();
-        ui.lan_status = format!(
-            "SCPI {} / HiSLIP {} / mDNS {}",
-            bound(self.scpi.port()),
-            bound(self.hislip.port()),
-            if self.announce.available() { "on" } else { "unavailable" }
-        );
+        ui.net.ifs = primary.into_iter().map(|ip| ("eth0".into(), Ipv4Addr::from(ip).to_string()))
+            .chain(addresses.iter().copied().filter(|a| Some(*a) != primary).enumerate().map(|(i, ip)| (format!("LAN{}", i + 2), Ipv4Addr::from(ip).to_string()))).collect();
+        ui.lan_status = format!("SCPI {} / HiSLIP {} / mDNS {}", bound(self.scpi.port()), bound(self.hislip.port()), if self.announce.available() { "on" } else { "unavailable" });
     }
 }
 
@@ -103,9 +76,7 @@ mod tests {
         let mut bytes = Vec::new();
         let mut chunk = [0; 512];
         loop {
-            if let Some(message) = hislip::take_message(&mut bytes).unwrap() {
-                return message;
-            }
+            if let Some(message) = hislip::take_message(&mut bytes).unwrap() { return message; }
             let n = stream.read(&mut chunk).unwrap();
             assert!(n > 0);
             bytes.extend_from_slice(&chunk[..n]);
@@ -114,8 +85,7 @@ mod tests {
 
     #[test]
     fn desktop_network_services_share_the_window_session() {
-        let args: Vec<String> =
-            ["--web-port", "0", "--scpi-port", "0", "--hislip-port", "0"].into_iter().map(str::to_string).collect();
+        let args: Vec<String> = ["--web-port", "0", "--scpi-port", "0", "--hislip-port", "0"].into_iter().map(str::to_string).collect();
         let mut services = Services::open(&args, &crate::netacl::Shared::default());
         let raw_port = services.scpi.port().unwrap();
         let hislip_port = services.hislip.port().unwrap();

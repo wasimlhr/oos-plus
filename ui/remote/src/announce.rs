@@ -19,10 +19,10 @@ use std::time::{Duration, Instant};
 // the Windows desktop build of oos-plus: its own sockets and interface list
 #[cfg(windows)]
 mod windows;
-#[cfg(unix)]
-use oos_system::system::set_socket_option;
 #[cfg(windows)]
 use windows::{addresses, host_label, join, mcast_socket, send_mcast};
+#[cfg(unix)]
+use oos_system::system::set_socket_option;
 
 const MDNS_PORT: u16 = 5353;
 const GROUP: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);

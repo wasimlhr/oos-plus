@@ -87,9 +87,7 @@ impl Scpi {
         ui.sync_view_state();
         let now = crate::store::setup_text(&ui.m);
         if rec.hold {
-            if ui.auto_running() {
-                return;
-            }
+            if ui.auto_running() { return; }
             // the auto set-up is done: the set-up it left is where the next step starts
             (rec.base, rec.seen, rec.pending, rec.hold) = (ui.m.clone(), now, false, false);
             return;
@@ -97,9 +95,7 @@ impl Scpi {
         if now != rec.seen {
             (rec.seen, rec.changed_at, rec.pending) = (now, ui.now, true);
         }
-        if rec.pending && ui.now - rec.changed_at >= SETTLE {
-            self.rec_step(ui, cv);
-        }
+        if rec.pending && ui.now - rec.changed_at >= SETTLE { self.rec_step(ui, cv); }
     }
 
     /// The actions since the last frame (`Ui::rec_action`), each written as its command.
@@ -109,13 +105,9 @@ impl Scpi {
             // the set-up after this action is the one before the next of the same frame, else the one the scope has
             let mut after = actions.get(i + 1).map(|next| next.1.clone());
             let (line, mut before) = (actions[i].0.clone(), std::mem::take(&mut actions[i].1));
-            if let Some(model) = after.as_mut() {
-                std::mem::swap(&mut ui.m, &mut **model);
-            }
+            if let Some(model) = after.as_mut() { std::mem::swap(&mut ui.m, &mut **model); }
             self.rec_action_written(ui, cv, &line, &mut before);
-            if let Some(model) = after.as_mut() {
-                std::mem::swap(&mut ui.m, &mut **model);
-            }
+            if let Some(model) = after.as_mut() { std::mem::swap(&mut ui.m, &mut **model); }
         }
     }
 
@@ -150,28 +142,20 @@ impl Scpi {
             true => self.mend(ui, cv, before, vec![line.to_string()], &want),
             false => (vec![line.to_string()], Vec::new()),
         };
-        if matches!(line, ":SINGle" | ":AUToscale") {
-            lines.insert(1, "*OPC?".to_string());
-        }
+        if matches!(line, ":SINGle" | ":AUToscale") { lines.insert(1, "*OPC?".to_string()); }
         let Some(rec) = self.rec.as_mut() else { return };
         rec.lines.push(comment(&format!("+{:.1} s", (ui.now - rec.started).max(0.0))));
         rec.commands += lines.len();
         rec.lines.extend(lines);
-        if let Some(keys) = named(&rest) {
-            rec.lines.push(comment(&format!("not recorded: {keys}")));
-        }
+        if let Some(keys) = named(&rest) { rec.lines.push(comment(&format!("not recorded: {keys}"))); }
         // the settings the action changed are its own: the next step starts from the set-up it left
         let auto = line == ":AUToscale";
-        if state || auto {
-            (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false);
-        }
+        if state || auto { (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false); }
         rec.hold = rec.hold || auto;
         // no message: the action has said what it did, or why not ("Save failed")
         let _ = crate::store::write(&rec.path, rec.text().as_bytes());
         // a key that is held or pressed again and again fills a recording as a knob does
-        if rec.full() {
-            ui.scpi_rec_want = false;
-        }
+        if rec.full() { ui.scpi_rec_want = false; }
     }
 
     fn rec_start(&mut self, ui: &mut Ui, cv: &Canvas) {
@@ -180,9 +164,7 @@ impl Scpi {
         let mut lines = vec![comment(&format!("OOS SCPI recording v1 (oos-ui {version})"))];
         lines.push(comment("the set-up at the start"));
         lines.extend(setup.lines().map(str::to_string));
-        if let Some(keys) = named(&rest) {
-            lines.push(comment(&format!("not carried: {keys}")));
-        }
+        if let Some(keys) = named(&rest) { lines.push(comment(&format!("not carried: {keys}"))); }
         lines.push(comment("what was set at the scope from then on"));
         let rec = Recorder {
             base: ui.m.clone(),
@@ -222,24 +204,16 @@ impl Scpi {
             rec.commands += step.len();
             rec.lines.extend(step);
         }
-        if let Some(keys) = named(&rest) {
-            rec.lines.push(comment(&format!("not recorded: {keys}")));
-        }
+        if let Some(keys) = named(&rest) { rec.lines.push(comment(&format!("not recorded: {keys}"))); }
         (rec.base, rec.seen, rec.pending) = (ui.m.clone(), want, false);
-        if wrote {
-            let _ = crate::store::write(&rec.path, rec.text().as_bytes());
-        }
-        if rec.full() {
-            ui.scpi_rec_want = false;
-        }
+        if wrote { let _ = crate::store::write(&rec.path, rec.text().as_bytes()); }
+        if rec.full() { ui.scpi_rec_want = false; }
         self.rec = Some(rec);
     }
 
     fn rec_stop(&mut self, ui: &mut Ui, cv: &Canvas) {
         // what was set last is written without the wait; what an auto set-up that still runs has set is its own
-        if !self.rec.as_ref().is_some_and(|r| r.hold) {
-            self.rec_step(ui, cv);
-        }
+        if !self.rec.as_ref().is_some_and(|r| r.hold) { self.rec_step(ui, cv); }
         let Some(rec) = self.rec.take() else { return };
         let n = rec.commands;
         ui.scpi_write(&rec.path, &rec.text(), Some(&format!("{n} command{}", if n == 1 { "" } else { "s" })));
@@ -255,9 +229,7 @@ impl Scpi {
     /// first, as the set-up was before the message; then the set-up after the message is the one the next step starts
     /// from.
     pub(crate) fn rec_after_remote(&mut self, ui: &mut Ui, cv: &Canvas, mut before: Model) {
-        if ui.m == before {
-            return;
-        }
+        if ui.m == before { return; }
         let Some(rec) = self.rec.as_ref() else { return };
         if rec.pending || crate::store::setup_text(&before) != rec.seen {
             // the queries of the step read the model: for the step it is the one from before the message
@@ -354,17 +326,14 @@ mod tests {
 
     /// The lines of a recording after the start (the commands, without the comments).
     fn recorded(lines: &[String]) -> Vec<String> {
-        let at =
-            lines.iter().position(|l| l == "# what was set at the scope from then on").expect("the mark of the start");
+        let at = lines.iter().position(|l| l == "# what was set at the scope from then on").expect("the mark of the start");
         lines[at + 1..].iter().filter(|l| !l.starts_with('#')).cloned().collect()
     }
 
     /// Sends the lines to a second scope, comments and all: its set-up text, and the errors it queued.
     fn replay(lines: &[String]) -> (String, Vec<String>) {
         let (mut s, mut ui, cv) = session();
-        for l in lines {
-            s.exec_line(&mut ui, &cv, l);
-        }
+        for l in lines { s.exec_line(&mut ui, &cv, l); }
         (text(&mut ui), s.queued_errors().to_vec())
     }
 
@@ -394,10 +363,7 @@ mod tests {
         tick(&mut s, &mut ui, &cv, 0.4);
         assert_eq!(recorded(s.rec_lines()), [":TIMebase:SCALe 2.000000E-03"]);
         assert_eq!(ui.toast_text(), "Recorded :TIMebase:SCALe 2.000000E-03");
-        assert!(
-            Ui::toast_is_info(&ui.toast_text()) && Ui::toast_is_info("SCPI recorder on"),
-            "a neutral message, not a warning"
-        );
+        assert!(Ui::toast_is_info(&ui.toast_text()) && Ui::toast_is_info("SCPI recorder on"), "a neutral message, not a warning");
         // another setting
         user(&mut ui, "ch1.coupling", "Ac");
         settle(&mut s, &mut ui, &cv);
@@ -455,12 +421,7 @@ mod tests {
         tick(&mut s, &mut ui, &cv, 0.1);
         s.exec_line(&mut ui, &cv, "*RST");
         settle(&mut s, &mut ui, &cv);
-        assert_eq!(
-            recorded(s.rec_lines()),
-            [":TIMebase:SCALe 1.000000E-03", ":TIMebase:SCALe 2.000000E-03"],
-            "{:?}",
-            s.rec_lines()
-        );
+        assert_eq!(recorded(s.rec_lines()), [":TIMebase:SCALe 1.000000E-03", ":TIMebase:SCALe 2.000000E-03"], "{:?}", s.rec_lines());
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
     }
 
@@ -481,10 +442,7 @@ mod tests {
         user(&mut ui, "ch1.coupling", "Ac");
         tick(&mut s, &mut ui, &cv, 0.05);
         tick(&mut s, &mut ui, &cv, 1.0);
-        assert!(
-            std::fs::read_to_string(&so_far[0]).unwrap().ends_with(":CHANnel1:COUPling AC\n"),
-            "written after the step"
-        );
+        assert!(std::fs::read_to_string(&so_far[0]).unwrap().ends_with(":CHANnel1:COUPling AC\n"), "written after the step");
         user(&mut ui, "tdiv", "0.001");
         tick(&mut s, &mut ui, &cv, 0.1);
         // switched off before the setting has stood still: it is written all the same
@@ -492,15 +450,9 @@ mod tests {
         tick(&mut s, &mut ui, &cv, 0.1);
         assert!(s.rec.is_none());
         let files: Vec<_> = std::fs::read_dir(&dir).unwrap().filter_map(|e| e.ok()).map(|e| e.path()).collect();
-        assert!(
-            files.len() == 1 && files[0].file_name().is_some_and(|n| n.to_string_lossy().starts_with("recording")),
-            "{files:?}"
-        );
+        assert!(files.len() == 1 && files[0].file_name().is_some_and(|n| n.to_string_lossy().starts_with("recording")), "{files:?}");
         let file = std::fs::read_to_string(&files[0]).unwrap();
-        assert!(
-            file.starts_with("# OOS SCPI recording v1") && file.ends_with(":TIMebase:SCALe 1.000000E-03\n"),
-            "{file}"
-        );
+        assert!(file.starts_with("# OOS SCPI recording v1") && file.ends_with(":TIMebase:SCALe 1.000000E-03\n"), "{file}");
         let message = ui.toast_text();
         assert!(message.starts_with("Saved recording") && message.ends_with("2 commands"), "{message}");
         // the lines of the last recording stay to be read
@@ -536,12 +488,7 @@ mod tests {
         // before the turn of the knob has stood still
         ui.key(key::SINGLE);
         tick(&mut s, &mut ui, &cv, 0.1);
-        assert_eq!(
-            recorded(s.rec_lines()),
-            [":TIMebase:SCALe 1.000000E-03", ":SINGle", "*OPC?"],
-            "{:?}",
-            s.rec_lines()
-        );
+        assert_eq!(recorded(s.rec_lines()), [":TIMebase:SCALe 1.000000E-03", ":SINGle", "*OPC?"], "{:?}", s.rec_lines());
         for k in [key::RUNSTOP, key::RUNSTOP, key::CLEAR, key::FORCE] {
             ui.key(k);
             settle(&mut s, &mut ui, &cv);
@@ -564,9 +511,7 @@ mod tests {
         use crate::ui::key;
         let (mut s, mut ui, cv, _dir) = session_in("default");
         // the demo signal has been seen: an auto set-up has something to find
-        for _ in 0..20 {
-            ui.step(0.05);
-        }
+        for _ in 0..20 { ui.step(0.05); }
         start(&mut s, &mut ui, &cv);
         user(&mut ui, "tdiv", "0.001");
         user(&mut ui, "ch1.vdiv", "0.5");
@@ -581,12 +526,7 @@ mod tests {
         ui.key(key::AUTO);
         settle(&mut s, &mut ui, &cv);
         assert!(!changed(&before, &text(&mut ui)).is_empty(), "the auto set-up of the demo signal changes settings");
-        assert_eq!(
-            recorded(s.rec_lines()),
-            ["*RST", ":TIMebase:SCALe 5.000000E-01", ":AUToscale", "*OPC?"],
-            "{:?}",
-            s.rec_lines()
-        );
+        assert_eq!(recorded(s.rec_lines()), ["*RST", ":TIMebase:SCALe 5.000000E-01", ":AUToscale", "*OPC?"], "{:?}", s.rec_lines());
         // what the user sets after it is a step from the set-up it left
         user(&mut ui, "ch1.coupling", "Ac");
         settle(&mut s, &mut ui, &cv);
@@ -625,9 +565,7 @@ mod tests {
         ui.script_do("Save setup").unwrap();
         assert_eq!(saved(dir.as_ref()), ["setup1.txt", "setup3.txt"], "the file of the slot");
         // the row has written it; the recorder, a frame later, must not run the save again
-        for name in saved(dir.as_ref()) {
-            std::fs::remove_file(dir.0.join(name)).unwrap();
-        }
+        for name in saved(dir.as_ref()) { std::fs::remove_file(dir.0.join(name)).unwrap(); }
         settle(&mut s, &mut ui, &cv);
         assert_eq!(recorded(s.rec_lines()), ["*SAV 3"], "{:?}", s.rec_lines());
         assert!(saved(dir.as_ref()).is_empty(), "written once, by the row");
@@ -636,9 +574,7 @@ mod tests {
         // run on a scope whose menu stands at another slot, the recording writes the slot it was made with
         let lines = s.rec_lines().to_vec();
         let (mut s, mut ui, cv, dir) = session_in("save-replay");
-        for l in &lines {
-            s.exec_line(&mut ui, &cv, l);
-        }
+        for l in &lines { s.exec_line(&mut ui, &cv, l); }
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
         assert_eq!(saved(dir.as_ref()), ["setup3.txt"], "{lines:?}");
     }
@@ -650,9 +586,7 @@ mod tests {
     fn an_action_is_recorded_where_it_is_done() {
         use crate::ui::key;
         let (mut s, mut ui, cv, _dir) = session_in("done");
-        for _ in 0..20 {
-            ui.step(0.05);
-        }
+        for _ in 0..20 { ui.step(0.05); }
         // what the Quick key does is a setting: set before the recorder is on, it is no line
         ui.m.quick = Quick::Clear;
         start(&mut s, &mut ui, &cv);
@@ -664,12 +598,7 @@ mod tests {
         ui.key(key::DEFAULT);
         ui.key(key::AUTO);
         settle(&mut s, &mut ui, &cv);
-        assert_eq!(
-            recorded(s.rec_lines()),
-            [":CLEar", ":TIMebase:SCALe 5.000000E-01", "*RST", ":AUToscale", "*OPC?"],
-            "{:?}",
-            s.rec_lines()
-        );
+        assert_eq!(recorded(s.rec_lines()), [":CLEar", ":TIMebase:SCALe 5.000000E-01", "*RST", ":AUToscale", "*OPC?"], "{:?}", s.rec_lines());
         ui.key(key::SINGLE);
         ui.scpi_rec_want = false;
         s.poll(&mut ui, &cv);
@@ -749,11 +678,7 @@ mod tests {
         let (mut s, mut ui, cv) = session();
         assert!(s.exec_line(&mut ui, &cv, "# a comment").is_empty());
         assert!(s.exec_line(&mut ui, &cv, "# +1.5 s").is_empty());
-        assert_eq!(
-            String::from_utf8(s.exec_line(&mut ui, &cv, "# one\n:CHANnel2:DISPlay ON\n# two\n:CHANnel2:DISPlay?"))
-                .unwrap(),
-            "1"
-        );
+        assert_eq!(String::from_utf8(s.exec_line(&mut ui, &cv, "# one\n:CHANnel2:DISPlay ON\n# two\n:CHANnel2:DISPlay?")).unwrap(), "1");
         assert!(s.queued_errors().is_empty(), "{:?}", s.queued_errors());
         // a comment someone wrote by hand may hold a `;`: nothing after it is run
         assert!(s.exec_line(&mut ui, &cv, "# off again; :CHANnel2:DISPlay OFF").is_empty());

@@ -13,24 +13,14 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
     frame(&mut u);
-    u.m.meas = vec![
-        (Meas::Vpp, WaveId::Ch(0)),
-        (Meas::Freq, WaveId::Ch(0)),
-        (Meas::Vamp, WaveId::Ch(1)),
-        (Meas::Freq, WaveId::Ch(1)),
-        (Meas::Rise, WaveId::Ch(0)),
-    ];
+    u.m.meas = vec![(Meas::Vpp, WaveId::Ch(0)), (Meas::Freq, WaveId::Ch(0)), (Meas::Vamp, WaveId::Ch(1)), (Meas::Freq, WaveId::Ch(1)), (Meas::Rise, WaveId::Ch(0))];
     u.ensure_meas_own();
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     u
 }
 
@@ -41,9 +31,7 @@ fn frame(u: &mut Ui) {
 }
 
 fn shot(u: &mut Ui, name: &str) {
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
@@ -66,9 +54,7 @@ fn tap(u: &mut Ui, r: Rect) {
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
     touch(u, Phase::Down, a.0, a.1);
-    for k in 1..=8 {
-        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
-    }
+    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
     touch(u, Phase::Up, b.0, b.1);
     frame(u);
 }
@@ -82,9 +68,7 @@ fn panel_width(u: &mut Ui, w: i32) {
 
 fn detailed(u: &mut Ui) {
     u.panel_set_view(PanelView::Detailed);
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
     assert!(u.studio_detailed());
 }
 
@@ -95,18 +79,12 @@ fn check_table(u: &Ui) {
     let (cols, _) = Ui::detail_cols(g.list.w);
     let row = Rect::new(0, 0, g.list.w, 38);
     let cells: Vec<Rect> = cols.iter().map(|&(_, x, cw)| Ui::detail_cell(row, x, cw, 0)).collect();
-    for p in cells.windows(2) {
-        assert!(p[0].right() <= p[1].x, "{p:?}");
-    }
+    for p in cells.windows(2) { assert!(p[0].right() <= p[1].x, "{p:?}"); }
     for (&(c, _, _), cell) in cols.iter().zip(&cells) {
         let head = u.detail_head(c, cell.w);
         assert!(head.is_empty() || f.sb.width(head) <= cell.w, "head {head:?} in {cell:?}");
-        if c == 0 && g.list.w >= 240 {
-            assert!(!head.is_empty(), "the Source head has a label when there is room");
-        }
-        if c == 1 {
-            assert_eq!(head, "Name");
-        }
+        if c == 0 && g.list.w >= 240 { assert!(!head.is_empty(), "the Source head has a label when there is room"); }
+        if c == 1 { assert_eq!(head, "Name"); }
     }
     let rows = u.meas_rows();
     let keys = u.studio_keys();
@@ -134,9 +112,7 @@ fn the_detailed_table_has_no_overlaps_at_the_default_and_the_minimum_panel_width
     assert!(shown == rows[i].name || shown == "Pk-pk", "{shown:?}");
     shot(&mut u, "meas-detailed");
     panel_width(&mut u, 200);
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let g = u.studio_panel_geo().unwrap();
     assert!(g.list.w <= 215, "{:?}", g.list);
     check_table(&u);
@@ -148,15 +124,9 @@ fn the_detailed_columns_at_every_width_follow_each_other_and_name_value_and_mean
     for w in [200, 210, 240, 262, 300, 329, 330, 400, 560, 700, 900] {
         let (cols, total) = Ui::detail_cols(w);
         let mut x = 0;
-        for &(_, cx, cw) in &cols {
-            assert_eq!(cx, x);
-            assert!(cw >= 12);
-            x += cw;
-        }
+        for &(_, cx, cw) in &cols { assert_eq!(cx, x); assert!(cw >= 12); x += cw; }
         assert_eq!(x, total);
-        if w >= 250 {
-            assert!(cols[3].1 + cols[3].2 <= w.max(262), "{w}: {cols:?}");
-        }
+        if w >= 250 { assert!(cols[3].1 + cols[3].2 <= w.max(262), "{w}: {cols:?}"); }
     }
 }
 
@@ -167,40 +137,27 @@ fn the_detailed_columns_at_every_width_follow_each_other_and_name_value_and_mean
 fn the_badge_row_has_one_named_button_that_opens_the_table_and_the_style_is_on_the_sheet() {
     let mut u = studio();
     u.studio_set_view(StudioView::Waveform);
-    for k in u.studio_keys() {
-        u.studio_set_pin(k, true);
-    }
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for k in u.studio_keys() { u.studio_set_pin(k, true); }
+    for _ in 0..4 { frame(&mut u); }
     // (a new set-up has the classic strip; the test starts from the Studio badges)
     assert!(u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Classic");
     u.select_option(Item::BadgeStyle, "Studio");
-    for _ in 0..2 {
-        frame(&mut u);
-    }
+    for _ in 0..2 { frame(&mut u); }
     assert!(!u.studio_classic());
     assert_eq!(u.value(Item::BadgeStyle), "Studio");
     let (list, row) = (u.studio_list_chip(), u.studio_row());
     assert!(list.right() == row.right() - 4 && list.w >= 56 && Ui::hit40(list).h >= 40, "{list:?} in {row:?}");
-    for (_, r) in u.studio_badges() {
-        assert!(r.right() <= list.x, "badges end before the button");
-    }
+    for (_, r) in u.studio_badges() { assert!(r.right() <= list.x, "badges end before the button"); }
     // it says what it opens
     let mut cv = Canvas::new(W, H);
     cv.au_start();
     u.render(&mut cv);
     // (it said "Meas . N" over the whole height of the row; now it is as small as a badge: the number of the
     // measurements, or "+N" for the pinned ones without a place, and an arrow)
-    let want = match u.studio_badges_more() {
-        Some((_, n)) => format!("+{n}"),
-        None => u.measurement_count().to_string(),
-    };
-    let said = cv.au.take().unwrap().into_iter().any(|e| {
-        matches!(e, Au::Text { s, ink: Some(ink), clip, .. }
-        if s == want && list.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= clip.2 && ink.2 <= list.right())
-    });
+    let want = match u.studio_badges_more() { Some((_, n)) => format!("+{n}"), None => u.measurement_count().to_string() };
+    let said = cv.au.take().unwrap().into_iter().any(|e| matches!(e, Au::Text { s, ink: Some(ink), clip, .. }
+        if s == want && list.contains(ink.0, (ink.1 + ink.3) / 2) && ink.2 <= clip.2 && ink.2 <= list.right()));
     assert!(said, "the button says {want}");
     shot(&mut u, "badges-studio");
     // the sheet sets the style, and the row follows
@@ -209,10 +166,7 @@ fn the_badge_row_has_one_named_button_that_opens_the_table_and_the_style_is_on_t
     assert!(u.studio_classic() && u.m.studio_classic);
     assert!(!u.studio.compact && !u.studio.hide_badges);
     let at = u.studio_list_chip();
-    assert!(
-        u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= at.x || r.bottom() <= at.y || at.bottom() <= r.y),
-        "no pair under the chip"
-    );
+    assert!(u.classic_layout().pairs.iter().all(|(_, r)| r.right() <= at.x || r.bottom() <= at.y || at.bottom() <= r.y), "no pair under the chip");
     shot(&mut u, "badges-classic");
     u.select_option(Item::BadgeStyle, "Studio");
     frame(&mut u);
@@ -232,26 +186,20 @@ fn the_badge_row_has_one_named_button_that_opens_the_table_and_the_style_is_on_t
 
 // ------------------------------------------------------------------------------------------------ sparse zoom
 
-fn scale_index(t: f32) -> usize {
-    tscales().iter().position(|&s| (s / t - 1.0).abs() < 1e-3).expect("a time scale")
-}
+fn scale_index(t: f32) -> usize { tscales().iter().position(|&s| (s / t - 1.0).abs() < 1e-3).expect("a time scale") }
 
 fn sparse_zoom() -> Ui {
     let mut u = studio();
     u.m.dots = false; // vectors: the zoom joins the samples
     u.m.tscale = scale_index(50e-3);
     u.m.delay = 0.0;
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u.set_zoom(true);
     u.m.zscale = scale_index(200e-6);
     u.m.zdelay = 0.439e-3;
     u.clamp_zoom();
     u.relayout();
-    for _ in 0..8 {
-        u.step(0.05);
-    }
+    for _ in 0..8 { u.step(0.05); }
     u
 }
 
@@ -277,9 +225,7 @@ fn a_sparse_zoom_joins_the_samples_with_lines_and_marks_each_one_and_dots_mode_s
     shot(&mut u, "sparse-zoom");
     // Display > Dots: dots only
     u.m.dots = true;
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let (n, _, _) = lit(&u);
     assert!(n < u.phz.w / 2, "dots only: {n} of {}", u.phz.w);
 }
@@ -287,22 +233,14 @@ fn a_sparse_zoom_joins_the_samples_with_lines_and_marks_each_one_and_dots_mode_s
 // ------------------------------------------------------------------------------------------------ the table in other panels
 
 fn eye_rows(u: &mut Ui) {
-    #[allow(unused_imports)]
-    use super::meascatalog::Cat;
+    #[allow(unused_imports)] use super::meascatalog::Cat;
     u.m.cat.clear();
-    for c in [
-        super::meascatalog::cat_from(super::meascatalog::cat::EyeHeight).unwrap(),
-        super::meascatalog::cat_from(super::meascatalog::cat::EyeHeightBer).unwrap(),
-        super::meascatalog::cat_from(super::meascatalog::cat::EyeWidth).unwrap(),
-        super::meascatalog::cat_from(super::meascatalog::cat::EyeHeightBer).unwrap(),
-    ] {
+    for c in [super::meascatalog::cat_from(super::meascatalog::cat::EyeHeight).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::EyeHeightBer).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::EyeWidth).unwrap(), super::meascatalog::cat_from(super::meascatalog::cat::EyeHeightBer).unwrap()] {
         let id = if u.m.cat.len() == 3 { WaveId::Ref(0) } else { WaveId::Ch(0) };
         u.m.cat.push((c.id, id, id, id, id));
     }
     u.ensure_meas_own();
-    for _ in 0..6 {
-        frame(u);
-    }
+    for _ in 0..6 { frame(u); }
 }
 
 #[test]
@@ -322,9 +260,7 @@ fn a_short_wide_panel_keeps_its_rows_with_the_controls_in_the_title_strip_and_a_
     assert_eq!(total, g.list.w);
     let row = Rect::new(0, 0, g.list.w, 28);
     let f = u.fonts();
-    for w in cols.windows(2) {
-        assert!(Ui::detail_cell(row, w[0].1, w[0].2, 0).right() <= Ui::detail_cell(row, w[1].1, w[1].2, 0).x);
-    }
+    for w in cols.windows(2) { assert!(Ui::detail_cell(row, w[0].1, w[0].2, 0).right() <= Ui::detail_cell(row, w[1].1, w[1].2, 0).x); }
     let c0 = Ui::detail_cell(row, cols[0].1, cols[0].2, 0);
     assert!(f.sb.width(u.detail_head(0, c0.w)) <= c0.w);
     // a narrow panel has a toolbar row of its own
@@ -333,9 +269,7 @@ fn a_short_wide_panel_keeps_its_rows_with_the_controls_in_the_title_strip_and_a_
     let mut u = studio();
     u.dock_apply(VKind::Measure, super::dock::Drop::Split(VKind::Wave, super::dock::Side::Bottom));
     detailed(&mut u);
-    for _ in 0..6 {
-        frame(&mut u);
-    }
+    for _ in 0..6 { frame(&mut u); }
     if let Some(g) = u.studio_panel_geo() {
         assert!(g.list.bottom() <= g.p.bottom());
         assert!(g.page >= 1);
@@ -349,9 +283,7 @@ fn narrow_columns_are_whole_or_gone_and_eye_names_stay_apart() {
     eye_rows(&mut u);
     detailed(&mut u);
     panel_width(&mut u, 262);
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     let g = u.studio_panel_geo().unwrap();
     let (cols, total) = Ui::detail_cols(g.list.w);
     assert!(total <= g.list.w, "every column shown fits: {cols:?} in {}", g.list.w);
@@ -359,18 +291,10 @@ fn narrow_columns_are_whole_or_gone_and_eye_names_stay_apart() {
     // priority: mean, min, max, sigma, count
     for w in [262, 330, 420, 520, 640] {
         let ids: Vec<usize> = Ui::detail_cols(w).0.iter().map(|c| c.0).collect();
-        if ids.contains(&4) {
-            assert!(ids.contains(&3), "{w}: {ids:?}");
-        }
-        if ids.contains(&5) {
-            assert!(ids.contains(&4), "{w}: {ids:?}");
-        }
-        if ids.contains(&6) {
-            assert!(ids.contains(&5), "{w}: {ids:?}");
-        }
-        if ids.contains(&7) {
-            assert!(ids.contains(&6), "{w}: {ids:?}");
-        }
+        if ids.contains(&4) { assert!(ids.contains(&3), "{w}: {ids:?}"); }
+        if ids.contains(&5) { assert!(ids.contains(&4), "{w}: {ids:?}"); }
+        if ids.contains(&6) { assert!(ids.contains(&5), "{w}: {ids:?}"); }
+        if ids.contains(&7) { assert!(ids.contains(&6), "{w}: {ids:?}"); }
         assert!(Ui::detail_cols(w).1 <= w);
     }
     // names: each fits, and Eye Height and Eye Height@BER read differently
@@ -379,21 +303,9 @@ fn narrow_columns_are_whole_or_gone_and_eye_names_stay_apart() {
     let keys = u.studio_keys();
     let name = Ui::detail_cell(Rect::new(0, 0, g.list.w, 38), cols[1].1, cols[1].2, 0);
     let room = name.w;
-    let shown: Vec<(String, String)> = rows
-        .iter()
-        .enumerate()
-        .map(|(i, r)| (r.name.clone(), u.detail_name(keys.get(i).copied(), &r.name, room).0))
-        .collect();
-    for (long, s) in &shown {
-        assert!(f.s.width(s).max(f.m.width(s).min(room)) <= room, "{long:?} -> {s:?}");
-    }
-    for (a, sa) in &shown {
-        for (b, sb) in &shown {
-            if a != b {
-                assert_ne!(sa, sb, "{a:?} and {b:?} read the same");
-            }
-        }
-    }
+    let shown: Vec<(String, String)> = rows.iter().enumerate().map(|(i, r)| (r.name.clone(), u.detail_name(keys.get(i).copied(), &r.name, room).0)).collect();
+    for (long, s) in &shown { assert!(f.s.width(s).max(f.m.width(s).min(room)) <= room, "{long:?} -> {s:?}"); }
+    for (a, sa) in &shown { for (b, sb) in &shown { if a != b { assert_ne!(sa, sb, "{a:?} and {b:?} read the same"); } } }
     assert!(shown.iter().any(|(l, s)| l == "Eye Height@BER" && s != l), "the narrow case cuts it: {shown:?}");
     shot(&mut u, "meas-detailed-narrow-eye");
 }
@@ -420,27 +332,18 @@ fn menu_on(scr: Screen) -> Ui {
     u.m.studio_zoom_tab = false;
     u.studio.enter = true;
     let mut cv = Canvas::new(scr.w, scr.h);
-    for _ in 0..10 {
-        u.step(0.05);
-        u.render(&mut cv);
-    }
+    for _ in 0..10 { u.step(0.05); u.render(&mut cv); }
     u.studio_set_view(StudioView::Docked);
     let gear = u.studio_top().gear;
     tap_at(&mut u, gear.x + gear.w / 2, gear.y + gear.h / 2);
-    for _ in 0..4 {
-        u.step(0.05);
-        u.render(&mut cv);
-    }
+    for _ in 0..4 { u.step(0.05); u.render(&mut cv); }
     assert!(u.menu_open && u.menu == MenuId::Main && u.sheet_active());
     u
 }
 
 fn shot_at(u: &mut Ui, scr: Screen, name: &str) {
     let mut cv = Canvas::new(scr.w, scr.h);
-    for _ in 0..3 {
-        u.render(&mut cv);
-        u.step(0.02);
-    }
+    for _ in 0..3 { u.render(&mut cv); u.step(0.02); }
     u.render(&mut cv);
     if let Some(dir) = std::env::var_os("OOS_SHOTS") {
         let _ = std::fs::create_dir_all(&dir);
@@ -458,24 +361,11 @@ fn the_menu_stays_inside_its_body_in_a_short_window_and_scrolls_to_the_last_row(
         let mut u = menu_on(scr);
         let g = u.menu_geo();
         let sheet = g.r;
-        assert!(
-            g.view.y >= sheet.y + super::sheet::SHEET_HEAD && g.view.bottom() <= sheet.bottom() - 2,
-            "{scr:?}: {:?} in {sheet:?}",
-            g.view
-        );
+        assert!(g.view.y >= sheet.y + super::sheet::SHEET_HEAD && g.view.bottom() <= sheet.bottom() - 2, "{scr:?}: {:?} in {sheet:?}", g.view);
         assert!(sheet.bottom() <= scr.h, "{scr:?}: the sheet {sheet:?} is on the screen");
-        if scr == Screen::PANEL {
-            assert_eq!(g.max_scroll(), 0, "the whole Menu fits at 1024 x 600");
-            assert_eq!(Ui::menu_cols(g.r.w), 6);
-            shot_at(&mut u, scr, "menu-wide");
-        }
-        if scr.h == 420 {
-            assert!(g.max_scroll() > 0);
-            shot_at(&mut u, scr, "menu-wide-short");
-        }
-        if scr.h == 480 {
-            shot_at(&mut u, scr, "menu-short-top");
-        }
+        if scr == Screen::PANEL { assert_eq!(g.max_scroll(), 0, "the whole Menu fits at 1024 x 600"); assert_eq!(Ui::menu_cols(g.r.w), 6); shot_at(&mut u, scr, "menu-wide"); }
+        if scr.h == 420 { assert!(g.max_scroll() > 0); shot_at(&mut u, scr, "menu-wide-short"); }
+        if scr.h == 480 { shot_at(&mut u, scr, "menu-short-top"); }
         // at the top and at the end: a button that is drawn (in view at all) is inside the body or cut by it, and a tap on the part outside does nothing
         let end = g.max_scroll();
         for s in [0, end / 2, end] {
@@ -484,9 +374,7 @@ fn the_menu_stays_inside_its_body_in_a_short_window_and_scrolls_to_the_last_row(
             for grp in &g.groups {
                 for &(_, c) in &grp.items {
                     let shown = c.bottom() > g.view.y && c.y < g.view.bottom();
-                    if shown && c.y >= g.view.y && c.bottom() <= g.view.bottom() {
-                        assert!(c.h == CELL_H_T);
-                    }
+                    if shown && c.y >= g.view.y && c.bottom() <= g.view.bottom() { assert!(c.h == CELL_H_T); }
                 }
             }
         }
@@ -500,16 +388,11 @@ fn the_menu_stays_inside_its_body_in_a_short_window_and_scrolls_to_the_last_row(
         }
         let last = g.groups.last().unwrap().items.iter().map(|(_, c)| c.bottom()).max().unwrap();
         assert!(last <= g.view.bottom() - 8 || end == 0, "{scr:?}: padding under the last row");
-        if scr.h == 480 {
-            shot_at(&mut u, scr, "menu-short-end");
-        }
+        if scr.h == 480 { shot_at(&mut u, scr, "menu-short-end"); }
         // Power off asks first, and its first tap lands
         let c = item_rect(&u, Item::PowerAct);
         tap_at(&mut u, c.x + c.w / 2, c.y + c.h / 2);
-        assert!(
-            u.studio.md.armed.is_some_and(|(i, _)| i == Item::PowerAct),
-            "{scr:?}: Power off is tappable at the end"
-        );
+        assert!(u.studio.md.armed.is_some_and(|(i, _)| i == Item::PowerAct), "{scr:?}: Power off is tappable at the end");
         // a tap outside the body (the bar under the sheet) hits no button
         let below = g.view.bottom() + 3;
         let before = u.studio.md.armed;
@@ -557,18 +440,14 @@ fn the_badge_row_is_there_only_for_pinned_badges_with_the_panel_closed_and_never
     u.studio.pinned = Some(Vec::new());
     u.m.cursor = CursorMode::Time;
     u.relayout();
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert!(u.studio_panel_shown() && !u.studio_badges_visible());
     assert_eq!(u.studio_row_h(), 0);
     let bottom_open = u.dock_wave_rect().bottom();
     shot(&mut u, "no-badge-row");
     // the panel closed and nothing pinned: still no row, and not for the cursor alone; a chip at the plot's corner opens the panel
     u.studio_set_view(StudioView::Waveform);
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert!(!u.studio_badges_visible() && u.studio_row_h() == 0);
     assert!(u.studio_cursor_chip(0).is_some() || true);
     let chip = u.studio_meas_chip().expect("a way to the panel");
@@ -577,27 +456,19 @@ fn the_badge_row_is_there_only_for_pinned_badges_with_the_panel_closed_and_never
     // the chip is an arrow: a tap slides it out, a tap on its count opens the panel
     tap(&mut u, chip);
     assert_ne!(u.studio.view, StudioView::Docked, "the arrow only slides the chip out");
-    for _ in 0..14 {
-        frame(&mut u);
-    }
+    for _ in 0..14 { frame(&mut u); }
     let out = u.studio_meas_chip().expect("the chip is out");
     assert!(out.w > chip.w, "{out:?} wider than {chip:?}");
     tap(&mut u, Rect::new(out.x, out.y, out.w - 34, out.h));
     assert_eq!(u.studio.view, StudioView::Docked, "the count opens the panel");
     // pinned and the panel open: no row
-    for k in u.studio_keys() {
-        u.studio_set_pin(k, true);
-    }
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for k in u.studio_keys() { u.studio_set_pin(k, true); }
+    for _ in 0..4 { frame(&mut u); }
     assert_eq!(u.studio_row_h(), 0);
     assert_eq!(u.dock_wave_rect().bottom(), bottom_open, "the plot keeps the height");
     // pinned and the panel closed: the row is back
     u.studio_set_view(StudioView::Waveform);
-    for _ in 0..4 {
-        frame(&mut u);
-    }
+    for _ in 0..4 { frame(&mut u); }
     assert!(u.studio_badges_visible() && u.studio_row_h() > 0);
     assert!(u.studio_meas_chip().is_none());
     shot(&mut u, "badge-row-pinned");

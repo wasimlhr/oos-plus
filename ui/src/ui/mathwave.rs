@@ -129,8 +129,7 @@ fn compute_job(job: &Job) -> Result<Signal, &'static str> {
     if job.config.uses_taps() {
         // the filter's taps are an impulse response at their own step, not a signal to put on the grid of the record
         let [(_, a), (_, taps)] = job.inputs.as_slice() else { return Err("A filter file needs its taps in Source B") };
-        let v = oos_dsp::filter::Filter::apply_taps(&a.v, a.dt, &taps.v, taps.dt)
-            .ok_or("The filter file has no usable taps")?;
+        let v = oos_dsp::filter::Filter::apply_taps(&a.v, a.dt, &taps.v, taps.dt).ok_or("The filter file has no usable taps")?;
         return Ok(Signal { t0: a.t0, dt: a.dt, v: Arc::new(v) });
     }
     let start = job.inputs.iter().map(|(_, w)| w.t0).fold(f64::NEG_INFINITY, f64::max);
@@ -387,9 +386,7 @@ impl Ui {
     /// Math channel `k` for the remote read-out: samples, interval, time of the first sample. None when it is off,
     /// an FFT (a spectrum, not a record in time), has no source data, or is still being computed.
     pub(crate) fn math_view(&self, k: usize) -> Option<(Arc<Vec<f32>>, f64, f64)> {
-        if k >= NMATH || matches!(self.m.math_ch(k).op, MathOp::Off | MathOp::Fft) {
-            return None;
-        }
+        if k >= NMATH || matches!(self.m.math_ch(k).op, MathOp::Off | MathOp::Fft) { return None; }
         let w = self.math_record(k).ok().flatten()?;
         Some((Arc::clone(&w.v), w.dt, w.t0))
     }

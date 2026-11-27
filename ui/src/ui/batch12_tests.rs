@@ -4,7 +4,7 @@
 //! measurement for it. (The list of one measurement a row, with its drag to reorder and its row menu, is gone: the
 //! first view is the strip of cells, batch 17.)
 //! OOS_SHOTS=<dir> writes pictures (b12-*).
-use super::measdrag::UNDO_S;
+use super::measdrag::{UNDO_S};
 use super::studio::{MeasKey, StudioView};
 use super::*;
 
@@ -15,9 +15,7 @@ fn studio() -> Ui {
     u.m.studio_zoom_tab = false;
     u.m.ch[1].on = true;
     u.studio.enter = true;
-    for _ in 0..10 {
-        u.step(0.05);
-    }
+    for _ in 0..10 { u.step(0.05); }
     let mut cv = Canvas::new(W, H);
     u.render(&mut cv);
     u.studio_set_view(StudioView::Docked);
@@ -54,9 +52,7 @@ fn touch(u: &mut Ui, phase: Phase, x: i32, y: i32) {
 }
 
 fn moves(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
-    for k in 1..=8 {
-        touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8);
-    }
+    for k in 1..=8 { touch(u, Phase::Move, a.0 + (b.0 - a.0) * k / 8, a.1 + (b.1 - a.1) * k / 8); }
 }
 
 fn drag(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
@@ -78,9 +74,7 @@ fn row_pt(u: &Ui, k: usize) -> (i32, i32) {
     (g.list.x + 70, g.list.y + k as i32 * u.studio_panel_row() + u.studio_panel_row() / 2)
 }
 
-fn keys(u: &Ui) -> Vec<MeasKey> {
-    u.studio_keys()
-}
+fn keys(u: &Ui) -> Vec<MeasKey> { u.studio_keys() }
 
 /// Holds a finger on `a` until the ring has run out, then moves to `b`; the finger is still down.
 fn hold_to(u: &mut Ui, a: (i32, i32), b: (i32, i32)) {
@@ -141,9 +135,7 @@ fn a_short_swipe_springs_back_and_removes_nothing() {
     assert_eq!(keys(&u), before);
     assert!(u.md_undo_bar().is_none());
     assert!(u.studio.md.spring.is_some(), "springs back");
-    for _ in 0..30 {
-        frame(&mut u);
-    }
+    for _ in 0..30 { frame(&mut u); }
     assert!(u.studio.md.spring.is_none() && u.studio.md.swipe.is_none());
 }
 
@@ -166,22 +158,8 @@ fn a_tap_on_a_row_opens_its_settings_and_does_not_swipe() {
 fn a_vertical_drag_scrolls_the_list_and_never_swipes() {
     let mut u = table();
     // a list longer than its page
-    for k in [
-        Meas::Vmax,
-        Meas::Vmin,
-        Meas::Vamp,
-        Meas::Vrms,
-        Meas::Vavg,
-        Meas::Period,
-        Meas::Area,
-        Meas::Rise,
-        Meas::Fall,
-        Meas::PWidth,
-        Meas::NWidth,
-    ] {
-        for c in 0..2 {
-            let _ = u.meas_add(k, WaveId::Ch(c));
-        }
+    for k in [Meas::Vmax, Meas::Vmin, Meas::Vamp, Meas::Vrms, Meas::Vavg, Meas::Period, Meas::Area, Meas::Rise, Meas::Fall, Meas::PWidth, Meas::NWidth] {
+        for c in 0..2 { let _ = u.meas_add(k, WaveId::Ch(c)); }
     }
     frame(&mut u);
     let g = u.studio_panel_geo().unwrap();
@@ -277,9 +255,7 @@ fn a_tile_dragged_onto_a_channel_adds_the_measurement_for_that_channel() {
     let _ = k;
     assert_eq!(after.len(), before.len() + 1, "one measurement added");
     let new = after.iter().find(|k| !before.contains(k)).copied().unwrap();
-    let src = match new {
-        MeasKey::One(_, id) | MeasKey::Pair(_, id, _) | MeasKey::Cat(_, id, _, _, _) => id,
-    };
+    let src = match new { MeasKey::One(_, id) | MeasKey::Pair(_, id, _) | MeasKey::Cat(_, id, _, _, _) => id };
     assert_eq!(src, WaveId::Ch(1), "for CH2");
 }
 

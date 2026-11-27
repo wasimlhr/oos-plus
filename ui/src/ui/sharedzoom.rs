@@ -62,11 +62,7 @@ pub(super) enum RPart {
 
 fn zoom_text_of(n: f32) -> String {
     let n = if n.is_finite() { n.max(1.0) } else { 1.0 };
-    if n >= 9.95 {
-        format!("{:.0}\u{d7}", n)
-    } else {
-        format!("{:.1}\u{d7}", n).replace(".0\u{d7}", "\u{d7}")
-    }
+    if n >= 9.95 { format!("{:.0}\u{d7}", n) } else { format!("{:.1}\u{d7}", n).replace(".0\u{d7}", "\u{d7}") }
 }
 
 impl Ui {
@@ -74,17 +70,13 @@ impl Ui {
 
     /// The lane being drawn (`cur_win`) as a source, in Studio's stacked lanes.
     fn studio_cur_trace(&self) -> Option<Trace> {
-        if self.m.layout != Layout::Studio || !self.stacked() {
-            return None;
-        }
+        if self.m.layout != Layout::Studio || !self.stacked() { return None; }
         self.trace_sources().get(self.plot.cur_win).copied()
     }
 
     /// The single zoom lane, while it is still a lane.
     pub(super) fn studio_zoom_lane(&self) -> Option<Trace> {
-        if self.m.layout != Layout::Studio {
-            return None;
-        }
+        if self.m.layout != Layout::Studio { return None; }
         let t = self.studio.sz.lane?;
         self.trace_sources().contains(&t).then_some(t)
     }
@@ -100,20 +92,14 @@ impl Ui {
     /// The time view of the lane being drawn, given the shared one. A lane of a reference with its own scale
     /// has it; with one lane chosen to zoom, the other lanes keep the main time base.
     pub(super) fn studio_lane_view(&self, base: (f32, f32)) -> (f32, f32) {
-        if self.m.layout != Layout::Studio || (self.studio.sz.lane.is_none() && self.studio.sz.ref_h.is_empty()) {
-            return base;
-        }
+        if self.m.layout != Layout::Studio || (self.studio.sz.lane.is_none() && self.studio.sz.ref_h.is_empty()) { return base; }
         let Some(t) = self.studio_cur_trace() else { return base };
         if let Trace::Reference(i) = t {
-            if let Some(own) = self.studio_ref_own(i) {
-                return own;
-            }
+            if let Some(own) = self.studio_ref_own(i) { return own; }
         }
         if self.m.zoom {
             if let Some(z) = self.studio_zoom_lane() {
-                if z != t {
-                    return (self.m.time_per_div(), self.m.delay);
-                }
+                if z != t { return (self.m.time_per_div(), self.m.delay); }
             }
         }
         base
@@ -124,9 +110,7 @@ impl Ui {
     /// it, whatever scale of its own the lane had (a lane with its own scale stood still in Stacked traces, and
     /// Horizontal did nothing to it); the own scale is there again in Live.
     pub(super) fn studio_ref_own(&self, i: usize) -> Option<(f32, f32)> {
-        if self.m.layout != Layout::Studio || self.sim_plays_ref(i) {
-            return None;
-        }
+        if self.m.layout != Layout::Studio || self.sim_plays_ref(i) { return None; }
         self.studio.sz.ref_h.get(&i).copied()
     }
 
@@ -138,11 +122,7 @@ impl Ui {
     /// The vertical zoom applies to this lane rectangle (every detail lane, or the chosen one).
     pub(super) fn studio_vzoom_covers(&self, area: Rect) -> bool {
         let Some(z) = self.studio_zoom_lane() else { return true };
-        self.trace_sources()
-            .iter()
-            .position(|t| *t == z)
-            .and_then(|i| self.plot.wins.get(i))
-            .is_some_and(|w| *w == area)
+        self.trace_sources().iter().position(|t| *t == z).and_then(|i| self.plot.wins.get(i)).is_some_and(|w| *w == area)
     }
 
     // ------------------------------------------------------------------------------------------ own horizontal
@@ -150,9 +130,7 @@ impl Ui {
     /// s/div and delay at which the whole record of reference `slot` fills a lane.
     pub(super) fn studio_ref_fit_view(&self, slot: usize) -> Option<(f32, f32)> {
         let r = self.refs.get(slot)?.as_ref()?;
-        if r.v.len() < 2 || !(r.dt > 0.0) {
-            return None;
-        }
+        if r.v.len() < 2 || !(r.dt > 0.0) { return None; }
         let t0 = self.source_time_origin(WaveId::Ref(slot), r.t0);
         let span = (r.v.len() - 1) as f64 * r.dt;
         Some(((span / HDIV as f64) as f32, (t0 + span / 2.0) as f32))
@@ -161,9 +139,7 @@ impl Ui {
     /// Fit in Studio: the lane of the reference gets its own time/div so the whole record fills it (and its volts
     /// fit); the live time base and the other lanes stay. False: not Studio or nothing to fit.
     pub(super) fn studio_ref_fit(&mut self, slot: usize) -> bool {
-        if self.m.layout != Layout::Studio || !self.stacked() {
-            return false;
-        }
+        if self.m.layout != Layout::Studio || !self.stacked() { return false; }
         let Some(view) = self.studio_ref_fit_view(slot) else { return false };
         if let Some(r) = self.refs[slot].as_ref() {
             let summary = crate::wave::autoset_summary(&r.v, r.dt);
@@ -184,9 +160,8 @@ impl Ui {
 
     /// "Follow main" or "Own" for a reference.
     pub(super) fn studio_ref_set_own(&mut self, slot: usize, own: bool) {
-        if !own {
-            self.studio.sz.ref_h.remove(&slot);
-        } else if !self.studio.sz.ref_h.contains_key(&slot) {
+        if !own { self.studio.sz.ref_h.remove(&slot); }
+        else if !self.studio.sz.ref_h.contains_key(&slot) {
             let seed = self.studio_ref_fit_view(slot).unwrap_or((self.m.time_per_div(), self.m.delay));
             self.studio.sz.ref_h.insert(slot, seed);
         }
@@ -198,23 +173,15 @@ impl Ui {
         self.studio_ref_set_own(slot, true);
         let Some(&(t, d)) = self.studio.sz.ref_h.get(&slot) else { return };
         let ladder = tscales();
-        let next = if dir > 0 {
-            ladder.iter().copied().find(|&s| s > t * 1.001)
-        } else {
-            ladder.iter().copied().rev().find(|&s| s < t * 0.999)
-        };
-        if let Some(n) = next {
-            self.studio.sz.ref_h.insert(slot, (n, d));
-        }
+        let next = if dir > 0 { ladder.iter().copied().find(|&s| s > t * 1.001) } else { ladder.iter().copied().rev().find(|&s| s < t * 0.999) };
+        if let Some(n) = next { self.studio.sz.ref_h.insert(slot, (n, d)); }
         self.dirty_map = true;
     }
 
     /// One step of the own position: a division.
     pub(super) fn studio_ref_step_pos(&mut self, slot: usize, dir: i32) {
         self.studio_ref_set_own(slot, true);
-        if let Some(h) = self.studio.sz.ref_h.get_mut(&slot) {
-            h.1 += dir as f32 * h.0;
-        }
+        if let Some(h) = self.studio.sz.ref_h.get_mut(&slot) { h.1 += dir as f32 * h.0; }
         self.dirty_map = true;
     }
 
@@ -225,9 +192,7 @@ impl Ui {
     /// overview is the whole record with the zoom window on it; without an axis the window had no time to read, and
     /// the dimmed parts beside it no graticule.
     pub(super) fn draw_studio_overview_axis(&self, cv: &mut Canvas, o: Rect) {
-        if o.h < 36 || o.w < 200 {
-            return;
-        }
+        if o.h < 36 || o.w < 200 { return; }
         let f = self.fonts();
         let (tdiv, delay) = (self.m.time_per_div(), self.m.delay);
         let span = tdiv * HDIV;
@@ -239,71 +204,48 @@ impl Ui {
         let keep = if corner.y < o.bottom() && corner.bottom() > o.bottom() - 16 { corner.x - 30 } else { i32::MAX };
         for i in 0..=HDIV as i32 {
             let x = o.x + (i as f32 * o.w as f32 / HDIV).round() as i32;
-            if i > 0 && i < HDIV as i32 {
-                cv.blend(Rect::new(x, o.y, 1, o.h), AXIS_TEXT, 46);
-            }
-            if (i - HDIV as i32 / 2).rem_euclid(every) != 0 {
-                continue;
-            }
+            if i > 0 && i < HDIV as i32 { cv.blend(Rect::new(x, o.y, 1, o.h), AXIS_TEXT, 46); }
+            if (i - HDIV as i32 / 2).rem_euclid(every) != 0 { continue; }
             let t = delay as f64 + (i as f64 - HDIV as f64 / 2.0) * tdiv as f64;
             let zero = t.abs() < tdiv as f64 * 1e-3;
             let s = if zero { "0 s".to_string() } else { axis_label64(t, tdiv, delay, span, "s") };
             let w = f.s.width(&s);
             let tx = (x - w / 2).clamp(o.x + 4, o.x + o.w - 4 - w);
             // not under the Full screen and Zoom buttons in the corner
-            if tx < free + 8 || tx + w > keep {
-                continue;
-            }
+            if tx < free + 8 || tx + w > keep { continue; }
             free = tx + w;
             backed_text(cv, &f.s, tx, o.y + o.h - 4, &s, if zero { ACCENT } else { AXIS_TEXT });
         }
     }
 
     pub(super) fn draw_studio_overview_math(&self, cv: &mut Canvas, o: Rect) {
-        if self.m.layout != Layout::Studio {
-            return;
-        }
+        if self.m.layout != Layout::Studio { return; }
         let (tdiv, delay) = (self.m.time_per_div() as f64, self.m.delay as f64);
-        if !(tdiv > 0.0) {
-            return;
-        }
+        if !(tdiv > 0.0) { return; }
         cv.set_clip(o);
         let sc = math_scales();
         for k in 0..NMATH {
             let c = self.m.math_ch(k);
-            if !self.m.math_shown(k) || c.op == MathOp::Fft {
-                continue;
-            }
+            if !self.m.math_shown(k) || c.op == MathOp::Fft { continue; }
             let Ok(Some(rec)) = self.math_record_shown(k) else { continue };
             let w = rec.v.as_ref();
-            if w.is_empty() || !(rec.dt > 0.0) {
-                continue;
-            }
+            if w.is_empty() || !(rec.dt > 0.0) { continue; }
             let col = MATH_COLORS[k % MATH_COLORS.len()];
             let vpd = sc[c.scale.min(sc.len() - 1)] as f32;
             let half = tdiv * HDIV as f64 / 2.0;
             let at = |t: f64| ((t - rec.t0) / rec.dt).floor().clamp(-1.0, w.len() as f64) as isize;
             let begin = (at(delay - half) - 1).clamp(0, w.len() as isize) as usize;
             let end = (at(delay + half) + 2).clamp(0, w.len() as isize) as usize;
-            if end <= begin {
-                continue;
-            }
+            if end <= begin { continue; }
             let step = ((end - begin) / (o.w as usize * 2)).max(1);
             let mut prev: Option<(i32, i32)> = None;
             for i in (begin..end).step_by(step) {
                 let v = w[i];
-                if !v.is_finite() {
-                    prev = None;
-                    continue;
-                }
+                if !v.is_finite() { prev = None; continue; }
                 let t = rec.t0 + i as f64 * rec.dt - delay;
                 let x = (o.x as f64 + o.w as f64 / 2.0 + t / tdiv * o.w as f64 / HDIV as f64).round() as i32;
-                let y = (o.y as f32 + o.h as f32 / 2.0 - (v / vpd + c.offset) * o.h as f32 / VDIV)
-                    .clamp(-1e4, 1e4)
-                    .round() as i32;
-                if let Some((x0, y0)) = prev {
-                    cv.line(x0, y0, x, y, col);
-                }
+                let y = (o.y as f32 + o.h as f32 / 2.0 - (v / vpd + c.offset) * o.h as f32 / VDIV).clamp(-1e4, 1e4).round() as i32;
+                if let Some((x0, y0)) = prev { cv.line(x0, y0, x, y, col); }
                 prev = Some((x, y));
             }
         }
@@ -314,25 +256,15 @@ impl Ui {
 
     /// A finger held on the Zoom button opens the zoom source popover (an R chip's hold menu has the horizontal one). The lift of a hold is not a tap (`touch.held`).
     pub(super) fn studio_hold_tick(&mut self) {
-        if self.m.layout != Layout::Studio {
-            return;
-        }
+        if self.m.layout != Layout::Studio { return; }
         let Some((t0, x, y)) = self.studio.sz.press else { return };
-        if self.studio.sz.fired || self.now - t0 < LONG_PRESS {
-            return;
-        }
-        if self.m.touch_lock || self.full_on() || self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() {
-            return;
-        }
-        if self.touch.down && self.touch.drag != Drag::None && self.touch.drag != Drag::Pending {
-            return;
-        }
+        if self.studio.sz.fired || self.now - t0 < LONG_PRESS { return; }
+        if self.m.touch_lock || self.full_on() || self.dialog.is_some() || self.power.open || self.wlan.osk.is_some() { return; }
+        if self.touch.down && self.touch.drag != Drag::None && self.touch.drag != Drag::Pending { return; }
         if !self.view_on() && self.zoom_btn().1.contains(x, y) {
             self.studio.sz.fired = true;
             self.workspace_drop_gesture();
-            if self.touch.down {
-                self.touch.held = true;
-            }
+            if self.touch.down { self.touch.held = true; }
             self.close_menu();
             self.studio.ch_picker = false;
             self.studio.sz.ref_pop = None;
@@ -343,9 +275,7 @@ impl Ui {
     /// What a finger held at (x, y) does when it is on the Zoom button: the zoom source popover opens. False when the
     /// point is not the button's (`:UI:CONText`; the touch path is `studio_hold_tick`).
     pub(super) fn studio_sz_hold(&mut self, x: i32, y: i32) -> bool {
-        if self.m.layout != Layout::Studio || self.view_on() || self.full_on() || !self.zoom_btn().1.contains(x, y) {
-            return false;
-        }
+        if self.m.layout != Layout::Studio || self.view_on() || self.full_on() || !self.zoom_btn().1.contains(x, y) { return false; }
         self.close_menu();
         self.studio.ch_picker = false;
         self.studio.sz.ref_pop = None;
@@ -357,9 +287,7 @@ impl Ui {
 
     /// The zoom source popover: its rectangle and what each part is.
     pub(super) fn studio_sz_parts(&self) -> Option<(Rect, Vec<(ZPart, Rect)>)> {
-        if !self.studio.sz.pop || self.m.layout != Layout::Studio {
-            return None;
-        }
+        if !self.studio.sz.pop || self.m.layout != Layout::Studio { return None; }
         let btn = self.zoom_btn().0;
         let lanes = self.trace_sources();
         let cols = 3;
@@ -398,25 +326,16 @@ impl Ui {
         for (part, r) in parts {
             match part {
                 ZPart::All | ZPart::Lane(_) => {
-                    let on = match part {
-                        ZPart::All => lane.is_none(),
-                        ZPart::Lane(t) => lane == Some(t),
-                        _ => false,
-                    };
+                    let on = match part { ZPart::All => lane.is_none(), ZPart::Lane(t) => lane == Some(t), _ => false };
                     chip(cv, r, BTN, if on { AMBER } else { BTN_BORDER });
-                    let text = match part {
-                        ZPart::Lane(t) => trace_name(t),
-                        _ => "Zoom: All lanes".to_string(),
-                    };
+                    let text = match part { ZPart::Lane(t) => trace_name(t), _ => "Zoom: All lanes".to_string() };
                     cv.text_in(&f.m, r, 1, &text, if on { AMBER } else { TEXT });
                 }
                 ZPart::XMinus | ZPart::XPlus | ZPart::YMinus | ZPart::YPlus => {
                     chip(cv, r, BTN, BTN_BORDER);
                     let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
                     cv.hline(cx - 6, cx + 6, cy, TEXT);
-                    if matches!(part, ZPart::XPlus | ZPart::YPlus) {
-                        cv.vline(cx, cy - 6, cy + 6, TEXT);
-                    }
+                    if matches!(part, ZPart::XPlus | ZPart::YPlus) { cv.vline(cx, cy - 6, cy + 6, TEXT); }
                     let label = match part {
                         ZPart::XMinus => Some(format!("X zoom {}", zoom_text_of(self.studio_sz_xfactor()))),
                         ZPart::YMinus => Some(format!("Y zoom {}", zoom_text_of(self.zoom_view.vfactor))),
@@ -445,31 +364,13 @@ impl Ui {
         let Some((part, _)) = parts.into_iter().find(|(_, r)| r.contains(x, y)) else { return true };
         let area = self.wave_area();
         match part {
-            ZPart::All => {
-                self.studio.sz.lane = None;
-                self.studio_sz_zoom_on();
-            }
-            ZPart::Lane(t) => {
-                self.studio.sz.lane = Some(t);
-                self.studio_sz_zoom_on();
-            }
+            ZPart::All => { self.studio.sz.lane = None; self.studio_sz_zoom_on(); }
+            ZPart::Lane(t) => { self.studio.sz.lane = Some(t); self.studio_sz_zoom_on(); }
             // one step of the zoom time base around the centre of the zoom window; minus stops at the main time base
-            ZPart::XMinus => {
-                self.studio_sz_zoom_on();
-                self.zoom_horizontal_step(1, area, 0.5);
-            }
-            ZPart::XPlus => {
-                self.studio_sz_zoom_on();
-                self.zoom_horizontal_step(-1, area, 0.5);
-            }
-            ZPart::YMinus => {
-                self.studio_sz_zoom_on();
-                self.zoom_vertical_step(-1, area, 0.5);
-            }
-            ZPart::YPlus => {
-                self.studio_sz_zoom_on();
-                self.zoom_vertical_step(1, area, 0.5);
-            }
+            ZPart::XMinus => { self.studio_sz_zoom_on(); self.zoom_horizontal_step(1, area, 0.5); }
+            ZPart::XPlus => { self.studio_sz_zoom_on(); self.zoom_horizontal_step(-1, area, 0.5); }
+            ZPart::YMinus => { self.studio_sz_zoom_on(); self.zoom_vertical_step(-1, area, 0.5); }
+            ZPart::YPlus => { self.studio_sz_zoom_on(); self.zoom_vertical_step(1, area, 0.5); }
             ZPart::Reset => {
                 self.studio_sz_zoom_on();
                 self.studio.sz.lane = None;
@@ -482,29 +383,21 @@ impl Ui {
 
     /// How far the zoom window magnifies time: the main time base over the zoom's (1 with the zoom off).
     pub(super) fn studio_sz_xfactor(&self) -> f32 {
-        if !self.m.zoom {
-            return 1.0;
-        }
+        if !self.m.zoom { return 1.0; }
         self.m.time_per_div() / tscales()[self.m.zscale.min(tscales().len() - 1)]
     }
 
     fn studio_sz_zoom_on(&mut self) {
-        if !self.m.zoom {
-            self.set_zoom(true);
-        }
+        if !self.m.zoom { self.set_zoom(true); }
     }
 
     // ------------------------------------------------------------------------------------------ reference popover
 
     pub(super) fn studio_ref_pop_parts(&self) -> Option<(Rect, Vec<(RPart, Rect)>)> {
         let i = self.studio.sz.ref_pop?;
-        if self.m.layout != Layout::Studio {
-            return None;
-        }
+        if self.m.layout != Layout::Studio { return None; }
         let pill = self.studio_bottom().refs[i];
-        if pill.w == 0 {
-            return None;
-        }
+        if pill.w == 0 { return None; }
         let h = 34 + 4 * (ROW + 4) + 6;
         let x = pill.x.clamp(4, self.scr.w - POP_W - 4);
         let p = Rect::new(x, pill.y - h - 8, POP_W, h);
@@ -539,33 +432,18 @@ impl Ui {
                 RPart::Follow | RPart::Own => {
                     let on = (part == RPart::Own) == own.is_some();
                     chip(cv, r, BTN, if on { AMBER } else { BTN_BORDER });
-                    cv.text_in(
-                        &f.m,
-                        r,
-                        1,
-                        if part == RPart::Own { "Own" } else { "Follow main" },
-                        if on { AMBER } else { TEXT },
-                    );
+                    cv.text_in(&f.m, r, 1, if part == RPart::Own { "Own" } else { "Follow main" }, if on { AMBER } else { TEXT });
                 }
                 RPart::TMinus | RPart::TPlus | RPart::PMinus | RPart::PPlus => {
                     chip(cv, r, BTN, BTN_BORDER);
                     let (cx, cy) = (r.x + r.w / 2, r.y + r.h / 2);
                     cv.hline(cx - 6, cx + 6, cy, TEXT);
-                    if matches!(part, RPart::TPlus | RPart::PPlus) {
-                        cv.vline(cx, cy - 6, cy + 6, TEXT);
-                    }
+                    if matches!(part, RPart::TPlus | RPart::PPlus) { cv.vline(cx, cy - 6, cy + 6, TEXT); }
                     if matches!(part, RPart::TMinus | RPart::PMinus) {
                         let time = part == RPart::TMinus;
-                        cv.text_in(
-                            &f.m,
-                            Rect::new(p.x + 12, r.y, 100, r.h),
-                            0,
-                            if time { "Time/div" } else { "Position" },
-                            shade,
-                        );
+                        cv.text_in(&f.m, Rect::new(p.x + 12, r.y, 100, r.h), 0, if time { "Time/div" } else { "Position" }, shade);
                         let mid = Rect::new(r.right(), r.y, 100, r.h);
-                        let text =
-                            if time { format!("{}/div", si_short(tdiv as f64, "s")) } else { si(pos as f64, "s") };
+                        let text = if time { format!("{}/div", si_short(tdiv as f64, "s")) } else { si(pos as f64, "s") };
                         cv.text_in(&f.mb, mid, 1, &text, shade);
                     }
                 }
@@ -594,9 +472,7 @@ impl Ui {
             RPart::TPlus => self.studio_ref_step_tdiv(i, 1),
             RPart::PMinus => self.studio_ref_step_pos(i, -1),
             RPart::PPlus => self.studio_ref_step_pos(i, 1),
-            RPart::Fit => {
-                self.studio_ref_fit(i);
-            }
+            RPart::Fit => { self.studio_ref_fit(i); }
         }
         true
     }
@@ -609,12 +485,8 @@ impl Ui {
 
     /// Taps for both popovers. False: none is open.
     pub(super) fn studio_sz_taps(&mut self, x: i32, y: i32) -> bool {
-        if self.studio.sz.ref_pop.is_some() {
-            return self.studio_ref_pop_tap(x, y);
-        }
-        if self.studio.sz.pop {
-            return self.studio_sz_tap(x, y);
-        }
+        if self.studio.sz.ref_pop.is_some() { return self.studio_ref_pop_tap(x, y); }
+        if self.studio.sz.pop { return self.studio_sz_tap(x, y); }
         false
     }
 }
