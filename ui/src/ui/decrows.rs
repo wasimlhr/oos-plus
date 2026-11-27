@@ -208,6 +208,7 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
         parts.collect::<Vec<_>>().join(" ")
     };
     let address = || (0..pk.len()).find(|&k| matches!(pk[k].kind, DecKind::Addr { .. }));
+    let msg = m.dec_proto.module().map_or_else(Vec::new, |module| module.message_cells(pk));
     cols.iter()
         .map(|(_, c)| match *c {
             Col::Label(l) => texts.iter().filter_map(|t| t.strip_prefix(l)).collect::<Vec<_>>().join(" "),
@@ -232,6 +233,7 @@ fn cells_of(m: &Model, cols: &[(&'static str, Col)], pk: &[Packet]) -> Vec<Strin
             Col::Second => half(true),
             // (a column of one field, not of a frame)
             Col::Own => String::new(),
+            Col::Msg(n) => msg.get(n).cloned().unwrap_or_default(),
         })
         .collect()
 }
@@ -1062,7 +1064,10 @@ mod tests {
                 word(9.0, true, 0x8c12, Some(MIL1553_COMMAND)),
             ];
             let rows = rows_of(&m, 0, "D1 1553", &p, EvView::Messages);
-            assert_eq!(titles(&rows), ["RT", "T/R", "SA", "WC/MC", "Data", "Status"]);
+            assert_eq!(
+                titles(&rows),
+                ["Type", "RT", "T/R", "SA/mode", "Mode code", "Status", "WC", "Data", "C/S payload"]
+            );
             // and word by word: what each is, the mode code by its name, the count as words, a failed parity said
             let bad = Packet { ok: false, ..word(10.0, false, 0x0157, None) };
             let q = [p[0].clone(), p[1].clone(), p[3].clone(), p[4].clone(), bad];
@@ -1081,8 +1086,11 @@ mod tests {
             assert_eq!(words[4].cells, ["Data", "", "", "", "", "0157", "", "", ""]);
             assert_eq!(words[4].why, "Manchester or parity error");
             assert_eq!(words[0].why, "");
-            assert_eq!(rows[0].cells, ["17", "R", "02", "02", "0005 0006", "17 TF"]);
-            assert_eq!(rows[1].cells, ["17", "T", "00", "18", "", ""]);
+            assert_eq!(rows[0].cells, ["BC to RT", "17", "R", "02", "", "TF", "2", "0005 0006", "00001000010"]);
+            assert_eq!(
+                rows[1].cells,
+                ["Mode command", "17", "T", "00", "Transmit last command", "", "", "", "10000010010"]
+            );
         }
         // FlexRay, where it is built in: the start sequence every frame begins with is no part of the text of a
         // frame, and it is a field with its row

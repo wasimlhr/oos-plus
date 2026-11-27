@@ -133,6 +133,8 @@ pub(super) struct EventRow {
     pub who: String,
     pub text: String,
     pub ok: bool,
+    /// the error in words, the text of the Error column of the Events pane (empty for a row without one)
+    pub why: String,
 }
 
 /// The digits the times of `rows` are written with: three, and more where rows next to each other would read the
@@ -163,17 +165,30 @@ impl Ui {
                     who: format!("D{} {}", k + 1, m.dec_proto.name()),
                     text,
                     ok,
+                    why: String::new(),
                 }));
                 continue;
             }
-            for x in p.iter() {
+            // the Error column of the Events pane is the one source of a row's error: what the module says of the
+            // field, else of the message it is in (`MsgRow::error_text`); a row with one is not ok
+            let module = m.dec_proto.module();
+            let mut message = vec![""; p.len()];
+            if let Some(module) = module {
+                for g in super::decband::messages(&m, &p) {
+                    let why = module.message_error(&p[g.clone()]);
+                    message[g].fill(why);
+                }
+            }
+            for (i, x) in p.iter().enumerate() {
                 let text = packet_tag(&m, x).map_or_else(|| packet_text(&m, x), |t| t.to_string());
                 let source = if m.dec_on_la() { String::new() } else { format!(" {}", decode_source_name(m.dec_src)) };
+                let why = module.and_then(|module| module.field_error(x)).unwrap_or(message[i]);
                 v.push(EventRow {
                     t: x.t0,
                     who: format!("D{} {}{}", k + 1, m.dec_proto.name(), source),
                     text,
-                    ok: x.ok,
+                    ok: x.ok && why.is_empty(),
+                    why: why.to_string(),
                 });
             }
         }
@@ -191,7 +206,7 @@ impl Ui {
             Some(spec) if self.m.layout == Layout::Studio && spec.kind == TrigType::Bus => self.bus_search_what(spec),
             _ => what.to_string(),
         };
-        EventRow { t, who: format!("{} #{}", source, index + 1), text: what, ok: true }
+        EventRow { t, who: format!("{} #{}", source, index + 1), text: what, ok: true, why: String::new() }
     }
 
     /// The count in the title of the search table. Studio's own search says how much of the record it looked at
@@ -306,7 +321,7 @@ impl Ui {
                     (Some(_), None) => String::new(),
                     (None, _) => "no stamp".into(),
                 };
-                EventRow { t: t[k].unwrap_or(f64::NAN), who: format!("{}", k + 1), text: d, ok: t[k].is_some() }
+                EventRow { t: t[k].unwrap_or(f64::NAN), who: format!("{}", k + 1), text: d, ok: t[k].is_some(), why: String::new() }
             })
             .collect()
     }
@@ -316,7 +331,11 @@ impl Ui {
         self.decode_events()
             .iter()
             .enumerate()
-            .map(|(i, r)| format!("{},{:e},{},{},{}", i + 1, r.t, r.who, r.text, if r.ok { "ok" } else { "error" }))
+            .map(|(i, r)| {
+                // an error row says why, as the Error column of the Events pane does
+                let why = if r.why.is_empty() { String::new() } else { format!(",{}", r.why) };
+                format!("{},{:e},{},{},{}{}", i + 1, r.t, r.who, r.text, if r.ok { "ok" } else { "error" }, why)
+            })
             .collect::<Vec<_>>()
             .join("\n")
     }

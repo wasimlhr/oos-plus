@@ -439,3 +439,20 @@ fn a_memory_depth_that_is_not_one_names_the_depths_the_unit_takes() {
     line(&mut sc, &mut ui, &cv, ":ACQuire:MDEPth 10M");
     assert_eq!(line(&mut sc, &mut ui, &cv, ":SYSTem:ERRor?"), "0,\"No error\"");
 }
+
+// Break it catches: a depth set in roll mode answered with no word and read back as the roll stream's 31250 a few
+// seconds later. The depth is kept; the error names the reason and the way out, and none comes without roll.
+#[test]
+fn a_depth_roll_mode_cannot_give_is_answered_with_a_settings_conflict() {
+    let (mut s, mut ui, cv) = session();
+    // the host source has no hardware: the board decides the mode by the model alone
+    line(&mut s, &mut ui, &cv, ":TIMebase:ROLL ON;:TIMebase:MAIN:SCALe 0.5");
+    line(&mut s, &mut ui, &cv, ":ACQuire:MDEPth 10M");
+    let e = line(&mut s, &mut ui, &cv, ":SYST:ERR?");
+    assert!(e.starts_with("-221,\"Settings conflict\"") && e.contains("Auto Roll off") && e.contains("200 ms/div"), "{e}");
+    assert_eq!(ui.m.mdepth, 5, "the depth is kept");
+    line(&mut s, &mut ui, &cv, ":TIMebase:ROLL OFF;:ACQuire:MDEPth 1M");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    line(&mut s, &mut ui, &cv, ":TIMebase:ROLL ON;:TIMebase:MAIN:SCALe 0.001;:ACQuire:MDEPth 1M");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+}

@@ -141,12 +141,59 @@ impl Protocol for Mil1553 {
     /// of each for a transfer between two terminals), its data words, and what the status says.
     fn columns(&self) -> &'static [(&'static str, Col)] {
         &[
-            ("RT", Col::Part("RT ", 1)),
-            ("T/R", Col::Part("RT ", 2)),
-            ("SA", Col::Part("RT ", 4)),
-            ("WC/MC", Col::Part("RT ", 6)),
+            ("Type", Col::Msg(0)),
+            ("RT", Col::Msg(1)),
+            ("T/R", Col::Msg(2)),
+            ("SA/mode", Col::Msg(3)),
+            ("Mode code", Col::Msg(4)),
+            ("Status", Col::Msg(5)),
+            ("WC", Col::Msg(6)),
             ("Data", Col::Data),
-            ("Status", Col::Label("ST ")),
+            ("C/S payload", Col::Msg(7)),
+        ]
+    }
+    /// The columns of a message as the Tektronix table has them: its kind (command to a terminal, from one, between
+    /// two, a mode command), the terminal, the direction, the subaddress, the mode code by name, the flags of the
+    /// status word, the count of data words the command announces, and the 11 bits behind the terminal of the command.
+    fn message_cells(&self, pk: &[Packet]) -> Vec<String> {
+        use oos_dsp::decode::{MIL1553_COMMAND, MIL1553_COMMAND_2, MIL1553_STATUS};
+        let none = String::new;
+        let Some(cmd) = pk.iter().find(|p| p.kind == (Kind::Word { cmd: true }) && p.value2 == Some(MIL1553_COMMAND))
+        else {
+            return Vec::new();
+        };
+        let v = cmd.value;
+        let (transmit, sa, n) = (v >> 10 & 1 == 1, v >> 5 & 31, v & 31);
+        let mode = sa == 0 || sa == 31;
+        let two = pk.iter().any(|p| p.value2 == Some(MIL1553_COMMAND_2));
+        let kind = if mode {
+            "Mode command"
+        } else if two {
+            "RT to RT"
+        } else if transmit {
+            "RT to BC"
+        } else {
+            "BC to RT"
+        };
+        let status = pk.iter().find(|p| p.value2 == Some(MIL1553_STATUS)).map_or_else(none, |p| {
+            let set = MIL1553_FLAGS.iter().filter(|f| p.value & f.0 != 0).map(|f| f.1);
+            let flags = set.collect::<Vec<_>>().join(" ");
+            if flags.is_empty() { "OK".to_string() } else { flags }
+        });
+        let (code, words) = if mode {
+            (mil1553_mode_code(n).map_or_else(|| format!("Mode code {:02}", n), str::to_string), none())
+        } else {
+            (none(), if n == 0 { 32 } else { n }.to_string())
+        };
+        vec![
+            kind.into(),
+            format!("{:02}", v >> 11),
+            if transmit { "T" } else { "R" }.into(),
+            format!("{:02}", sa),
+            code,
+            status,
+            words,
+            payload(v),
         ]
     }
     /// A word in the Events pane: what it is, and each part of a command or a status word in a column of its own. A

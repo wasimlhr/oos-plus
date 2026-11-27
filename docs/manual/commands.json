@@ -1253,7 +1253,7 @@
       [
        "<value>",
        "Text",
-       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M` (1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M; what the unit has is cut to its memory). A value that is none of them is -224, and the error names the depths this unit takes (`5M` is none of them).",
+       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M` (1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M; what the unit has is cut to its memory). In roll mode (Auto Roll on and 200 ms/div or slower; stock rolls from 50) the record is the stream's points of the screen whatever the depth: the depth is kept for the faster time bases and the set is answered with -221 that names the depth, the reason and the way out (`:TIMebase:ROLL OFF`, or a time base faster than 200 ms/div). A value that is none of them is -224, and the error names the depths this unit takes (`5M` is none of them).",
        "5.000000E+05"
       ]
      ],
@@ -2331,7 +2331,7 @@
       [
        "<value>",
        "Text",
-       "Model roll setting; acquisition source restrictions still apply.",
+       "Model roll setting; acquisition source restrictions still apply. On: roll from 200 ms/div (stock: 50 ms/div), the record is the stream's points of the screen and a set `:ACQuire:MDEPth` is answered with -221. Off: scan from 200 ms/div, which reads the depth (at least 1 M); below 200 ms/div the acquisition is normal either way.",
        "1"
       ]
      ],
@@ -8530,7 +8530,7 @@
     {
      "header": ":DECode:EVENts",
      "query": ":DECode:EVENts?",
-     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. While the scope runs the rows are those of the record on the screen and change with the next acquisition; stop it first (`:STOP`, `:SINGle`) and ask again until the answer is not `BUSY` for a complete list. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
+     "desc": "Physical-time event rows, `BUSY` while pending, or an error if unavailable. While the scope runs the rows are those of the record on the screen and change with the next acquisition; stop it first (`:STOP`, `:SINGle`) and ask again until the answer is not `BUSY` for a complete list. A row is `ok` or `error`; an error row ends with its reason, the text of the Error column of the Events pane (\"Word count mismatch\", \"Incomplete packet\"), so a word of a message the pane flags is an error here too. The rows come one per line without a count, so a client that reads line by line cannot tell where they end: `:BUS<n>:DATA?` gives the same rows as a block.",
      "remarks": [
       "- Menu equivalent: Decode and bus > Read decoded events.",
       "- Origin: OOS extension"

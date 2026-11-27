@@ -780,6 +780,10 @@ impl Ui {
         if self.decoder_uses_raw(m) {
             return self.reference_decode_packets(m);
         }
+        // a record above 1 M points read only as min/max pairs has no bit timing: say so, not "Nothing decoded"
+        if self.memory_raw().is_some_and(|raw| crate::deepmeas::deep_pairs(&raw.frame)) {
+            return Err(super::reference_decode::DEEP_PAIRS);
+        }
         if let Some(p) = self.decode_native(m, rec) {
             return p;
         }

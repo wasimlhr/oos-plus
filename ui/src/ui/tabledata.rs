@@ -143,9 +143,9 @@ impl Ui {
         self.events_wait()?;
         let rows = self.decode_events().into_iter().enumerate();
         let cells = rows.map(|(i, e)| {
-            vec![(i + 1).to_string(), seconds(e.t), e.who, e.text, if e.ok { "ok" } else { "error" }.into()]
+            vec![(i + 1).to_string(), seconds(e.t), e.who, e.text, if e.ok { "ok" } else { "error" }.into(), e.why]
         });
-        Ok(Table::new(&["Index", "Time (s)", "Source", "Event", "Ok"], cells.collect()))
+        Ok(Table::new(&["Index", "Time (s)", "Source", "Event", "Ok", "Error"], cells.collect()))
     }
 
     /// A table by its name (`TABLES`, but MEASURE), or why there is none.
@@ -209,7 +209,7 @@ mod tests {
         let ui = demo_1553();
         let messages = ui.table_data("EVENTS").unwrap();
         assert_eq!(&messages.head[..2], ["Index", "Time (s)"]);
-        for want in ["RT", "T/R", "SA", "WC/MC", "Data", "Status", "Error"] {
+        for want in ["Type", "RT", "T/R", "SA/mode", "Mode code", "Status", "WC", "Data", "C/S payload", "Error"] {
             assert!(messages.head.iter().any(|h| h == want), "{want}: {:?}", messages.head);
         }
         assert!(!messages.rows.is_empty());
@@ -238,6 +238,30 @@ mod tests {
         let text = ui.events_text();
         assert_eq!(text.lines().count(), ui.table_data("FIELDS").unwrap().rows.len());
         assert!(text.lines().next().unwrap().starts_with("1,"), "{text}");
+    }
+
+    // Break it catches: `:DECode:EVENts?` and the table FIELDS marking a word ok that the Error column of the Events
+    // pane flags (an agent read 63 ok words under a table of 63 errors)
+    #[test]
+    fn the_rows_of_the_event_query_agree_with_the_error_column() {
+        let mut ui = demo_1553();
+        // a record cut short: the last message loses words, so a message error appears
+        ui.m.ev_view = EvView::Fields;
+        let rows = ui.decode_events();
+        assert!(!rows.is_empty());
+        for r in &rows {
+            assert_eq!(r.ok, r.why.is_empty() && r.ok, "{r:?}");
+        }
+        let fields = ui.table_data("FIELDS").unwrap();
+        let (ok, err) = (fields.head.iter().position(|h| h == "Ok").unwrap(), fields.head.len() - 1);
+        assert_eq!(fields.head[err], "Error");
+        for row in &fields.rows {
+            assert_eq!(row[ok] == "ok", row[err].is_empty(), "{row:?}");
+        }
+        // the text of the query: an error row ends with its reason
+        for (line, r) in ui.events_text().lines().zip(&rows) {
+            assert_eq!(line.ends_with(&format!(",error,{}", r.why)) || r.ok || r.why.is_empty(), true, "{line}");
+        }
     }
 
     // Break it catches: a decode error left as a bare "error" for a message that is incomplete or has the wrong count

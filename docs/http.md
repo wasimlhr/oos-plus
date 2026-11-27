@@ -468,7 +468,10 @@ answers as `9.9E37` (none) is `null`.
   `coupling`, `bwlimit`, `invert`, and `trigger` (`type`, `source`, `slope`, `coupling`, `sweep`, `holdoff`, `level`).
 - Answer: `applied`, the commands that ran without an error, in the order sent (the parts in the order above; in a
   channel the probe before the scale; in the trigger the source before the level), and `state`, what `scope_state`
-  answers after them. A command the interpreter refuses does not stop the others.
+  answers after them. A command the interpreter refuses does not stop the others. A key that is not known refuses the
+  whole call with the list of the keys there are (`acquisition` is taken for `acquire`); `scope_state` adds `auto_roll`
+  to `acquire`: with it on and a time base from 200 ms/div the record is the roll stream's, not the depth set.
+  `decode_results` and `table` rows of a table with an Error column carry `ok`, false for a row that has one.
 
 ### MCP tool `acquire`
 

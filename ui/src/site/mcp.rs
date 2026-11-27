@@ -728,7 +728,13 @@ fn scope_state(run: &mut Run) -> J {
     let mut q = |k: &str| value(run.q(k));
     let timebase = J::obj(&[("scale", q(":TIM:SCAL?")), ("offset", q(":TIM:OFFS?"))]);
     let acquire =
-        J::obj(&[("sample_rate", q(":ACQ:SRAT?")), ("memory_depth", q(":ACQ:MDEP?")), ("type", q(":ACQ:TYPE?"))]);
+        J::obj(&[
+            ("sample_rate", q(":ACQ:SRAT?")),
+            ("memory_depth", q(":ACQ:MDEP?")),
+            ("type", q(":ACQ:TYPE?")),
+            // roll: on the time bases from 200 ms/div the record is the stream's, not the depth asked for
+            ("auto_roll", q(":TIM:ROLL?")),
+        ]);
     let trigger = J::obj(&[
         ("type", q(":TRIG:MODE?")),
         ("status", q(":TRIG:STAT?")),
@@ -1121,7 +1127,13 @@ fn table_rows(run: &mut Run, name: &str, offset: usize, rows: usize, extra: Vec<
                 .skip(offset)
                 .take(rows)
                 .map(|cells| {
-                    J::obj(&head.iter().zip(cells).map(|(h, c)| (h.as_str(), J::Str(c.clone()))).collect::<Vec<_>>())
+                    let mut fields: Vec<(&str, J)> =
+                        head.iter().zip(cells).map(|(h, c)| (h.as_str(), J::Str(c.clone()))).collect();
+                    // a row with an Error is not ok: the flag follows the column of the Events pane
+                    if let Some(e) = head.iter().position(|h| h == "Error") {
+                        fields.push(("ok", J::Bool(cells.get(e).is_none_or(|c| c.is_empty()))));
+                    }
+                    J::obj(&fields)
                 })
                 .collect();
             let next = offset + shown.len();
@@ -1192,7 +1204,8 @@ enum Kind {
 fn commands(obj: &J, table: &[(&str, &str, Kind)], prefix: &str, out: &mut Vec<String>) -> Result<(), String> {
     let J::Obj(fields) = obj else { return Err(format!("{prefix}: an object")) };
     if let Some((key, _)) = fields.iter().find(|(key, _)| !table.iter().any(|(k, _, _)| k == key)) {
-        return Err(format!("{prefix}{key}: not known"));
+        let keys: Vec<&str> = table.iter().map(|(k, _, _)| *k).collect();
+        return Err(format!("{prefix}{key}: not known; the keys are {}", keys.join(", ")));
     }
     for (key, header, kind) in table {
         let Some(v) = obj.get(key) else { continue };
@@ -1216,12 +1229,15 @@ fn commands(obj: &J, table: &[(&str, &str, Kind)], prefix: &str, out: &mut Vec<S
 fn configure_commands(args: &J) -> Result<Vec<String>, String> {
     let mut cmds = Vec::new();
     if let J::Obj(fields) = args {
-        let parts = ["channels", "timebase", "trigger", "acquire"];
+        // "acquisition" is taken for "acquire": the name an assistant tries first
+        let parts = ["channels", "timebase", "trigger", "acquire", "acquisition"];
         if let Some((key, _)) = fields.iter().find(|(k, _)| !parts.contains(&k.as_str())) {
-            return Err(format!("{key}: not known"));
+            return Err(format!(
+                "{key}: not known; the keys are channels, timebase, trigger, acquire (acquisition is taken for it), and nothing else"
+            ));
         }
     }
-    if let Some(a) = args.get("acquire") {
+    if let Some(a) = args.get("acquire").or_else(|| args.get("acquisition")) {
         let table = [
             ("memory_depth", ":ACQ:MDEP", Kind::Word),
             ("type", ":ACQ:TYPE", Kind::Word),
