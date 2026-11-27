@@ -314,6 +314,17 @@ fn the_polarity_of_a_decoder_is_set_and_read_over_scpi() {
     assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "AUTO");
     line(&mut s, &mut ui, &cv, ":DECode:PROTocol MODBUSASCII;:DECode:POLarity INV");
     assert_eq!(ui.m.dec_opt[3], 1);
+    // CAN: the only row; CAN-FD after bit rate, data rate and signal; LIN after the checksum; FlexRay after the rate
+    for (proto, slot) in [("CAN", 0), ("CANFD", 3), ("LIN", 1), ("FLEXRAY", 1)] {
+        line(&mut s, &mut ui, &cv, &format!(":DECode:PROTocol {proto};:DECode:POLarity INV"));
+        let asked = line(&mut s, &mut ui, &cv, ":BUS1:POLarity?");
+        assert_eq!((ui.m.dec_opt[slot], asked.as_str()), (1, "INVERTED"), "{proto}");
+    }
+    // SENT, S/PDIF, USB PD and MLT-3 read a swapped pair as it is: no row
+    for proto in ["SENT", "SPDIF", "USBPD", "MLT3"] {
+        line(&mut s, &mut ui, &cv, &format!(":DECode:PROTocol {proto};:DECode:POLarity INV"));
+        assert!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?").starts_with("-224"), "{proto}");
+    }
     line(&mut s, &mut ui, &cv, ":DECode:PROTocol 1553");
     assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "NORMAL");
     line(&mut s, &mut ui, &cv, ":DECode:POLarity INVerted");

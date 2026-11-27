@@ -9,7 +9,7 @@
 
 use super::{flexray_frame_crc, flexray_header_crc, sent_crc, Kind, Packet};
 use crate::edges::{edges, states};
-use crate::protocols::{BusWhat, ModuleInfo, OPTS};
+use crate::protocols::{BusWhat, Mirror, ModuleInfo, OPTS};
 
 /// SENT clock ticks (s) of the Decode menu; 0 = any tick (from the sync pulses).
 pub const SENT_TICKS: [f64; 8] = [3e-6, 5e-6, 10e-6, 20e-6, 30e-6, 50e-6, 90e-6, 0.0];
@@ -45,6 +45,7 @@ pub static LIN: ModuleInfo = ModuleInfo::new("Lin", "LIN", "automotive")
     .differential()
     .starts_on(BusWhat::Id, 0x21)
     .bit(|_, sh| 1.0 / sh.baud)
+    .polarity(1, Mirror::Threshold)
     .decoder(|l| {
         use LinChecksum::*;
         let checksum = [Either, Enhanced, Classic][l.opt[0].min(2)];
@@ -176,6 +177,7 @@ pub static FLEXRAY: ModuleInfo = ModuleInfo::new("FlexRay", "FlexRay", "automoti
     .differential()
     .starts_on(BusWhat::Id, 0x2a)
     .bit(|opt, _| 1.0 / flexray_rate(opt))
+    .polarity(1, Mirror::Threshold)
     .decoder(|l| Ok(flexray(l.main(), l.dt, flexray_rate(&l.opt), l.thr, l.hy, false)));
 
 /// The bit rates of a FlexRay cluster, the option row of the ui's module.

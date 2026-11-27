@@ -20,6 +20,8 @@ const fn idle_fall(idle: f32) -> Option<DemoTrig> {
 
 pub struct Uart;
 
+static CAN_OPTIONS: [Opt; 1] = [POLARITY];
+
 static UART_OPTIONS: [Opt; 1] = [POLARITY];
 
 impl Protocol for Uart {
@@ -199,6 +201,10 @@ impl Protocol for Can {
     fn shared(&self) -> &'static [Row] {
         &[Row::CanRate, Row::CanH]
     }
+    /// The Polarity row: Inverted reads the line the other way round from the Signal row (CAN_H or RX/TX).
+    fn options(&self) -> &'static [Opt] {
+        &CAN_OPTIONS
+    }
     /// 500 kbit/s on CH3 (RX level); the trigger on the start of frame after the bus idle.
     fn setup(&self) -> Setup {
         Setup { rows: &[(Row::CanRate, 2), (Row::CanH, 0)], trig: idle_fall(20e-6), ..Setup::default() }
@@ -221,8 +227,8 @@ impl Protocol for Can {
 
 /// LIN: which checksum a frame is checked against (option 0 of `oos_dsp::decode::LIN`). Either is what the decoder
 /// did before the option was there.
-const LIN_OPTIONS: [Opt; 1] =
-    [Opt { name: "Checksum", choices: &["Either", "Enhanced (2.x)", "Classic (1.x)"], default: 0 }];
+const LIN_OPTIONS: [Opt; 2] =
+    [Opt { name: "Checksum", choices: &["Either", "Enhanced (2.x)", "Classic (1.x)"], default: 0 }, POLARITY];
 
 pub struct Lin;
 
