@@ -28,17 +28,15 @@ fn shared() -> Shared {
 
 /// The module of `key` on one line with its polarity row set to `pol`: the packets and whether it read inverted.
 fn run(key: &str, v: &[f32], dt: f64, thr: f32, hy: f32, pol: Polarity) -> (Vec<Packet>, bool) {
-    run_with(key, v, dt, thr, hy, [0; OPTS], pol, shared())
+    run_with(key, v, dt, (thr, hy), [0; OPTS], pol, shared())
 }
 
 /// The same with the other option rows `opt` and shared rows `sh` of the setup.
-#[allow(clippy::too_many_arguments)]
 fn run_with(
     key: &str,
     v: &[f32],
     dt: f64,
-    thr: f32,
-    hy: f32,
+    (thr, hy): (f32, f32),
     mut opt: [usize; OPTS],
     pol: Polarity,
     sh: Shared,
@@ -66,7 +64,7 @@ fn assert_swap_is_read(
     what: fn(&[Packet]) -> Vec<u32>,
 ) {
     let swapped = flip(good);
-    let go = |v: &[f32], pol| run_with(key, v, dt, 1.65, 0.4, opt, pol, sh);
+    let go = |v: &[f32], pol| run_with(key, v, dt, (1.65, 0.4), opt, pol, sh);
     let (clean, used) = go(good, Polarity::Normal);
     assert!(!clean.is_empty() && bad(&clean) == 0 && !used, "{key}: the good bus: {} failed", bad(&clean));
     let (normal, used) = go(&swapped, Polarity::Normal);
@@ -106,8 +104,8 @@ fn an_inverted_uart_is_read_with_inverted_or_auto() {
     assert_swap_is_read("Uart", &good, dt, [0; OPTS], sh, data);
     // the serial trigger set to Inverted (idle low) is the line as it is wired: the Polarity row reverses that
     let trig = Shared { uart_inv: true, ..sh };
-    let (idle_low, used) = run_with("Uart", &flip(&good), dt, 1.65, 0.4, [0; OPTS], Polarity::Normal, trig);
-    let (as_wired, _) = run_with("Uart", &good, dt, 1.65, 0.4, [0; OPTS], Polarity::Normal, sh);
+    let (idle_low, used) = run_with("Uart", &flip(&good), dt, (1.65, 0.4), [0; OPTS], Polarity::Normal, trig);
+    let (as_wired, _) = run_with("Uart", &good, dt, (1.65, 0.4), [0; OPTS], Polarity::Normal, sh);
     assert!(!used && bad(&idle_low) == 0 && data(&idle_low) == data(&as_wired));
 }
 
