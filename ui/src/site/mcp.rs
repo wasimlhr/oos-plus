@@ -728,7 +728,13 @@ fn scope_state(run: &mut Run) -> J {
     let mut q = |k: &str| value(run.q(k));
     let timebase = J::obj(&[("scale", q(":TIM:SCAL?")), ("offset", q(":TIM:OFFS?"))]);
     let acquire =
-        J::obj(&[("sample_rate", q(":ACQ:SRAT?")), ("memory_depth", q(":ACQ:MDEP?")), ("type", q(":ACQ:TYPE?"))]);
+        J::obj(&[
+            ("sample_rate", q(":ACQ:SRAT?")),
+            ("memory_depth", q(":ACQ:MDEP?")),
+            ("type", q(":ACQ:TYPE?")),
+            // roll: on the time bases from 200 ms/div the record is the stream's, not the depth asked for
+            ("auto_roll", q(":TIM:ROLL?")),
+        ]);
     let trigger = J::obj(&[
         ("type", q(":TRIG:MODE?")),
         ("status", q(":TRIG:STAT?")),

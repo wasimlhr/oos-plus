@@ -1362,6 +1362,15 @@ impl Scpi {
                 Some(i) => m.mdepth = i,
                 None => return self.refused_depth(m, arg),
             }
+            // roll streams the screen as it goes: the record is the stream's points whatever the setting says, which
+            // is kept for the time bases that acquire normally (not a silent 31250 a few seconds later)
+            if board().slow_mode(m) == crate::board::Slow::Roll {
+                self.push_err(format!(
+                    "-221,\"Settings conflict\" the depth {} is kept, but in roll mode the record is the stream's points of the screen (the query reads the stream, e.g. 31250 at 200 ms/div): turn Auto Roll off (:TIMebase:ROLL OFF) or use a timebase faster than {} ms/div",
+                    arg.trim(),
+                    crate::board::dho::hw::ROLL_TDIV * 1e3
+                ));
+            }
             return Some(None);
         }
         // the acquisition settings of the table (settings/acquisition.rs), where :CORes was, before :SEGMents,

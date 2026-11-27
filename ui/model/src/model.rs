@@ -546,7 +546,7 @@ pub struct Model {
     /// option settings of a protocol module (`protocols::Opt`), indices into its choices
     pub dec_opt: [u8; oos_dsp::protocols::OPTS],
     pub zoom: bool,
-    /// slow time bases on the hardware: roll from 50 ms/div (on), scan from 200 ms/div (off), like stock "Auto Roll"
+    /// slow time bases on the hardware: roll from 200 ms/div (on; stock rolls from 50), scan from 200 ms/div (off) (`hw::ROLL_TDIV`, `SCAN_TDIV`), like stock "Auto Roll"
     pub auto_roll: bool,
     pub zscale: usize, // index into tscales(), <= tscale
     pub zdelay: f32,   // centre of the zoom window relative to the trigger
