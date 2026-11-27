@@ -223,7 +223,7 @@ fn polarity_rows_have_one_set_of_names_and_are_where_the_info_says() {
     assert_eq!(Polarity::from_index(2), Polarity::Auto);
     let with: Vec<&str> = MODULES.iter().filter(|m| m.polarity.is_some()).map(|m| m.key).collect();
     let want = ["Uart", "Can", "Lin", "Dmx512", "Uart9", "ModbusRtu", "ModbusAscii", "CanFd", "FlexRay", "Arinc429"];
-    assert_eq!(with, [&want[..], &["Mil1553"]].concat());
+    assert_eq!(with, [&want[..], &["Mil1553", "Usb"]].concat());
 }
 
 fn every_value(p: &[Packet]) -> Vec<u32> {
@@ -289,6 +289,51 @@ fn an_inverted_flexray_line_is_read_with_inverted_or_auto() {
     assert_swap_is_read("FlexRay", &good, dt, [0; OPTS], shared(), every_value);
 }
 
+// Break it catches: USB with D+ and D- swapped (J and K exchanged: every sync and PID fails) that Inverted or Auto
+// do not read as the good pair, in the full-speed and the automatic setting, or D+ alone not mirrored
+#[test]
+fn a_usb_pair_with_d_plus_and_d_minus_swapped_is_read_with_inverted_or_auto() {
+    use oos_dsp::decode::{usb_pid, UsbSpeed};
+    let pk = [
+        gen::usb_sof(0x710),
+        gen::usb_token(0x2D, 0x15, 0xe),
+        gen::usb_data(0xC3, &[0x80, 0x06, 0x00, 0x01, 0x00, 0x00, 0x40, 0x00]),
+        vec![usb_pid(2)],
+    ];
+    let mut items = vec![gen::UsbItem::Idle(1e-6)];
+    items.extend(pk.iter().flat_map(|p| [gen::UsbItem::Idle(1e-6), gen::UsbItem::packet(p, 12e6)]));
+    let (p, m) = gen::usb(&items, false, 15e-9, 0.0, 3.3);
+    let dt = 1.0 / 12e6 / 8.0;
+    let n = ((p.seg.last().map_or(0.0, |s| s.0) + 5e-6) / dt) as usize;
+    let (dp, dm) = (sample(|t| p.v(t), 0.0, dt, n), sample(|t| m.v(t), 0.0, dt, n));
+    let m_info = MODULES.iter().find(|m| m.key == "Usb").unwrap();
+    let read = |a: &[f32], b: Option<&[f32]>, speed: UsbSpeed, pol: Polarity| {
+        let opt = [pol as usize, 0, 0, 0];
+        let sh = Shared { usb_speed: speed, ..shared() };
+        let lines = [Some(a), None, b, None];
+        let l = Lines { lines, dt, thr: 1.65, hy: 0.3, opt, sh, chans: [None; 4], src: [None; 4] };
+        m_info.decode_used(&l).unwrap()
+    };
+    for speed in [UsbSpeed::Full, UsbSpeed::Auto] {
+        let (clean, used) = read(&dp, Some(&dm), speed, Polarity::Normal);
+        assert!(!used && clean.len() > 20 && bad(&clean) == 0, "{speed:?}: {} fields, {} failed", clean.len(), bad(&clean));
+        // the pair connected the other way round: D+ carries what D- did
+        let (normal, _) = read(&dm, Some(&dp), speed, Polarity::Normal);
+        assert!(bad(&normal) > 0 || every_value(&normal) != every_value(&clean), "{speed:?}: Normal read it right");
+        for pol in [Polarity::Inverted, Polarity::Auto] {
+            let (got, used) = read(&dm, Some(&dp), speed, pol);
+            assert!(used && bad(&got) == 0 && every_value(&got) == every_value(&clean), "{speed:?} {pol:?}");
+        }
+        let (got, used) = read(&dp, Some(&dm), speed, Polarity::Auto);
+        assert!(!used && every_value(&got) == every_value(&clean), "{speed:?}: Auto on a good pair");
+    }
+    // D+ alone on a line mirrored about the threshold
+    let flipped = flip(&dp);
+    let (clean, _) = read(&dp, None, UsbSpeed::Full, Polarity::Normal);
+    let (got, used) = read(&flipped, None, UsbSpeed::Full, Polarity::Inverted);
+    assert!(used && every_value(&got) == every_value(&clean) && !clean.is_empty());
+}
+
 /// The sentences the diagnosis of module `key` gives for `v` decoded with the polarity Normal.
 fn sentences(key: &str, v: &[f32], dt: f64, opt: [usize; OPTS], sh: Shared) -> String {
     let m = MODULES.iter().find(|m| m.key == key).unwrap();
@@ -346,6 +391,19 @@ fn a_swapped_pair_reads_the_same_in_the_decoders_without_a_polarity_row() {
     };
     assert!(pd(&good).iter().all(|x| x.1) && pd(&good).len() > 4);
     assert_eq!(pd(&swapped), pd(&good));
+    // DCC: the bits are the lengths of the two halves of a period, the same on a swapped pair
+    let dcc_frames = [
+        gen::DccFrame { address: 0x03, data: vec![0x3f], xor: None, preamble: 14 },
+        gen::DccFrame { address: 0x28, data: vec![0x00, 0x28], xor: None, preamble: 12 },
+    ];
+    let dt = oos_dsp::decode::DCC_ONE_HALF / 8.0;
+    let good = gen::dcc(&dcc_frames, 0.0, 3.3).sample(dt, 200e-6);
+    let swapped = flip(&good);
+    let dcc = |v: &[f32]| -> Vec<(u32, bool)> {
+        oos_dsp::decode::dcc(v, dt, 1.65, 0.3).iter().map(|x| (x.value, x.ok)).collect()
+    };
+    assert!(dcc(&good).len() > 6 && dcc(&good).iter().all(|x| x.1));
+    assert_eq!(dcc(&swapped), dcc(&good));
     // SENT: every nibble is the time between two falling edges, and the same between two rising ones
     let fr = [
         gen::SentFrame { status: 0x3, data: vec![0x7, 0x8, 0x9, 0x5, 0x5, 0x5], crc: None, pause: 56 },

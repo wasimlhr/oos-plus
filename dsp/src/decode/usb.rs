@@ -9,7 +9,7 @@
 
 use super::usb_bus::{usb_bus, Ls, UsbBus};
 use super::{usb_crc16, usb_crc5, Kind, Packet};
-use crate::protocols::{BusWhat, ModuleInfo};
+use crate::protocols::{BusWhat, Mirror, ModuleInfo};
 
 /// USB bit rates: low speed and full speed.
 pub const USB_LOW: f64 = 1.5e6;
@@ -63,6 +63,7 @@ pub static USB: ModuleInfo = ModuleInfo::new("Usb", "USB", "usb")
     // auto: room for a low-speed packet before the trigger point
     .bit(|_, sh| 1.0 / if sh.usb_speed == UsbSpeed::Low { USB_LOW } else { USB_FULL })
     .span(|_, sh| (sh.usb_speed == UsbSpeed::Auto).then_some(200.0 / USB_LOW))
+    .polarity(0, Mirror::Swap)
     .decoder(|l| Ok(usb(l.main(), l.lines[2], l.dt, l.sh.usb_speed, l.thr, l.hy)));
 
 /// USB's rule of the protocol trigger: an ID is the device address or a PID.

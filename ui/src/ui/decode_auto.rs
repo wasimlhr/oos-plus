@@ -248,7 +248,7 @@ mod tests {
         ui.set_dec_proto(Proto::I2C);
         assert!(!ui.decode_auto().join("
 ").contains("polarity"));
-        for key in ["Uart", "ModbusRtu", "ModbusAscii", "Can", "CanFd", "Lin", "FlexRay"] {
+        for key in ["Uart", "ModbusRtu", "ModbusAscii", "Can", "CanFd", "Lin", "FlexRay", "Usb"] {
             ui.set_dec_proto(Proto::from_key(key).unwrap());
             let Proto::Module(i) = ui.m.dec_proto;
             let (slot, _) = crate::protocols::get(i).info().polarity.unwrap();
