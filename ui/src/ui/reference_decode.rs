@@ -10,6 +10,24 @@ const BACKGROUND_POINTS: usize = 262_144;
 const MAX_POINTS: usize = 32_000_000;
 const MAX_PACKETS: usize = 250_000;
 pub(super) const COMPUTING: &str = "Decode computing";
+/// What a decoder says of a record above 1 M points that is only read as min/max pairs (Run, or a STOP that could not
+/// read the record raw): the pairs carry no bit timing.
+pub(super) const DEEP_PAIRS: &str = "Deep record is read compressed: stop it, or use at most 1M points";
+
+/// "Record too long for the decoder: N samples, limit M", for the record of `n` samples. The text of a count is made
+/// once and kept (an error is a `&'static str`): a handful of records is all that is ever asked.
+pub(crate) fn too_long(n: usize) -> &'static str {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    static SEEN: OnceLock<Mutex<HashMap<usize, &'static str>>> = OnceLock::new();
+    let mut seen = SEEN.get_or_init(Default::default).lock().unwrap_or_else(|e| e.into_inner());
+    if seen.len() > 64 {
+        seen.clear();
+    }
+    seen.entry(n).or_insert_with(|| {
+        Box::leak(format!("Record too long for the decoder: {n} samples, limit {MAX_POINTS}").into_boxed_str())
+    })
+}
 type Packets = Result<Arc<Vec<Packet>>, &'static str>;
 
 struct Wave {
@@ -160,7 +178,7 @@ pub(super) fn decode_borrowed(original: &Model, waves: &[BorrowedWave<'_>], hyst
     }
     let count = (last - first + 1.0) as usize;
     if count > MAX_POINTS {
-        return Err("Decoder aligned record exceeds 32M samples");
+        return Err(too_long(count));
     }
     let t0 = finest.t0 + first * dt;
     // points that are minimum and maximum in turn are read by the means of neighbours, on their own grid: aligned to
@@ -233,7 +251,7 @@ impl Ui {
     /// The screen record is peak-detect or resampled for drawing, which loses the timing of a protocol such as DCC
     /// (58 us halves); such a decoder runs on the reference path, which reads `raw` for every role (issue #225).
     pub(super) fn decoder_uses_raw(&self, m: &Model) -> bool {
-        let Some(raw) = self.last[0].as_ref().and_then(|rec| rec.raw.as_ref()) else { return false };
+        let Some(raw) = self.memory_raw() else { return false };
         !m.dec_on_la()
             && !raw.frame.envelope
             && sources(m)
@@ -271,7 +289,10 @@ impl Ui {
             }
             WaveId::Ch(c) => {
                 let r = candidate.or(self.last[0].as_ref()).ok_or("Live decoder source has no record")?;
-                if let Some(raw) = native_of(r, c) {
+                // the live record's own samples: after a STOP the whole record the stop read (`memory_raw`), not the
+                // view read again from it
+                let own = if candidate.is_some() { native_of(r, c) } else { self.memory_raw().filter(|raw| !raw.frame.envelope && raw.frame.ch[c].len() >= 2) };
+                if let Some(raw) = own {
                     if !raw.frame.dt.is_finite() || raw.frame.dt <= 0.0 || !raw.t0.is_finite() {
                         return Err("Invalid decoder record");
                     }
@@ -299,9 +320,7 @@ impl Ui {
         for id in sources(m)? {
             let (v, dt, t0, vpd) = self.decoder_samples_at(id, candidate)?;
             let revision = if id < NCH {
-                candidate
-                    .or(self.last[0].as_ref())
-                    .and_then(|rec| rec.raw.as_ref())
+                (if candidate.is_some() { candidate.and_then(|rec| rec.raw.as_ref()) } else { self.memory_raw() })
                     .map_or(self.counts.wfm_total, |raw| raw.frame.seq)
             } else if self.session_is_sim && id == DEC_REF_BASE + self.m.sim_slot {
                 self.replay.sim_attempt
@@ -887,6 +906,70 @@ mod tests {
         assert!(ui.decoder_uses_raw(&ui.m), "a second role with raw samples");
         ui.m.dec_src2 = 2;
         assert!(!ui.decoder_uses_raw(&ui.m), "no role has raw samples");
+    }
+
+    /// A long record of many bursts (a deep STOP record, 6 M samples, 150 bytes 40 000 samples apart) is decoded in
+    /// full from the samples the acquisition kept, none thinned out; one above the decoder's limit says so with its
+    /// count; a record above 1 M points that holds only min/max pairs says that, not "Nothing decoded".
+    #[test]
+    fn a_long_record_of_many_bursts_is_decoded_in_full_and_the_limits_are_named() {
+        let mut ui = uart_ui(4000);
+        let n = 6_000_000;
+        let (mut v, dt) = uart(0, n);
+        let (one, _) = uart(0, 400);
+        let bytes: Vec<u8> = (0..150u32).map(|i| (i * 7 + 3) as u8).collect();
+        for (k, &b) in bytes.iter().enumerate() {
+            let (burst, _) = uart(b, 400);
+            let at = 1000 + k * 40_000;
+            v[at..at + one.len()].copy_from_slice(&burst);
+        }
+        let frame = Arc::new(crate::board::Frame {
+            seq: 9,
+            dt,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            acq: (1.0 / dt, n),
+            ..crate::board::Frame::default()
+        });
+        let record = |envelope: bool, frame: Arc<crate::board::Frame>| Record {
+            ch: std::array::from_fn(|c| if c == 0 { vec![3.3; 40] } else { Vec::new() }),
+            dt: dt * 1000.0,
+            t0: 0.0,
+            triggered: true,
+            partial: false,
+            raw: Some(crate::wave::Raw { frame, i0: 0, i1: n, t0: 0.0, conditioned: true }),
+            la: None,
+            pairs: envelope,
+            peak: false,
+        };
+        ui.m.dec_src = 0;
+        ui.last[0] = Some(record(false, frame.clone()));
+        let packets = wait_live(&ui);
+        let got: Vec<u8> =
+            packets.iter().filter(|p| p.kind == oos_dsp::decode::Kind::Data).map(|p| p.value as u8).collect();
+        assert_eq!(got, bytes, "every burst of the record, none missing");
+        // only pairs of a deep record
+        let pairs = Arc::new(crate::board::Frame { envelope: true, ..(*frame).clone() });
+        ui.last[0] = Some(record(true, pairs));
+        assert_eq!(ui.decode_packets_of(&ui.m).unwrap_err(), DEEP_PAIRS);
+        // above the limit of the decoder
+        let big = vec![0.0f32; MAX_POINTS + 1];
+        let wave = BorrowedWave { source: 0, v: &big, dt: 1e-9, t0: 0.0, pairs: false };
+        let err = decode_borrowed(&ui.m, &[wave], 0.1).unwrap_err();
+        assert_eq!(err, format!("Record too long for the decoder: {} samples, limit {MAX_POINTS}", MAX_POINTS + 1));
+    }
+
+    fn wait_live(ui: &Ui) -> Arc<Vec<Packet>> {
+        let deadline = Instant::now() + Duration::from_secs(30);
+        loop {
+            match ui.decode_packets_of(&ui.m) {
+                Ok(packets) => return packets,
+                Err(COMPUTING) => {
+                    assert!(Instant::now() < deadline);
+                    std::thread::sleep(Duration::from_millis(1));
+                }
+                Err(error) => panic!("{error}"),
+            }
+        }
     }
 
     #[test]

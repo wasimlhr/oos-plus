@@ -243,6 +243,14 @@ fn mcp_configure_sets_and_reads_back_and_refuses_unknown_keys() {
         assert!(failed(&r), "{args}: {r}");
     }
     assert_eq!(ui.m.time_per_div(), before, "a refused call sets nothing");
+    // an unknown key names the keys there are; "acquisition" is taken for "acquire"
+    let r = call(&mut ui, &cv, &mut scpi, "configure", r#"{"display":{}}"#);
+    assert!(r.to_string().contains("the keys are channels, timebase, trigger, acquire"), "{r}");
+    let r = call(&mut ui, &cv, &mut scpi, "configure", r#"{"timebase":{"scael":1}}"#);
+    assert!(r.to_string().contains("the keys are scale, offset"), "{r}");
+    let r = call(&mut ui, &cv, &mut scpi, "configure", r#"{"acquisition":{"type":"PEAK"}}"#);
+    assert!(!failed(&r), "{r}");
+    assert!(data(&r).to_string().contains(":ACQ:TYPE PEAK"), "{r}");
     // a value the interpreter refuses: the error is in the answer, the rest is applied
     let r = call(&mut ui, &cv, &mut scpi, "configure", r#"{"channels":[{"channel":1,"coupling":"XX","scale":1}]}"#);
     assert!(failed(&r), "{r}");

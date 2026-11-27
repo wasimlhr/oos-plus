@@ -1192,7 +1192,8 @@ enum Kind {
 fn commands(obj: &J, table: &[(&str, &str, Kind)], prefix: &str, out: &mut Vec<String>) -> Result<(), String> {
     let J::Obj(fields) = obj else { return Err(format!("{prefix}: an object")) };
     if let Some((key, _)) = fields.iter().find(|(key, _)| !table.iter().any(|(k, _, _)| k == key)) {
-        return Err(format!("{prefix}{key}: not known"));
+        let keys: Vec<&str> = table.iter().map(|(k, _, _)| *k).collect();
+        return Err(format!("{prefix}{key}: not known; the keys are {}", keys.join(", ")));
     }
     for (key, header, kind) in table {
         let Some(v) = obj.get(key) else { continue };
@@ -1216,12 +1217,15 @@ fn commands(obj: &J, table: &[(&str, &str, Kind)], prefix: &str, out: &mut Vec<S
 fn configure_commands(args: &J) -> Result<Vec<String>, String> {
     let mut cmds = Vec::new();
     if let J::Obj(fields) = args {
-        let parts = ["channels", "timebase", "trigger", "acquire"];
+        // "acquisition" is taken for "acquire": the name an assistant tries first
+        let parts = ["channels", "timebase", "trigger", "acquire", "acquisition"];
         if let Some((key, _)) = fields.iter().find(|(k, _)| !parts.contains(&k.as_str())) {
-            return Err(format!("{key}: not known"));
+            return Err(format!(
+                "{key}: not known; the keys are channels, timebase, trigger, acquire (acquisition is taken for it), and nothing else"
+            ));
         }
     }
-    if let Some(a) = args.get("acquire") {
+    if let Some(a) = args.get("acquire").or_else(|| args.get("acquisition")) {
         let table = [
             ("memory_depth", ":ACQ:MDEP", Kind::Word),
             ("type", ":ACQ:TYPE", Kind::Word),
