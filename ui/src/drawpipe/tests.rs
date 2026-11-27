@@ -69,7 +69,7 @@ fn model(tdiv: f64, two: bool, dots: bool) -> Model {
         tscale: tscales().iter().position(|&t| (t as f64 - tdiv).abs() < tdiv * 1e-3).unwrap(),
         ..Default::default()
     };
-    (m.trig_level, m.dots) = (0.0, dots);
+    (m.trig_level, m.dots) = (0.0, dots.into());
     for c in 0..NCH {
         (m.ch[c].on, m.ch[c].offset) = (c == 0 || c == 1 && two, 0.0);
     }

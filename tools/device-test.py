@@ -1432,15 +1432,18 @@ def rising_edges(b, lo, hi):
     return out
 
 
-def zoomed_out(s, o, c, d, how, meas):
-    """A record of depth `d` at 0.2 ms/div with a 100 kHz sine, ended by `how` (STOP while running, or SING), then the
-    smallest 1-2-5 time base whose screen holds it and a quarter more. `meas` False clears the measurement list (no
-    raw deep reads, docs/fork/deep-meas.md). The covered time on the screen record, its centre, the record's length."""
+def zoomed_out(s, o, c, d, how, meas, tdiv=None):
+    """A record of depth `d` at 0.2 ms/div (or `tdiv`) with a 100 kHz sine, ended by `how` (STOP while running, or
+    SING), then the smallest 1-2-5 time base whose screen holds it and a quarter more. `meas` False clears the
+    measurement list (no raw deep reads, docs/fork/deep-meas.md). The covered time on the screen record, its centre,
+    the record's length."""
     s.base()
     s.gen("SIN", 1e5, 2.0)
     if not meas:
         s.w(":MEAS:CLE ALL")
     s.w(f":ACQ:MDEP {d}")
+    if tdiv:
+        s.w(f":TIM:SCAL {tdiv}")
     s.settle(2, extra=2)
     rate = s.num(":ACQ:SRAT?")
     s.w(f":{how}")
@@ -1473,12 +1476,16 @@ def zoomed_out(s, o, c, d, how, meas):
 @test("a1", need=(1,))
 def deep_record_fills_the_zoomed_out_screen(s, o):
     """A deep record, stopped while running and taken with Single, holds the signal over its whole length: zoomed out,
-    the trace covers depth / rate around the trigger, no shorter (#47: a DHO804 showed about 7 ms of 50 M at
-    1.25 GSa/s) and no longer. Without measurements, so the screen record is the stored record read again."""
+    the trace covers depth / rate around the trigger, no shorter (#47: a DHO804 showed about 7 us of 50 M at
+    1.25 GSa/s, stopped at 50 ns/div, where the live read is only the screen window) and no longer. Without
+    measurements, so the screen record is the stored record read again."""
     c = s.loop[0]
     rows = []
-    for d, how in (("10000000", "STOP"), ("50000000", "STOP"), ("125000000", "STOP"), ("50000000", "SING")):
-        name, got, mid, span, bw = zoomed_out(s, o, c, d, how, meas=False)
+    cases = (("10000000", "STOP", None), ("50000000", "STOP", None), ("125000000", "STOP", None),
+             ("50000000", "SING", None), ("50000000", "STOP", 5e-8), ("125000000", "STOP", 5e-8))
+    for d, how, tdiv in cases:
+        name, got, mid, span, bw = zoomed_out(s, o, c, d, how, meas=False, tdiv=tdiv)
+        name += f" from {tdiv * 1e9:.0f} ns/div" if tdiv else ""
         rows.append(f"{name}: {got * 1e3:.1f} of {span * 1e3:.1f} ms, centre {mid * 1e3:+.1f} ms")
         near(f"{name}: covered time", got, span, rel=0.05, ab=2 * bw)
         near(f"{name}: centre on the trigger", mid, 0.0, ab=1.5 * bw)
@@ -1980,7 +1987,8 @@ def logger_writes(s, o):
     s.w(":SYST:LOG ON")
     time.sleep(6)
     s.w(":SYST:LOG OFF")
-    t = s.shell("ls -t /tmp/oos/log-*.csv /oos/log-*.csv 2>/dev/null | head -1 | xargs wc -l")
+    # the logger writes to a USB stick when one is in (its OOS folder), else to /tmp/oos or /oos
+    t = s.shell("ls -t /mnt/usb/OOS/log-*.csv /tmp/oos/log-*.csv /oos/log-*.csv 2>/dev/null | head -1 | xargs wc -l")
     assert re.search(r"\b[4-9]\b", t), t
 
 

@@ -447,20 +447,28 @@ mod tests {
         assert!(pll_dry(&args(&["--freq", "5e9", "--dry"])).is_err());
     }
 
-    // Break it catches: a default that changes without a hardware check, or a value that puts more than the two known
-    // parameters on the insmod shell line.
+    // Break it catches: a default that changes without a hardware check, a lost C2H timeout (a stalled read then holds
+    // the acquisition 10 s), or a value that puts more than the known parameters on the insmod shell line.
     #[test]
     fn xdma_parameters_from_the_system_settings() {
-        assert_eq!(xdma_params(None).unwrap(), "poll_mode=1");
-        assert_eq!(xdma_params(Some(" \n")).unwrap(), "poll_mode=1");
-        assert_eq!(xdma_params(Some("poll_mode=0\n")).unwrap(), "poll_mode=0");
-        assert_eq!(xdma_params(Some("poll_mode=0   interrupt_mode=2")).unwrap(), "poll_mode=0 interrupt_mode=2");
+        assert_eq!(xdma_params(None).unwrap(), "poll_mode=1 c2h_timeout=1");
+        assert_eq!(xdma_params(Some(" \n")).unwrap(), "poll_mode=1 c2h_timeout=1");
+        assert_eq!(xdma_params(Some("poll_mode=0\n")).unwrap(), "poll_mode=0 c2h_timeout=1");
+        assert_eq!(
+            xdma_params(Some("poll_mode=0   interrupt_mode=2")).unwrap(),
+            "poll_mode=0 interrupt_mode=2 c2h_timeout=1"
+        );
+        assert_eq!(xdma_params(Some("c2h_timeout=10 h2c_timeout=3")).unwrap(), "c2h_timeout=10 h2c_timeout=3");
         for bad in [
             "poll_mode=2",
             "poll_mode=0; reboot",
             "poll_mode=0 poll_mode=1",
             "interrupt_mode=4",
-            "c2h_timeout=1",
+            "c2h_timeout=0",
+            "c2h_timeout=11",
+            "c2h_timeout=01",
+            "c2h_timeout=1 c2h_timeout=2",
+            "h2c_timeout=",
             "poll_mode=0 $(id)",
         ] {
             assert!(xdma_params(Some(bad)).is_err(), "{}", bad);

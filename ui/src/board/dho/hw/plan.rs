@@ -18,18 +18,19 @@ pub(super) fn force_prearm(on: Option<bool>) {
     PREARM_ON.force(on);
 }
 
-/// Arm the next batch before the decode of the current one (`seq::prearm`), so the decode is no longer dead time.
-/// `acq.prearm = on` in system.conf, or OOS_PREARM set (any value). Off by default: the stop of an acquisition armed
-/// ahead that is then not read (a settings change, the generator, self-cal, roll) is not verified on the unit yet
-///.
+/// Arm the next batch before the decode of the current one (`seq::prearm`), so the decode is no longer dead time. On by
+/// default since it was verified on the unit 2026-11-27 (DHO924S: the whole device test with it on, among it the stop
+/// of an acquisition armed ahead and then not read at new settings, STOP, the generator, roll and scan, segments;
+/// records a second with two channels at 5 ms/div 11.0 to 12.1, 2 ms/div 19.5 to 23.1, 1 ms/div 34 to 44). The way
+/// back: `acq.prearm = off` in system.conf, or OOS_PREARM=0.
 pub(super) fn prearm_on() -> bool {
     PREARM_ON.get()
 }
 
-static PREARM_ON: crate::board::policy::Switch =
-    crate::board::policy::Switch::new(|| std::env::var_os("OOS_PREARM").is_some() || PREARM.get());
+static PREARM_ON: crate::board::policy::Switch = crate::board::policy::Switch::new(|| !PREARM_OFF.get());
 
-pub(super) const PREARM: crate::sysconf::Flag = crate::sysconf::Flag { key: "acq.prearm", env: None, on: "on" };
+pub(super) const PREARM_OFF: crate::sysconf::Flag =
+    crate::sysconf::Flag { key: "acq.prearm", env: Some("OOS_PREARM"), on: "off" };
 
 /// Stops the acquisition armed ahead, if one is, before anything else writes the FPGA.
 #[cfg(any(target_os = "linux", test))]
@@ -76,6 +77,26 @@ pub fn batch_plan(s: &Settings, p: &hz::Params) -> Settings {
         b.frames = b.frames.min(zone_batch());
     }
     b
+}
+
+/// Longest wait for further frames of a batch after its first one (`seq::acquire_batch_on`): the ring fills while
+/// the loop draws frames of the last batch.
+#[cfg(any(target_os = "linux", test))]
+pub(super) const FILL_MS: u64 = 25;
+
+/// The wait for further frames of a batch after its first one: `FILL_MS`, or none when one record lasts `FILL_MS` or
+/// longer, as no further frame can be complete within the wait. From 2 ms/div at 100 kpts (records of 40 ms and more)
+/// the wait was dead time of every record: 8.7 records a second at 5 ms/div and 13 at 2 ms/div, where the records
+/// themselves allow 12.5 and 25 (unit 2026-11-27, two channels, XY and YT alike). The fork yottabytesolutions/oos
+/// (fumingcaps, release v0.2.2) shortens this wait at slow time bases the same way.
+#[cfg(any(target_os = "linux", test))]
+pub(super) fn fill_wait_ms(p: &hz::Params) -> u64 {
+    let record_ms = p.memsel as f64 * 1e3 / p.rate.max(1) as f64;
+    if record_ms >= FILL_MS as f64 {
+        0
+    } else {
+        FILL_MS
+    }
 }
 
 /// Frames a batch arms with the deposit workers' grant (`pipe::Workers::grant`, ADR 0081): a batch planned with up to
@@ -344,16 +365,36 @@ pub fn stop_plan(b: &Settings, p: &hz::Params, tdiv: f64, delay: f64) -> (Settin
     (r, pre / k)
 }
 
-/// Whether arming ahead (`acq.prearm`) leaves the replay at STOP possible: not for a batch of the live compression or
-/// one whose newest frame the deep measurements may read raw (`deep_raw_settings`), since the next batch would write
-/// the ring under it. Prearm gains at
-/// short time bases; deep compressed records take most of a batch in the read anyway.
+/// Whether arming ahead (`acq.prearm`) leaves the replay at STOP possible: not for a batch of the live compression,
+/// one whose newest frame the deep measurements may read raw (`deep_raw_settings`), or a record the live read takes
+/// only part of (`partly_read`), since the next batch would write the ring under it and the views after a STOP could
+/// not read it again (issue #47: 50 M at 50 ns/div, zoomed out after the STOP, showed the 7 us of the live window).
+/// Prearm gains at short time bases; deep records take most of a batch in the read anyway.
 pub(super) fn prearm_keeps_replay(
     b: &Settings,
     p: &hz::Params,
     deep: Option<crate::board::policy::deep::Want>,
 ) -> bool {
-    !raw_newest(b, p) && deep.is_none_or(|w| deep_raw_settings(b, p, w.wide).is_none())
+    !raw_newest(b, p) && !partly_read(b) && deep.is_none_or(|w| deep_raw_settings(b, p, w.wide).is_none())
+}
+
+/// Whether the live read of batch `b` takes only part of its record (`batch_plan`: a screen window, or the record
+/// through the FPGA compression): the rest is only in the ring, for the views after a STOP.
+pub(super) fn partly_read(b: &Settings) -> bool {
+    b.window.is_some() || b.compress > 1
+}
+
+/// Looks at the stop condition (every 10 ms of the wait for a batch, `seq::acquire_batch_on`) a STOP lets pass before
+/// it cuts that wait: for a record the live read takes only part of, as long as the record takes twice and 50 ms more,
+/// so the record being recorded is finished and read, and stays in the ring for the views (issue #47: a STOP cut it,
+/// the arm had already written the ring over the record before, and nothing was left but the live window). Without a
+/// trigger the STOP comes that much later; other records keep the cut at once.
+pub(super) fn hold_grace_looks(b: &Settings, p: &hz::Params) -> u32 {
+    if !partly_read(b) || p.rate == 0 {
+        return 0;
+    }
+    let record_ms = p.memsel as f64 * 1e3 / p.rate as f64;
+    ((2.0 * record_ms + 50.0) / 10.0).ceil() as u32
 }
 
 /// The raw read at STOP (docs/fork/stop-exact.md) of the newest frame of the batch `b` with `count` frames read just

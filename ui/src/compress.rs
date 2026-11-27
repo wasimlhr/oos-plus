@@ -382,7 +382,7 @@ mod tests {
         let (w, h) = (970usize, 448usize);
         for (dots, jitter) in [(false, 0.0), (false, 7.3), (true, 3.1)] {
             let (mut m, p, (raw_bytes, raw_s), (comp_bytes, comp_s)) = square_10us(jitter);
-            m.dots = dots;
+            m.dots = dots.into();
             let fr = crate::board::dho::hw::decode(&raw_bytes, &raw_s, &p, 1);
             let fc = crate::board::dho::hw::decode(&comp_bytes, &comp_s, &p, 1);
             assert!(live(&fc) && !live(&fr));

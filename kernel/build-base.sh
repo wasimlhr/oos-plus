@@ -71,6 +71,8 @@ docker run --rm -e OUT_OWNER="$(id -u):$(id -g)" -v oos-kbuild:/w -v "$here:/k:r
 	make -C "$K" O="$O" ARCH=arm64 CROSS_COMPILE=$CROSS -j"$JOBS" Image dtbs modules > "$W/make.log" 2>&1 || { tail -n 20 "$W/make.log"; exit 1; }
 	make -C "$K" O="$O" ARCH=arm64 CROSS_COMPILE=$CROSS INSTALL_MOD_PATH="$W/modroot" INSTALL_MOD_STRIP=1 modules_install >/dev/null
 	cp -r /k/modules/xdma "$X"
+	# ours: a C2H stream read that timed out returns ETIMEDOUT, not the bytes before it (modules/xdma-timeout.patch)
+	patch -p1 -s -d "$X" --no-backup-if-mismatch < /k/modules/xdma-timeout.patch
 	make -C "$O" ARCH=arm64 CROSS_COMPILE=$CROSS M="$X/xdma" modules > "$W/xdma.log" 2>&1 || { tail -n 20 "$W/xdma.log"; exit 1; }
 	make -C "$O" ARCH=arm64 CROSS_COMPILE=$CROSS M="$X/xdma" INSTALL_MOD_PATH="$W/modroot" INSTALL_MOD_STRIP=1 modules_install >/dev/null
 	# rtw89 of a newer kernel for the RTL8851BU (USB WLAN), with the patch for the mac80211 of 6.12

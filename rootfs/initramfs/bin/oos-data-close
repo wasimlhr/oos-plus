@@ -1,0 +1,43 @@
+#!/bin/sh
+# Copyright (C) 2026 dekajoule
+# SPDX-License-Identifier: GPL-2.0-or-later
+# oos-data-close - the card in a clean state before the power goes or another kernel starts (docs/protocols/board.md
+# 8.3, docs/update.md):
+#   oos-data-close close    the USB stick unmounted, everything synced, /oos read only
+#   oos-data-close reopen   /oos writable again (the power-off or the kexec did not come)
+# Callers: oos-ui's power-off and restart, oos-update before a kexec start, init at shutdown. Every step has a time
+# limit, so a card or a stick that hangs does not hold the power-off up. One line on stdout; exit 1 when /oos stays
+# writable (close) or was not made writable (reopen). A stick unmounted here is mounted again when it is put in again.
+DATA=/oos
+USB=/mnt/usb
+
+mounted() { grep -q " $1 " /proc/mounts; }
+
+case "${1:-}" in
+close)
+	usb=none
+	if mounted $USB; then
+		# a stick that does not answer is detached: its writes are lost, the card's are not held up
+		if timeout 1 umount $USB 2>/dev/null; then usb=unmounted; else umount -l $USB 2>/dev/null; usb=detached; fi
+	fi
+	timeout 3 sync
+	data=absent
+	if mounted $DATA; then
+		if timeout 3 mount -o remount,ro $DATA 2>/dev/null; then data="read only"; else data="still writable (busy)"; fi
+	fi
+	echo "oos-data-close: stick $usb, $DATA $data"
+	case "$data" in "still writable"*) exit 1 ;; esac
+	;;
+reopen)
+	if mounted $DATA && timeout 3 mount -o remount,rw $DATA 2>/dev/null; then
+		echo "oos-data-close: $DATA writable again"
+	else
+		echo "oos-data-close: $DATA not made writable"
+		exit 1
+	fi
+	;;
+*)
+	echo "usage: oos-data-close close|reopen" >&2
+	exit 2
+	;;
+esac

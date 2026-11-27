@@ -308,7 +308,7 @@ const KEYS: &[(&str, P)] = &[
     ("zdelay", Num(&[])),
     ("color_grade", Bool),
     ("hdmi_lines", Bool),
-    ("dots", Bool),
+    ("dots", Is(&["true", "false", "on", "off", "1", "0", "TRUE", "yes", "auto", "AUTO"])),
     ("bar", Is(&["cards", "compact", "Cards"])),
     ("hdmi", Is(&["Mirror", "Waveform", "Layout", "mirror"])),
     ("hdmi_view", Is(&["0", "1", "4", "5", "+1"])),

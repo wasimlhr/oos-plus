@@ -13,33 +13,39 @@ use oos_hal::dho::afe;
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 const XDMA_DEFAULT: &str = "poll_mode=1";
 
-/// The xdma.ko parameters of `xdma.params` in the system settings (`oos-conf`; None or empty = `XDMA_DEFAULT`). Only
-/// `poll_mode=0|1` and `interrupt_mode=0..3` (0 auto, 1 MSI, 2 legacy INTx, 3 MSI-X), each at most once: the line goes
-/// to `insmod` through a shell.
+/// The xdma.ko parameters of `xdma.params` in the system settings (`oos-conf`; None or empty = `XDMA_DEFAULT`), with
+/// `c2h_timeout=1` unless they set it. Only `poll_mode=0|1`, `interrupt_mode=0..3` (0 auto, 1 MSI,
+/// 2 legacy INTx, 3 MSI-X), `c2h_timeout=1..10` and `h2c_timeout=1..10` (seconds), each at most once: the line goes to
+/// `insmod` through a shell.
 #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
 pub(super) fn xdma_params(v: Option<&str>) -> Result<String, String> {
     let v = v.map(str::trim).unwrap_or("");
-    if v.is_empty() {
-        return Ok(XDMA_DEFAULT.into());
-    }
+    let mut words: Vec<&str> = if v.is_empty() { vec![XDMA_DEFAULT] } else { v.split_whitespace().collect() };
     let mut seen = Vec::new();
-    for w in v.split_whitespace() {
-        let ok = matches!(
-            w,
-            "poll_mode=0"
-                | "poll_mode=1"
-                | "interrupt_mode=0"
-                | "interrupt_mode=1"
-                | "interrupt_mode=2"
-                | "interrupt_mode=3"
-        );
-        let key = w.split('=').next().unwrap_or(w);
+    for w in &words {
+        let (key, value) = w.split_once('=').unwrap_or((w, ""));
+        let seconds = |v: &str| matches!(v, "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" | "10");
+        let ok = match key {
+            "poll_mode" => matches!(value, "0" | "1"),
+            "interrupt_mode" => matches!(value, "0" | "1" | "2" | "3"),
+            "c2h_timeout" | "h2c_timeout" => seconds(value),
+            _ => false,
+        };
         if !ok || seen.contains(&key) {
-            return Err(format!("xdma.params: {:?} is not allowed (poll_mode=0|1, interrupt_mode=0..3, each once)", w));
+            return Err(format!(
+                "xdma.params: {:?} is not allowed (poll_mode=0|1, interrupt_mode=0..3, c2h_timeout and h2c_timeout \
+                 1..10, each once)",
+                w
+            ));
         }
         seen.push(key);
     }
-    Ok(v.split_whitespace().collect::<Vec<_>>().join(" "))
+    // a read the FPGA does not finish ends after 1 s with ETIMEDOUT instead of the driver's 10 s, and the acquisition
+    // recovers (`hw::dmafault` of oos-ui)
+    if !seen.contains(&"c2h_timeout") {
+        words.push("c2h_timeout=1");
+    }
+    Ok(words.join(" "))
 }
 
 /// PCIe host + xdma bring-up with retries (the loop of oos-fpga-up, without the FPGA boot), then BAR1. The device and

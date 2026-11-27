@@ -1,6 +1,6 @@
 # SCPI and VXI-11
 
-How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.2.2.
+How to control OOS from a computer: the ways in (raw socket, VXI-11/VISA, MCP), the rules of the command syntax, every command family with examples, waveform and screenshot transfer, errors, and what differs from the stock Rigol firmware. This page describes OOS 0.2.3.
 
 > **No authentication.** Anyone who can reach the scope can control it. Keep it on a trusted bench network, never on the internet. `net.allow` (below) limits who may connect.
 
@@ -55,7 +55,7 @@ All of them end in the same SCPI interpreter, so a command behaves the same whic
 
 ```sh
 printf '*IDN?\n' | nc dho924s-123456.local 5555
-# OOS,DHO924S,<serial>,oos-ui 0.2.2
+# OOS,DHO924S,<serial>,oos-ui 0.2.3
 ```
 
 **Python with pyvisa, raw socket:**
@@ -416,7 +416,7 @@ A reference can be a trigger, measurement, cursor, Math or decoder source like a
 
 | Command | Values |
 |---|---|
-| `:DISPlay:TYPE[?]` | `DOTS\|VECTors` |
+| `:DISPlay:TYPE[?]` | `DOTS\|VECTors\|AUTO` |
 | `:DISPlay:GRADing:TIME[?]` | `MIN`, `0.1`, `0.5`, `1`, `5`, `10`, `INFinite` |
 | `:DISPlay:WBRightness[?]`, `:GBRightness[?]`, `:GRID[?]`, `:RULers[?]`, `:COLor[?]` | waveform/grid brightness, grid, rulers, colour grading |
 | `:DISPlay:VIEW[?] <n>`, `:VIEW:COUNt[?] 1..4`, `:VIEW:MONitor[?] 0..4` | OOS: the views of Display > Views, and the one an HDMI monitor shows |

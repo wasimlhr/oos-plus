@@ -979,3 +979,33 @@ fn batch_sequences_settle_once_after_each_group_of_their_writes() {
     let plain = take();
     assert!(plain.len() > 2 && plain.chunks(2).all(|x| matches!(x, [Ev::Wr(..), Ev::Gap])), "{:?}", plain);
 }
+
+// Break it catches: a C2H read that timed out reported like any other read error, so the live loop cannot tell a
+// stalled play (xdma.ko's c2h_timeout) from a broken stream, or a timed-out read that leaves bytes behind as data
+#[test]
+fn a_timed_out_c2h_read_is_told_apart_and_leaves_no_data() {
+    use crate::dho::bus::{DmaBuf, Recorder};
+    struct Stalled(bool);
+    impl std::io::Read for Stalled {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            // one chunk, then the play stalls
+            if std::mem::replace(&mut self.0, false) {
+                buf[..64].fill(0x5a);
+                return Ok(64);
+            }
+            Err(std::io::Error::from(std::io::ErrorKind::TimedOut))
+        }
+    }
+    let s = Settings { tdiv: 10e-9, frames: 3, window: None, ..Settings::default() };
+    let mut st = State::handover(s.mask, None);
+    let p = st.configure(&s, None, None).unwrap().1;
+    let mut bar = Recorder::default();
+    bar.regs.insert(0x4034, 0x2000);
+    let mut dma = DmaBuf::new();
+    let e = read_raw_again(&mut st, &s, &p, &mut bar, &mut Stalled(true), &mut dma, 2, |_| {}).unwrap_err();
+    assert!(e.starts_with(DMA_TIMEOUT), "{}", e);
+    assert!(e.contains("0x4034 = 0x2000"), "{}", e);
+    assert!(dma.data().is_empty());
+    let other = read_raw_again(&mut st, &s, &p, &mut bar, &mut std::io::empty(), &mut dma, 2, |_| {}).unwrap_err();
+    assert!(!other.starts_with(DMA_TIMEOUT), "{}", other);
+}

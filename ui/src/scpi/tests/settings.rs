@@ -248,6 +248,11 @@ fn display_type_persistence_brightness_and_grid() {
     assert_eq!(line(&mut s, &mut ui, &cv, ":DISP:GRAD:TIME?"), "0.1", "0.2 s snaps to the screen's 100 ms step");
     line(&mut s, &mut ui, &cv, ":DISP:GRAD:TIME INF;:DISP:TYPE DOTS;:DISP:GRID NONE;:DISP:WBR 7");
     assert_eq!(line(&mut s, &mut ui, &cv, ":DISP:GRAD:TIME?;:DISP:TYPE?;:DISP:GRID?;:DISP:WBR?"), "INF;DOTS;NONE;10");
+    // Display > Dots has a third choice: Auto, and the two of before keep their words
+    for (arg, want) in [("AUTO", "AUTO"), ("VECTors", "VECT"), ("auto", "AUTO"), ("DOTS", "DOTS")] {
+        line(&mut s, &mut ui, &cv, &format!(":DISP:TYPE {}", arg));
+        assert_eq!(line(&mut s, &mut ui, &cv, ":DISP:TYPE?"), want, "{}", arg);
+    }
 
     line(&mut s, &mut ui, &cv, "*CLS;:DISP:GBR 40;:DISP:RUL OFF;:DISP:COL ON");
     assert_eq!(line(&mut s, &mut ui, &cv, ":DISP:GBR?;:DISP:RUL?;:DISP:COL?"), "40;0;1");

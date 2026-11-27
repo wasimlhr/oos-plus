@@ -11,7 +11,7 @@
 //! each trace (the menu offers the windows the layout has).
 
 use super::{Arg, Choice, CustomIo, Scpi, Setting, Ty, Unknown, Val};
-use crate::model::{step_index, Density, Grid, HDMI_MODES, PANES, PANES_N, PERSIST, TEXT_SIZES};
+use crate::model::{step_index, Density, Grid, DOTS, HDMI_MODES, PANES, PANES_N, PERSIST, TEXT_SIZES};
 
 /// The slices, in the order of the docs table.
 pub const SLICES: [&[Setting]; 5] = [&VIEW, &DENSITY, &PANE, &DRAW, &TEXT];
@@ -159,11 +159,12 @@ pub const DRAW: [Setting; 5] = [
         ty: Ty::Custom(&DOTS_IO),
         label: "Dots",
         #[cfg(test)]
-        doc: "Draws every sample as a dot instead of joining them with lines.",
+        doc: "Off joins the samples with lines, On draws every sample as a dot, Auto draws lines with the samples \
+              marked once they lie 8 pixels apart, and dots in XY.",
         accept: None,
         step: None,
-        get: |m, _| Val::Bool(m.dots),
-        put: |m, _, v| m.dots = v.index() != 0,
+        get: |m, _| Val::Index(m.dots as usize),
+        put: |m, _, v| m.dots = DOTS[v.index().min(DOTS.len() - 1)],
     },
     Setting {
         key: "bar",
@@ -261,14 +262,28 @@ const PANE_IO: CustomIo = CustomIo {
 };
 
 /// A switch in a setup and in the menu; over SCPI the stock words of the drawing type.
+/// Display > Dots in the setup (`false`, `true` as before Auto, and `auto`) and over SCPI (`:DISPlay:TYPE`).
 const DOTS_IO: CustomIo = CustomIo {
-    store: |v| (v.index() != 0).to_string(),
-    load: |t| crate::words::p_bool(t).map(Val::Bool),
-    query: |v| if v.index() != 0 { "DOTS" } else { "VECT" }.to_string(),
-    take: |a| super::switch_word(a, "VECTors", "DOTS"),
-    labels: &["Off", "On"],
+    store: |v| {
+        match v.index() {
+            0 => "false",
+            1 => "true",
+            _ => "auto",
+        }
+        .to_string()
+    },
+    load: |t| {
+        if t.trim().eq_ignore_ascii_case("auto") {
+            Ok(Val::Index(2))
+        } else {
+            crate::words::p_bool(t).map(|b| Val::Index(b as usize))
+        }
+    },
+    query: |v| ["VECT", "DOTS", "AUTO"][v.index().min(2)].to_string(),
+    take: |a| ["VECTors", "DOTS", "AUTO"].iter().position(|w| crate::words::kw(a, w)).map(Val::Index),
+    labels: &["Off", "On", "Auto"],
     #[cfg(test)]
-    values: "`DOTS`, `VECTors`; the query answers `DOTS` or `VECT`",
+    values: "`DOTS`, `VECTors`, `AUTO`; the query answers `DOTS`, `VECT` or `AUTO`",
 };
 
 fn persist_index(arg: &str) -> Option<usize> {

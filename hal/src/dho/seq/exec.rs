@@ -277,7 +277,18 @@ fn plain_step<B: crate::dho::bus::Bus, R: std::io::Read, C: Clock>(
             let bytes = read_len(*frames, *frame);
             let buf = dma
                 .read(c2h, bytes, |got, k| log(format!("c2h: short read of {} bytes (at {} of {})", k, got, bytes)))
-                .map_err(|e| format!("c2h read of {} bytes: {} (0x4034 = {:#x})", bytes, e, bar.rd(0x4034)))?;
+                .map_err(|e| match e.kind() {
+                    // the FPGA did not deliver the play within xdma.ko's c2h_timeout: the caller recovers
+                    std::io::ErrorKind::TimedOut => format!(
+                        "{}: {} bytes asked (0x4034 = {:#x}, 0x4080 = {:#x}, 0x4010 = {:#x})",
+                        DMA_TIMEOUT,
+                        bytes,
+                        bar.rd(0x4034),
+                        bar.rd(0x4080),
+                        bar.rd(0x4010)
+                    ),
+                    _ => format!("c2h read of {} bytes: {} (0x4034 = {:#x})", bytes, e, bar.rd(0x4034)),
+                })?;
             let n = unpad_in(buf, *frame);
             dma.truncate(n);
         }
@@ -306,6 +317,11 @@ pub fn execute(
 
 /// What `execute_until` returns when `stop` ended a poll: the same state of the FPGA as a poll that timed out.
 pub const NEW_SETTINGS: &str = "stopped for new settings";
+
+/// The start of the error of a C2H read that timed out (ETIMEDOUT from xdma.ko after its `c2h_timeout`): the FPGA did
+/// not deliver the play. The bytes of the read are dropped (`DmaBuf::read` leaves none); the next arm starts with the
+/// stop sequence.
+pub const DMA_TIMEOUT: &str = "c2h DMA timeout";
 
 /// `execute` whose polls end early with `Err(NEW_SETTINGS)` when `stop()` says so (checked every 10 ms).
 #[cfg(target_os = "linux")]

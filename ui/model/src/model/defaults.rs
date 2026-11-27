@@ -164,7 +164,7 @@ impl Default for Model {
             color_grade: false,
             hdmi_lines: true,
             // samples joined as lines by default
-            dots: false,
+            dots: Dots::Off,
             layout: Layout::Default,
             studio_view: "waveform".into(),
             studio_dock: String::new(),

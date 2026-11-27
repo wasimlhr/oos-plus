@@ -1422,7 +1422,7 @@ impl Ui {
             return self.toast_saved(&p, res);
         }
         let slot = self.mask_path();
-        if let Err(e) = crate::store::write(&slot, t.as_bytes()) {
+        if let Err(e) = crate::store::write_durable(&slot, t.as_bytes()) {
             return self.toast(&format!("Save failed: {}", e));
         }
         let p = crate::store::next_name(&self.save_dir(), "mask", "txt");

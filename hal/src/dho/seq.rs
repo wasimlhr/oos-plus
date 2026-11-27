@@ -14,7 +14,7 @@ mod samples;
 mod settings;
 pub use exec::{
     acquire_batch, acquire_batch_idle, acquire_batch_on, acquire_batch_until, acquire_la, disarm, execute_bus,
-    execute_bus_on, execute_bus_until, execute_on, prearm, raw_settings, read_raw_again, NEW_SETTINGS,
+    execute_bus_on, execute_bus_until, execute_on, prearm, raw_settings, read_raw_again, DMA_TIMEOUT, NEW_SETTINGS,
 };
 #[cfg(target_os = "linux")]
 pub use exec::{execute, execute_into_until, execute_until};

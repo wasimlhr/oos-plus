@@ -1251,7 +1251,7 @@ impl Ui {
                 // it. `:SAVE:SETup` would write the slot the scope that runs the recording happens to stand at
                 self.rec_action(&format!("*SAV {}", self.files.slot));
                 let p = self.setup_path();
-                let r = crate::store::write(&p, self.setup_text_full().as_bytes());
+                let r = crate::store::write_durable(&p, self.setup_text_full().as_bytes());
                 self.toast_saved(&p, r);
             }
             // the rows below ask for the name of their file, or which file to load (ui/files.rs); the slots do not

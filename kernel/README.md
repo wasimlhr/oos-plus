@@ -9,7 +9,7 @@ Everything the kernel of OOS is built from. `build-base.sh` needs nothing outsid
 | `dts/` | device tree of the DHO800/DHO900 board |
 | `config` | the kernel configuration: only what OOS uses, with its modules (`=m`) beside `xdma` and `rtw89` |
 | `firmware/` | `regulatory.db` for the WLAN stack, built into the kernel |
-| `modules/xdma/` | Xilinx' XDMA driver, unchanged: [dma_ip_drivers](https://github.com/Xilinx/dma_ip_drivers) at `f09dce768433b2809e7aa6b9d41779265357a2b4`, `XDMA/linux-kernel` |
+| `modules/xdma/` | Xilinx' XDMA driver, unchanged: [dma_ip_drivers](https://github.com/Xilinx/dma_ip_drivers) at `f09dce768433b2809e7aa6b9d41779265357a2b4`, `XDMA/linux-kernel`. `modules/xdma-timeout.patch` is ours: a C2H stream read that timed out returns ETIMEDOUT even when part of it arrived (before, the bytes that came, so the reader asked again and the stream lost its place), and its log line is rate-limited |
 | `modules/rtw89/` | Realtek's 802.11ax driver `rtw89` of Linux 6.18.63 (`drivers/net/wireless/realtek/rtw89`, the stable tree at tag `v6.18.63`), unchanged, only the files of the RTL8851BU on USB; `Kbuild` is ours. `modules/rtw89-linux-6.12.patch` fits it to the mac80211 of 6.12 (ADR 0027) |
 | `tools/` | answers the `git log` queries of the Rockchip drivers, so the build needs no git tree |
 

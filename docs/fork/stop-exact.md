@@ -36,9 +36,16 @@ In the acquisition thread the STOP is `StopRun` in `ui/src/board/dho/hw/stop.rs`
   2026-11-20, 1 kHz square, 1 ms/div, 100 k, Normal): `:STOP;*OPC?` answered after 100 to 160 ms, and the preamble
   and the data read at once and 0.6 s later were the same record in 12 of 12 runs (main: 0 of 12); without a
   trigger (Normal, generator off) `*OPC?` answered after about 100 ms, not 3 s.
-- Arming ahead (`acq.prearm = on`, the unit's set-up) is skipped for batches the deep measurements may replay
-  (`prearm_keeps_replay`: a compressed deep record with deep measurements on), so the ring of the last batch stays for
-  the replay. Prearm's gain is at short time bases; at deep records the read takes most of the batch anyway.
+- Arming ahead (`acq.prearm`, on by default) is skipped for batches the deep measurements may replay
+  (`prearm_keeps_replay`: a compressed deep record with deep measurements on) and for every record the live read takes
+  only part of (`plan::partly_read`: a screen window or the compression), so the ring of the last batch stays for the
+  replay and the views. Prearm's gain is at short time bases; at deep records the read takes most of the batch anyway.
+- A STOP while such a partly read record is being recorded lets it finish: the wait for the batch ends at the STOP only
+  after twice the record's length and 50 ms (`plan::hold_grace_looks`), and the record is read and stays in the ring.
+  Before, the STOP cut that wait, the arm had already written the ring over the record before, and the views after the
+  STOP found nothing to read again: 50 M stopped at 50 ns/div and zoomed out showed the 7 us of the live window (issue
+  #47). **Verified on the unit** (DHO924S, 2026-11-27, 1 kHz sine, stopped at 50 ns/div, zoomed out): the whole record
+  on the screen at 10 M, 50 M and 125 M in 12 of 12 runs (main: 0 of 12).
 - No replay when the newest frame was already raw (rate-limited deep read, live compression), when the next batch was
   armed ahead anyway, or when anything else ran on the FPGA since the read (the read is only remembered for one
   pass). Then the record shown is the newest one already queued, measured as it is.

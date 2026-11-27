@@ -197,8 +197,9 @@ pub fn stat_text(ui: &Ui) -> String {
     let gpu = format!(" parts meas {:.1} analyse {:.1} pane {:.1} max {:.1} ms{}", p[0], p[1], p[2], p[3], gpu);
     let (acq, used, dropped) = crate::board::pipe::counters().read();
     let measured = crate::board::pipe::counters().measured.load(std::sync::atomic::Ordering::Relaxed);
+    let dma_timeouts = crate::board::pipe::counters().dma_timeouts.load(std::sync::atomic::Ordering::Relaxed);
     let gpu = format!(
-        "{} pipeline {} interp {:?} acquired {} used {} dropped {} measured {} compress k {}",
+        "{} pipeline {} interp {:?} acquired {} used {} dropped {} measured {} compress k {} dma timeouts {}",
         gpu,
         crate::drawpipe::status(),
         crate::sparse::interp(),
@@ -206,7 +207,8 @@ pub fn stat_text(ui: &Ui) -> String {
         used,
         dropped,
         measured,
-        crate::board::policy::compress::last_k()
+        crate::board::policy::compress::last_k(),
+        dma_timeouts
     );
     // the graphics chosen (the GPU part above only while the GPU really draws) and the monitor
     let hdmi = ui.hdmi.out.map_or(" hdmi off".to_string(), |(w, h)| format!(" hdmi {}x{} {:?}", w, h, ui.m.hdmi));

@@ -40,6 +40,8 @@ pub struct Counters {
     pub dropped: AtomicU64,
     /// frames whose cheap measurements went into the statistics (framestats.rs)
     pub measured: AtomicU64,
+    /// C2H reads of the live loop the FPGA did not finish (`hw::dmafault`)
+    pub dma_timeouts: AtomicU64,
 }
 
 /// The process's counters (the acquisition thread, the workers and the UI add to them).

@@ -40,7 +40,7 @@ a record leave out what pairs cannot give: Mean, RMS, AC RMS, Std dev, Area and 
 
 Since `fix/stop-exact` (docs/fork/stop-exact.md): STOP holds the acquisition thread, which reads the newest frame of
 its last batch raw when the record shown is of pairs; that frame becomes the record on screen, so the measurements
-belong to it. With `acq.prearm = on` such batches are not armed ahead, so the replay works there too.
+belong to it. Arming ahead (`acq.prearm`, on by default) leaves such batches out, so the replay works there too.
 
 The views after the STOP are read again from the stored record; zoomed out on a deep record that read is of pairs
 again. It is drawn, while the raw frame of the STOP stays the record measured, so Mean, RMS, Std dev and AC RMS keep

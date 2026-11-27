@@ -107,6 +107,7 @@ impl Ui {
                     }
                 }
                 self.draw_math(cv);
+                self.draw_sample_marks(cv);
                 if i == self.la_win_of() {
                     self.draw_la(cv);
                 }

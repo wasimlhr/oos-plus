@@ -133,7 +133,8 @@ impl State {
         }
     }
 
-    /// Atomic: temp file, fsync, rename.
+    /// Atomic: temp file, fsync, rename, and the directory synced (a failure of that is an error): the state decides
+    /// what the next start boots, so a power cut right after `save` must find it.
     pub fn save(&self, path: &Path) -> std::io::Result<()> {
         if let Some(d) = path.parent() {
             std::fs::create_dir_all(d)?;
@@ -142,7 +143,7 @@ impl State {
         crate::fsutil::write_atomic(
             path,
             self.text().as_bytes(),
-            &crate::fsutil::Opts { tmp: Some(&tmp), ..Default::default() },
+            &crate::fsutil::Opts { tmp: Some(&tmp), dir_sync: crate::fsutil::DirSync::Required, ..Default::default() },
         )
     }
 }
