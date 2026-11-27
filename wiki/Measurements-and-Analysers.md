@@ -170,7 +170,7 @@ see [[SCPI and VXI-11]].
 
 ## Frequency counter
 
-**Measure > DVM / counter** (also Menu > Instruments): **Counter** on, **Count source** a channel that is on, **Count mode** Frequency, Period or Totalize, **Digits** 3 to 6. From 0.1.9 the scope counts in hardware: a reciprocal counter in the FPGA, so 6 digits hold at any frequency, from below 1 Hz to tens of MHz. More digits take longer: 0.25 s for 3, 0.5 s for 4, 1 s for 5 and 6. Over SCPI: `:COUNter:CURRent?`.
+**Measure > DVM / counter** (also Menu > Instruments): **Counter** on, **Count source** a channel that is on, **Count mode** Frequency, Period or Totalize, **Digits** 3 to 7. From 0.1.9 the scope counts in hardware: a reciprocal counter in the FPGA, so 6 digits hold at any frequency, from below 1 Hz to tens of MHz. More digits take longer: 0.25 s for 3, 0.5 s for 4, 1 s for 5, 6 and 7. Over SCPI: `:COUNter:CURRent?`.
 
 ## Panes
 

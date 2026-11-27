@@ -16,11 +16,11 @@ Part of the [SCPI reference](README.md).
 | `:BODE:STOP` | Set / Query | Hz. Range 1e-3 to 1e9. | `1.000000E+06` | Bode > Stop freq | OOS extension |
 | `:BODE:POINts` | Set / Query | Points, 5 to 200. Range 5 to 200. | `40` | Bode > Points | OOS extension |
 | `:BODE:AMPLitude` | Set / Query | Volts peak to peak. Range 0.01 to 20.0. | `1.000000E+00` | Bode > Amplitude | OOS extension. The menu steps by 10 mV up to 100 mV and by 50 mV above, and shows it in Vpp or Vrms (Amp unit); the command takes and answers Vpp. |
-| `:BODE:INPut` | Set / Query | Source; the input is `OFF`-able on the free sweep. | `CH1` | Bode > Input (ref) | OOS extension |
-| `:BODE:OUTPut` | Set / Query | Source; the input is `OFF`-able on the free sweep. | `CH2` | Bode > Output | OOS extension |
+| `:BODE:INPut` | Set / Query | Source `CHANn` or `CHn` (`CHAN1` and `CH1` are the same; the query answers `CH1`); the input is `OFF`-able on the free sweep. | `CH1` | Bode > Input (ref) | OOS extension |
+| `:BODE:OUTPut` | Set / Query | Source `CHANn` or `CHn` (the query answers `CHn`); the input is `OFF`-able on the free sweep. | `CH2` | Bode > Output | OOS extension |
 | `:BODE:SWEep:TIME` | Set / Query | Seconds. Range 1e-3 to 500.0. | `1.000000E+00` | Bode > Free sweep: time | OOS extension |
 | `:BODE:SWEep:LOG` | Set / Query | `LIN`, `LOG`. | `LOG` | Bode > log | OOS extension |
-| `:BODE:SYNC:SOURce` | Set / Query | Channel `CH1`.. | `CH4` | Bode > Sync | OOS extension |
+| `:BODE:SYNC:SOURce` | Set / Query | Channel `CHANn` or `CHn` (the query answers `CHn`) | `CH4` | Bode > Sync | OOS extension |
 | `:BODE:SYNC:EDGE` | Set / Query | `RISING`, `FALLING`. | `RISING` | Bode > Sync | OOS extension |
 | `:BODE:SYNC:LEVel` | Set / Query | Volts. Range -1e3 to 1e3. | `1.000000E+00` | Bode > Sync | OOS extension |
 | `:BODE:REFLevel` | Set / Query | DBV Range -300.0 to 300.0. | `0.000000E+00` | Bode > Ref level | OOS extension |

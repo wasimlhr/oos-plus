@@ -1303,6 +1303,148 @@
      "example": ":ACQuire:AVERages 16\n:ACQuire:AVERages?    /*The query returns 16.*/"
     },
     {
+     "header": ":ACQuire:CORes",
+     "set": ":ACQuire:CORes <value>",
+     "query": ":ACQuire:CORes?",
+     "desc": "Choose whether the offsets of the interleaved ADC cores are removed in software (matched) or the raw words are kept.",
+     "related": [
+      ":ACQuire:SRATe"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{MATCh|RAW}",
+       "MATC"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > ADC cores.",
+      "- (also `ON`, `OFF`, `1`, `0`); the query answers `MATC` or `RAW`.",
+      "- Matched takes the offsets of the interleaved ADC cores off in software; Raw leaves the words as they come.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `MATC`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:AVERages:HARDware",
+     "set": ":ACQuire:AVERages:HARDware <value>",
+     "query": ":ACQuire:AVERages:HARDware?",
+     "desc": "Let the FPGA do the averaging in Average mode where the board can.",
+     "related": [
+      ":ACQuire:TYPE",
+      ":ACQuire:AVERages"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > HW average.",
+      "- (`1`, `0`); the query answers `1` or `0`.",
+      "- In Average mode the FPGA averages where the board can, else the software does.",
+      "- Experimental, not verified on a unit.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents",
+     "set": ":ACQuire:SEGMents <n>|OFF",
+     "query": ":ACQuire:SEGMents?",
+     "desc": "Record a number of segments (frames) one after the other, or switch segmented recording off.",
+     "related": [
+      ":ACQuire:SEGMents:HARDware",
+      ":ACQuire:SEGMents:INTerval",
+      ":ACQuire:SEGMents:TIMes",
+      ":ACQuire:ULTRa:MAXFrame"
+     ],
+     "params": [
+      [
+       "<n>|OFF",
+       "Text",
+       "segmented recording: the segment count without the menu's steps. More than 100000 is set to 100000, `OFF` or `0` switches it off, another value is -224. Where the segments are recorded is `:ACQuire:SEGMents:HARDware`. `:ACQuire:ULTRa:MAXFrame` sets the same count to the nearest menu step.",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > Segments.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "The query answers the count, `0` when off. On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents:HARDware",
+     "set": ":ACQuire:SEGMents:HARDware <value>",
+     "query": ":ACQuire:SEGMents:HARDware?",
+     "desc": "Record the segments in the FPGA instead of the software history.",
+     "related": [
+      ":ACQuire:SEGMents"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Boolean",
+       "{ON|OFF|1|0}",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > HW segments.",
+      "- (`1`, `0`); the query answers `1` or `0`.",
+      "- Segments are recorded by the FPGA instead of the software history.",
+      "- Experimental, not verified on a unit.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents:INTerval",
+     "set": ":ACQuire:SEGMents:INTerval <value>",
+     "query": ":ACQuire:SEGMents:INTerval?",
+     "desc": "Set the pause after each hardware segment, in seconds.",
+     "related": [
+      ":ACQuire:SEGMents"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Real",
+       "Seconds, 0 to 10: the pause after each hardware segment. Not verified on a unit.",
+       "0"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Acquire > Segment interval.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `0`.",
+     "ext": true
+    },
+    {
+     "header": ":ACQuire:SEGMents:TIMes",
+     "query": ":ACQuire:SEGMents:TIMes?",
+     "desc": "Read the trigger time of each recorded hardware segment.",
+     "related": [
+      ":ACQuire:SEGMents",
+      ":ACQuire:SEGMents:HARDware"
+     ],
+     "remarks": [
+      "- Comma-separated seconds: the trigger time of each recorded hardware segment since the first one, `9.9E37` for a segment without a time stamp; empty before segments are recorded.",
+      "- Not verified on a unit.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
      "header": ":ACQuire:ULTRa:MAXFrame",
      "set": ":ACQuire:ULTRa:MAXFrame <value>",
      "query": ":ACQuire:ULTRa:MAXFrame?",
@@ -8286,7 +8428,7 @@
       [
        "<value>",
        "Text",
-       "Chip-select role; optional roles accept `NONE`. Roles depend on the protocol.",
+       "The third role (chip select for SPI); optional roles accept `NONE`. Roles depend on the protocol; for USB (low and full speed) it is **D-**: D+ is `:DECode:SOURce`, USB has no clock role (`:DECode:SOURce2` is not used), and D- is optional (`NONE` reads D+ alone).",
        "CHAN2"
       ]
      ],
@@ -11976,7 +12118,7 @@
       [
        "<value>",
        "Text",
-       "Source; the input is `OFF`-able on the free sweep.",
+       "Source `CHANn` or `CHn` (`CHAN1` and `CH1` are the same; the query answers `CH1`); the input is `OFF`-able on the free sweep.",
        "CH1"
       ]
      ],
@@ -11995,7 +12137,7 @@
       [
        "<value>",
        "Text",
-       "Source; the input is `OFF`-able on the free sweep.",
+       "Source `CHANn` or `CHn` (the query answers `CHn`); the input is `OFF`-able on the free sweep.",
        "CH2"
       ]
      ],
@@ -12052,7 +12194,7 @@
       [
        "<value>",
        "Text",
-       "Channel `CH1`..",
+       "Channel `CHANn` or `CHn` (the query answers `CHn`)",
        "CH4"
       ]
      ],
