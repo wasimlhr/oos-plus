@@ -390,6 +390,9 @@ impl Ui {
         }
         // held while stopped, unless the screen still waits for a first record (a source started in STOP, as the
         // record path below takes it); a Clear in STOP leaves the screen empty, not the thread free to arm
+        if !running && self.seen.running {
+            self.src.hw_deep_want(&self.m);
+        }
         let final_done = self.src.hw_hold(!running && (self.last[0].is_some() || self.cleared), self.stop.final_req);
         // the protocol watch and XY read every record: no live compression for them (compress.rs)
         self.src.hw_needs_raw(self.needs_raw());

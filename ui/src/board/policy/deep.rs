@@ -20,6 +20,9 @@ pub const MAX_BYTES: usize = 24 << 20;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Want {
     pub every: bool,
+    /// a decoder wants the samples (a decoder reads a stretch of the record, not one value): a screen window above
+    /// `MAX_BYTES` is read as the window of `MAX_BYTES` around its centre, not left on pairs
+    pub wide: bool,
 }
 
 /// Least time between two raw deep reads of `bytes`: `PERIOD` per `PERIOD_BYTES`, at least `PERIOD`.

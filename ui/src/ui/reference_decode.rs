@@ -10,9 +10,16 @@ const BACKGROUND_POINTS: usize = 262_144;
 const MAX_POINTS: usize = 32_000_000;
 const MAX_PACKETS: usize = 250_000;
 pub(super) const COMPUTING: &str = "Decode computing";
-/// What a decoder says of a record above 1 M points that is only read as min/max pairs (Run, or a STOP that could not
-/// read the record raw): the pairs carry no bit timing.
+/// What a decoder says of a record above 1 M points that is only read as min/max pairs: the pairs carry no bit timing.
+/// While running; a stopped record says `DEEP_STOP_OFF` or `DEEP_STOP_LOST` (`deep_pairs_message`).
 pub(super) const DEEP_PAIRS: &str = "Deep record is read compressed: stop it, or use at most 1M points";
+/// The stopped record is on pairs because raw reads of deep records are switched off (`meas.deep_raw = off`).
+pub(super) const DEEP_STOP_OFF: &str =
+    "Stopped deep record is on min/max pairs: raw reads are off (meas.deep_raw), or use at most 1M points";
+/// The stopped record is on pairs although raw reads are on: the raw read at STOP did not come (the LA records, a
+/// segment or history record, a record loaded from a file, or the read failed).
+pub(super) const DEEP_STOP_LOST: &str =
+    "Stopped deep record could not be read raw: press RUN and STOP again, or use at most 1M points";
 
 /// "Record too long for the decoder: N samples, limit M", for the record of `n` samples. The text of a count is made
 /// once and kept (an error is a `&'static str`): a handful of records is all that is ever asked.
@@ -292,7 +299,11 @@ impl Ui {
                 let r = candidate.or(self.last[0].as_ref()).ok_or("Live decoder source has no record")?;
                 // the live record's own samples: after a STOP the whole record the stop read (`memory_raw`), not the
                 // view read again from it
-                let own = if candidate.is_some() { native_of(r, c) } else { self.memory_raw().filter(|raw| !raw.frame.envelope && raw.frame.ch[c].len() >= 2) };
+                let own = if candidate.is_some() {
+                    native_of(r, c)
+                } else {
+                    self.memory_raw().filter(|raw| !raw.frame.envelope && raw.frame.ch[c].len() >= 2)
+                };
                 if let Some(raw) = own {
                     if !raw.frame.dt.is_finite() || raw.frame.dt <= 0.0 || !raw.t0.is_finite() {
                         return Err("Invalid decoder record");
@@ -351,7 +362,12 @@ impl Ui {
             Err(COMPUTING) if self.m.run == RunState::Run => {
                 let prefix = format!("{:?}|{}|", m.dec_cfg(), self.workflow_epoch);
                 let cache = self.azr.reference_decode.borrow();
-                cache.entries.iter().rev().find(|e| e.key.starts_with(&prefix)).map_or(Err(COMPUTING), |e| e.packets.clone())
+                cache
+                    .entries
+                    .iter()
+                    .rev()
+                    .find(|e| e.key.starts_with(&prefix))
+                    .map_or(Err(COMPUTING), |e| e.packets.clone())
             }
             other => other,
         }
@@ -974,7 +990,12 @@ mod tests {
         // only pairs of a deep record
         let pairs = Arc::new(crate::board::Frame { envelope: true, ..(*frame).clone() });
         ui.last[0] = Some(record(true, pairs));
+        ui.m.run = RunState::Run;
         assert_eq!(ui.decode_packets_of(&ui.m).unwrap_err(), DEEP_PAIRS);
+        // stopped: not "stop it"
+        ui.m.run = RunState::Stop;
+        assert_eq!(ui.decode_packets_of(&ui.m).unwrap_err(), DEEP_STOP_LOST);
+        ui.m.run = RunState::Run;
         // above the limit of the decoder
         let big = vec![0.0f32; MAX_POINTS + 1];
         let wave = BorrowedWave { source: 0, v: &big, dt: 1e-9, t0: 0.0, pairs: false };

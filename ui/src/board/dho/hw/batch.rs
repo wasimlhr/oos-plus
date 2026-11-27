@@ -293,7 +293,7 @@ impl BatchRun {
         let deep_want = lock(out).deep_raw;
         let now_deep = clock.now_us();
         let deep = deep_want.filter(|_| count > 0).and_then(|w| {
-            deep_raw_settings(b, &p)
+            deep_raw_settings(b, &p, w.wide)
                 .filter(|ds| crate::board::policy::deep::due(w, self.deep_last, now_deep, seq::frame_bytes(ds, &p)))
         });
         let raw_frame = match deep {

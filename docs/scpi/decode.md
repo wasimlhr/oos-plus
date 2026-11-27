@@ -87,7 +87,7 @@ Part of the [SCPI reference](README.md).
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes | What it does | See also |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| `:DECode:DIAGnosis` | Query | Why the selected decoder decoded nothing, or mostly errors, in short sentences one a line, each naming the setting to change ("sample rate 15.6 kSa/s is too low for 1.00 Mb/s: ...", "all 21 words fail their check, but the inverted line decodes with 0 errors in 21: ... set Polarity to Auto or Inverted ...", a threshold outside the signal, a flat line, a record shorter than 20 bit times, a bit rate the edges do not show). A record the decoder cannot read says why in one line (the limit of a deep record, a source that is off). Empty when the decode is fine; `BUSY` while decoding. | empty | Events pane, when it is empty | OOS extension | Says why a decoder shows nothing or errors: the cause and the setting to change, so a bus is not left undecoded without a reason. | `:DECode:DIAGnosis:FIGures`, `:BUS<n>:DIAGnosis`, `:DECode:POLarity`, `:DECode:EVENts` |
+| `:DECode:DIAGnosis` | Query | Why the selected decoder decoded nothing, or mostly errors, in short sentences one a line, each naming the setting to change ("sample rate 15.6 kSa/s is too low for 1.00 Mb/s: ...", "all 21 words fail their check, but the inverted line decodes with 0 errors in 21: ... set Polarity to Auto or Inverted ...", a threshold outside the signal, a flat line, a record shorter than 20 bit times, a bit rate the edges do not show). A record the decoder cannot read says why in one line (the limit of a deep record, a source that is off). A record above 1 M points is read as min/max pairs while the scope runs and says "stop it"; stopped (or after SINGLE) the raw window of the record's screen, every channel that is on, is read once and decoded; a window above the budget of one read (24 MiB) is read as its largest part around the centre (about 6 M points with two channels on). When that read is missing the text says so ("Stopped deep record could not be read raw: press RUN and STOP again") or that raw reads are off (`meas.deep_raw`). Empty when the decode is fine; `BUSY` while decoding. | empty | Events pane, when it is empty | OOS extension | Says why a decoder shows nothing or errors: the cause and the setting to change, so a bus is not left undecoded without a reason. | `:DECode:DIAGnosis:FIGures`, `:BUS<n>:DIAGnosis`, `:DECode:POLarity`, `:DECode:EVENts` |
 | `:DECode:DIAGnosis:FIGures` | Query | What the diagnosis measured, four numbers: the bit rate the edges of the line suggest (Hz; twice the bit rate for a Manchester line, whose edge is in the middle of a bit), the lowest and highest sample (V) and the share of decoded fields that failed their check; `NAN` where unknown. | `NAN,NAN,NAN,0.000000E+00` | - | OOS extension | The bit rate, the signal levels and the error share the diagnosis is made from. | `:DECode:DIAGnosis` |
 | `:BUS<n>:DIAGnosis` | Query | The same for decoder n (`:BUS<n>:DIAGnosis:FIGures` for its figures). | empty | Events pane, when it is empty | OOS extension | The diagnosis of decoder n: why it decoded nothing or mostly errors. | `:DECode:DIAGnosis` |
 
@@ -148,3 +148,12 @@ Plot bus lane.
 :BUS:LANE:LABel?                       -> I2C
 ```
 
+### What a stopped deep record gives each reader
+
+A record above 1 M points, stopped:
+
+- The decoder (bands, Events, `:DECode:EVENts?`) reads the raw window of the stop: its source's samples across the screen, the centre part within the budget.
+- Measurements and the cursor readout read the same window (Mean, RMS, Std dev and Area from samples).
+- `:WAVeform:DATA?` in RAW is the same window, not all of the memory; in NORMal and in the picture it is the screen record (3600 points of min/max).
+
+Running, a deep record is read as pairs: the decoder says "stop it", and the mean-type measurements keep the last raw window.
