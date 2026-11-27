@@ -373,6 +373,12 @@ impl Ui {
         (w.src == 0 && (1..=crate::math::NMATH).contains(&k)).then(|| k - 1)
     }
 
+    /// The slot that holds a copy of math channel `k`, if one does (it is not made: a query must not change the refs).
+    pub(crate) fn ref_math_held(&self, k: usize) -> Option<usize> {
+        let label = format!("M{}", k + 1);
+        self.refs.iter().position(|r| r.as_ref().is_some_and(|w| w.label == label && w.src == 0))
+    }
+
     /// Math channel `k`'s result as a reference a cursor can read: the slot that already holds a copy of it, else the
     /// first free one, filled the way Save does (`ref_save_math`). Err when the result is not ready or every slot is
     /// taken by something else.

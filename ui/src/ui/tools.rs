@@ -1214,6 +1214,15 @@ impl Ui {
         self.stat_at(idx, current)
     }
 
+    /// Whether a row of the readout measures `k` of `src` (the statistics are kept per row).
+    pub(crate) fn meas_has_row(&self, k: Meas, src: WaveId) -> bool {
+        self.m.meas.iter().any(|&(kk, id)| kk == k && id == src)
+    }
+
+    pub(crate) fn pair_has_row(&self, k: usize, a: WaveId, b: WaveId) -> bool {
+        self.m.meas2.iter().any(|&(kk, aa, bb)| kk == k && aa == a && bb == b)
+    }
+
     pub(crate) fn pair_remote_stat(&self, k: usize, a: WaveId, b: WaveId) -> (u64, f64, f64, f64, f64, f64) {
         let current = self.pair_at(k, a, b);
         let idx =
