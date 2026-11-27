@@ -275,6 +275,31 @@ fn a_measurement_can_be_added_on_a_math_channel() {
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-221,"));
 }
 
+/// `:MEASure:STATistic:ITEM? <field>,<item>,MATH1` reads the statistics of the row on the math copy (it was
+/// `-224` and 9.9E37); with no row it says so (`-221`) instead of 9.9E37.
+#[test]
+fn statistics_of_a_math_source_read_its_row_and_say_when_there_is_none() {
+    let (mut s, mut ui, cv) = session();
+    line(&mut s, &mut ui, &cv, ":CHAN1:DISP ON;:CHAN2:DISP ON");
+    ui.step(0.05);
+    line(&mut s, &mut ui, &cv, ":STOP;*CLS;:MATH1:DISP ON;:MATH1:OPER ADD;:MATH1:SOUR1 CHAN1;:MATH1:SOUR2 CHAN1");
+    line(&mut s, &mut ui, &cv, ":MEAS:CLEar;*CLS");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:STAT:ITEM? AVERages,VPP,MATH1"), "9.9E37");
+    let err = line(&mut s, &mut ui, &cv, ":SYST:ERR?");
+    assert!(err.starts_with("-221,") && err.contains(":MEASure:ITEM VPP,MATH1"), "no row: {err}");
+    line(&mut s, &mut ui, &cv, ":MEAS:ITEM VPP,MATH1;*CLS");
+    for _ in 0..3 {
+        ui.step(0.05);
+    }
+    let cur: f64 = line(&mut s, &mut ui, &cv, ":MEAS:STAT:ITEM? CURRent,VPP,MATH1").parse().unwrap();
+    assert!(cur > 0.0 && cur < 1e30, "{cur}");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"", "the row on the math copy keeps statistics");
+    // a measurement of a channel with no row is not 9.9E37 either
+    line(&mut s, &mut ui, &cv, ":MEAS:CLEar;*CLS");
+    line(&mut s, &mut ui, &cv, ":MEAS:STAT:ITEM? MAXimum,VRMS,CHAN2");
+    assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-221,"));
+}
+
 #[test]
 fn a_math_channel_is_read_and_measured() {
     let (mut s, mut ui, cv) = session();

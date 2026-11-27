@@ -1236,7 +1236,7 @@
     {
      "header": ":ACQuire:SRATe",
      "query": ":ACQuire:SRATe?",
-     "desc": "ADC/model sample rate, not a loaded reference's native rate.",
+     "desc": "ADC/model sample rate, not a loaded reference's native rate. It is the rate of the settings in force now: right after a depth or time base set it is the rate the new setting gives, not the one of the acquisition before it (explicit depth in Normal mode; with Auto depth the live record's rate unless its span differs from the screen's, then the new time base's; roll, scan, Average, Peak and segments answer the live record, which is not the model's choice).",
      "remarks": [
       "- Menu equivalent: Acquisition > Memory depth (read-out).",
       "- Origin: Rigol-compatible"
@@ -1253,14 +1253,14 @@
       [
        "<value>",
        "Text",
-       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M` (1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M; what the unit has is cut to its memory). In roll mode (Auto Roll on and 200 ms/div or slower; stock rolls from 50) the record is the stream's points of the screen whatever the depth: the depth is kept for the faster time bases and the set is answered with -221 that names the depth, the reason and the way out (`:TIMebase:ROLL OFF`, or a time base faster than 200 ms/div). A value that is none of them is -224, and the error names the depths this unit takes (`5M` is none of them).",
+       "Set `AUTO` or a supported menu depth, e.g. `1000000`, `1M` (1k, 10k, 100k, 1M, 10M, 25M, 50M, 62.5M, 100M, 125M; what the unit has is cut to its memory). In roll mode (Auto Roll on and 200 ms/div or slower; stock rolls from 50) the record is the stream's points of the screen whatever the depth: the depth is kept for the faster time bases and the set is answered with -221 that names the depth, the reason and the way out (`:TIMebase:ROLL OFF`, or a time base faster than 200 ms/div). A value that is none of them is -224, and the error names the depths this unit takes (`5M` is none of them). In roll, scan, Average, Peak and segments the query answers the live record, which has its own depth.",
        "5.000000E+05"
       ]
      ],
      "remarks": [
       "- Origin: Rigol-compatible"
      ],
-     "returns": "Query returns the numeric configured/effective acquisition depth: the depth of the record the scope works with, so a depth set while stopped, or in roll (which has its own depth), reads back only once an acquisition with it has run. On a freshly started default model the query returns `5.000000E+05`.",
+     "returns": "Query returns the numeric configured/effective acquisition depth: the depth of the record the scope works with, and a depth just set reads back at once (the depth the setting gives, with the rate `:ACQuire:SRATe?` answers), also while stopped or running. On a freshly started default model the query returns `5.000000E+05`.",
      "example": ":ACQuire:MDEPth?    /*The query returns 5.000000E+05.*/\n:ACQuire:MDEPth 1M\n:ACQuire:MDEPth?    /*The query returns 1.000000E+06.*/"
     },
     {
@@ -4238,7 +4238,7 @@
    "title": "Waveform transfer",
    "intro": [
     {
-     "p": "Read waveform points and their scaling over SCPI. `:WAVeform:SOURce` selects the source for transfer and does not select the acquisition trigger. For a channel, NORMal reads the interpolated display record and RAW the retained native memory (when stopped: the whole record of the stop, whatever part of it the view shows, as long as it holds single samples, which is up to 1 M points); a reference uses its native arrays in all three modes. NORMal is the screen record (3600 points over the screen width: 139 ns apart at 50 us/div), whatever the memory depth; for the memory itself select `RAW` (or `MAXimum` while stopped), read `:WAVeform:POINts?` and `:WAVeform:XINCrement?` for the page, and take it in pages with `:WAVeform:STARt`/`:STOP` (every page of a 100 kpt memory answers in BYTE, WORD and ASCii, running or stopped; host and unit 2026-11-23, no case stayed silent). Do not assume `:ACQuire:SRATe?` describes a reference: read its preamble."
+     "p": "Read waveform points and their scaling over SCPI. `:WAVeform:SOURce` selects the source for transfer and does not select the acquisition trigger. For a channel, NORMal reads the interpolated display record and RAW the retained native memory (when stopped: the whole record of the stop, whatever part of it the view shows, as long as it holds single samples, which is up to 1 M points; a deeper record is read for the screen through the FPGA compression and, for the mean-type measurements and RAW, as one raw window of the newest frame at STOP (`docs/fork/deep-meas.md`, at most 12 M points of one channel), so a stopped 10 M record read in RAW is that window, not all 10 M points: the whole memory is a read of the unit, not made by default); a reference uses its native arrays in all three modes. NORMal is the screen record (3600 points over the screen width: 139 ns apart at 50 us/div), whatever the memory depth; for the memory itself select `RAW` (or `MAXimum` while stopped), read `:WAVeform:POINts?` and `:WAVeform:XINCrement?` for the page, and take it in pages with `:WAVeform:STARt`/`:STOP` (every page of a 100 kpt memory answers in BYTE, WORD and ASCii, running or stopped; host and unit 2026-11-23, no case stayed silent). Do not assume `:ACQuire:SRATe?` describes a reference: read its preamble."
     },
     {
      "p": "Menu location: none (data transfer); Display and layout > Screenshot for `:DISPlay:DATA?` (see display)."
@@ -5526,7 +5526,7 @@
       [
        "<item>[,source[,source]]",
        "Text",
-       "Set: add the readout and show statistics. `CNT` counts frames for `VMAX`, `VMIN`, `VPP`, `VAVG`, `VRMS`, `ACRms` and `SDEViation`: they are measured on every acquired frame (not on frames shown as 3600 interpolated points, short time bases); of an envelope frame (above 1 M points, roll, scan) only `VMAX`, `VMIN` and `VPP` count. Every other item counts the records measured, a few a second, so its `CNT` is much smaller in the same run.",
+       "Set: add the readout and show statistics. `CNT` counts frames for `VMAX`, `VMIN`, `VPP`, `VAVG`, `VRMS`, `ACRms` and `SDEViation`: they are measured on every acquired frame (not on frames shown as 3600 interpolated points, short time bases); of an envelope frame (above 1 M points, roll, scan) only `VMAX`, `VMIN` and `VPP` count. Every other item counts the records measured, a few a second, so its `CNT` is much smaller in the same run. A `MATH<n>` source reads the row that `:MEASure:ITEM <item>,MATH<n>` (or `:MEASure:SLOT<n>`) added on the math copy, and keeps its statistics like any row; a query for a measurement with no row says `-221` with the command that adds it (`MAXimum`, `MINimum`, `AVERages` and `DEViation`; `CURRent` and `CNT` need no row), never 9.9E37.",
        "—"
       ]
      ],
