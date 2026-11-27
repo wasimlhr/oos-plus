@@ -1351,8 +1351,6 @@ impl Ui {
     }
 }
 
-/// The cursor band and its C1 / C2 tags.
-pub(super) const BAND: Rgb = rgb(0x2d, 0xd4, 0xcf);
 /// Height of the T marker and the cursor tags, drawn on the top edge of the scale (no row of their own).
 const TAG_H: i32 = 24;
 
@@ -1435,13 +1433,15 @@ impl Ui {
                 if !off_same_side && (self.stacked() || self.plot.wins.len() < 2 || lane == g) { self.studio_band(cv, lane, g, (x0, x1)); }
             }
             cv.set_clip(Rect::new(grid.x - 12, grid.y, grid.w + 24, grid.h));
+            // the tags and the band take the colour of the trace the cursors read (cursor B of a track pair: its own)
+            let tint = [self.cursor_tint(self.cursor_source()), self.cursor_tint(if self.m.cursor == CursorMode::Track { self.cursor_b_source() } else { self.cursor_source() })];
             for (k, (x, name)) in [(xs[0], "X1"), (xs[1], "X2")].into_iter().enumerate() {
                 if !(0.0..=1.0).contains(&fr[k]) { continue; }
                 let r = self.studio_tag_rect(x);
-                cv.round(r, 3, BAND, 255);
+                cv.round(r, 3, tint[k], 255);
                 cv.text_in(&f.sb, r, 1, name, DARK_TEXT);
                 if self.workspace.cursor_sel == Some(k) { cv.round_outline(Rect::new(r.x - 2, r.y - 2, r.w + 4, r.h + 4), 3, ACCENT); }
-                cv.vline(x, r.bottom(), r.bottom() + 3, BAND);
+                cv.vline(x, r.bottom(), r.bottom() + 3, tint[k]);
             }
         }
         // T: where the trigger is in the record, dashed through every lane; at an edge when it is off the screen

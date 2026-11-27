@@ -341,9 +341,11 @@ impl Ui {
         let a = self.plot.area;
         cv.set_clip(a);
         let picked = self.workspace.cursor_sel.and_then(|k| self.cursor_tags().into_iter().find(|t| t.0 == k).map(|t| t.1));
-        let tagbox = |cv: &mut Canvas, x: i32, y: i32, s: &str| {
+        let tint_a = self.cursor_tint(source);
+        let tint_b = self.cursor_tint(self.cursor_b_source());
+        let tagbox = |cv: &mut Canvas, x: i32, y: i32, s: &str, col: Rgb| {
             let r = Rect::new(x, y, f.s.width(s) + 8, 14);
-            cv.round(r, 2, CURSOR, 255);
+            cv.round(r, 2, col, 255);
             cv.text_in(&f.s, r, 1, s, DARK_TEXT);
             if picked == Some(r) { cv.round_outline(Rect::new(r.x - 2, r.y - 2, r.w + 4, r.h + 4), 3, ACCENT); }
         };
@@ -353,8 +355,8 @@ impl Ui {
                 if self.m.cursor == CursorMode::Xy {
                     for (frac, name) in [(self.m.cur_c, "Y1"), (self.m.cur_d, "Y2")] {
                         let y = a.y + (frac * a.h as f32) as i32;
-                        cv.dashed_hline(a.x, a.x + a.w - 1, y, 4, 3, CURSOR);
-                        tagbox(cv, self.right_tag_x(a, y - 16, f.s.width(name) + 8), y - 16, name);
+                        cv.dashed_hline(a.x, a.x + a.w - 1, y, 4, 3, tint_a);
+                        tagbox(cv, self.right_tag_x(a, y - 16, f.s.width(name) + 8), y - 16, name, tint_a);
                     }
                 }
                 let (ta, tb) = self.cursor_times();
@@ -364,15 +366,17 @@ impl Ui {
                         continue;
                     }
                     let x = a.x + (frac * a.w as f32) as i32;
-                    cv.dashed_vline(x, a.y, a.y + a.h - 1, 4, 3, CURSOR);
-                    tagbox(cv, x + 2, a.y + a.h - 36, name);
+                    // time is global: the line crosses every lane; it has the colour of the source it reads
+                    let col = if name == "X1" || self.m.cursor != CursorMode::Track { tint_a } else { tint_b };
+                    cv.dashed_vline(x, a.y, a.y + a.h - 1, 4, 3, col);
+                    tagbox(cv, x + 2, a.y + a.h - 36, name, col);
                     // Each tracking mark follows its own native source and lane.
                     if self.m.cursor == CursorMode::Track {
                         let id = if name == "X1" { source } else { self.cursor_b_source() };
                         if self.workspace_source_visible_here(id) {
                             if let Some(v) = self.wave_at_source(id, t) {
                                 let y = self.y_of_wave(id, v);
-                                cv.dashed_hline(x - 10, x + 10, y, 2, 2, CURSOR);
+                                cv.dashed_hline(x - 10, x + 10, y, 2, 2, col);
                             }
                         }
                     }
@@ -381,8 +385,8 @@ impl Ui {
             CursorMode::Volt => {
                 for (frac, name) in [(self.m.cur_a, "Y1"), (self.m.cur_b, "Y2")] {
                     let y = a.y + (frac * a.h as f32) as i32;
-                    cv.dashed_hline(a.x, a.x + a.w - 1, y, 4, 3, CURSOR);
-                    tagbox(cv, self.right_tag_x(a, y - 16, f.s.width(name) + 8), y - 16, name);
+                    cv.dashed_hline(a.x, a.x + a.w - 1, y, 4, 3, tint_a);
+                    tagbox(cv, self.right_tag_x(a, y - 16, f.s.width(name) + 8), y - 16, name, tint_a);
                 }
             }
         }

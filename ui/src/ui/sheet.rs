@@ -1056,7 +1056,9 @@ impl Ui {
                         continue;
                     }
                     // the lines of a decoder: a channel in its colour, as its pill in the bottom bar
-                    let wave = matches!(it, Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 | Item::DecDiff).then(|| o.strip_prefix("CH").and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=NCH).contains(n)).map(|n| CH_COLORS[n - 1])).flatten();
+                    let wave = matches!(it, Item::DecSrc | Item::DecSrc2 | Item::DecCs | Item::DecSrc4 | Item::DecDiff).then(|| o.strip_prefix("CH").and_then(|n| n.parse::<usize>().ok()).filter(|n| (1..=NCH).contains(n)).map(|n| CH_COLORS[n - 1])).flatten()
+                        // the source of the cursors: the colour of the trace it names, channel or reference slot
+                        .or_else(|| matches!(it, Item::CurSrc | Item::CurSecond | Item::CurSrcB).then(|| self.wave_ids().into_iter().find(|&id| self.wave_name(id) == *o).map(|id| self.wave_color(id))).flatten());
                     if let Some(col) = wave {
                         let (fill, edge, ink) = line_chip(col, sel == Some(k));
                         btn(cv, r, fill, edge);
@@ -1091,6 +1093,12 @@ impl Ui {
                 cv.text_in(font, Rect::new(mid.x + 10, mid.y, mid.w - 34, mid.h), 0, &v, TEXT);
                 cv.no_clip();
                 chevron_down(cv, mid.x + mid.w - 18, mid.y + mid.h / 2 - 3, DIM);
+                // the source of the cursors carries the colour of its trace
+                if matches!(it, Item::CurSrc | Item::CurSecond | Item::CurSrcB) {
+                    if let Some(id) = self.wave_ids().into_iter().find(|&id| self.wave_name(id) == v) {
+                        cv.round(Rect::new(mid.x + 3, mid.y + 6, 4, mid.h - 12), 2, self.wave_color(id), 255);
+                    }
+                }
                 if !plain {
                     btn(cv, pl, BTN, BTN_BORDER);
                     Self::draw_sign(cv, pl, true);

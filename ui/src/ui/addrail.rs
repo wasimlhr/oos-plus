@@ -959,12 +959,20 @@ impl Ui {
         let second = self.cursor_b_source();
         let (ta, tb) = self.cursor_times();
         let (unit, unit_b) = (self.cursor_source_unit(source), self.cursor_source_unit(second));
-        let boxed = |cv: &mut Canvas, x: i32, y: i32, text: &str| {
-            let w = f.s.width(text) + 10;
+        // a value box names the source it is read from, in that trace's colour
+        let boxed = |cv: &mut Canvas, x: i32, y: i32, text: &str, src: Option<WaveId>| -> i32 {
+            let chip = src.map(|id| (self.cursor_source_label(id), self.cursor_tint(id)));
+            let cw = chip.as_ref().map_or(0, |c| f.sb.width(&c.0) + 6);
+            let w = cw + f.s.width(text) + 10;
             let r = Rect::new(x.clamp(a.x + 2, (a.right() - w - 2).max(a.x + 2)), y, w, 18);
+            let edge = chip.as_ref().map_or(CURSOR, |c| c.1);
             cv.round(r, 3, BAR, 255);
-            cv.round_outline(r, 3, CURSOR);
-            cv.text_in(&f.s, r, 1, text, TEXT);
+            cv.round_outline(r, 3, edge);
+            if let Some((name, col)) = chip {
+                cv.text(&f.sb, r.x + 5, r.y + 13, &name, col);
+            }
+            cv.text(&f.s, r.x + 5 + cw, r.y + 13, text, TEXT);
+            r.right()
         };
         let mode = self.m.cursor;
         let vertical = matches!(mode, CursorMode::Time | CursorMode::Track | CursorMode::Xy);
@@ -984,20 +992,22 @@ impl Ui {
                 };
                 // the first value is on the row of the cursor's own tag (X1), so it starts right of it: under the tag
                 // a time before the trigger lost its minus sign
-                boxed(cv, x + if k == 0 { 30 } else { 3 }, a.y + 4 + k as i32 * 20, &text);
+                let own = if k == 0 { source } else { second };
+                boxed(cv, x + if k == 0 { 30 } else { 3 }, a.y + 4 + k as i32 * 20, &text, (mode == CursorMode::Track).then_some(own));
             }
         }
         // the levels of the horizontal bars
         let area = self.source_area(source).unwrap_or(self.plot.area);
         let (scale, offset) = self.cursor_source_context().map_or((1.0, 0.0), |c| (c.1, c.2));
         let mut dv: Option<f64> = None;
+        let mut level_edge = a.x + 44;
         if matches!(mode, CursorMode::Volt | CursorMode::Xy) {
             let (fa, fb) = if mode == CursorMode::Volt { (self.m.cur_a, self.m.cur_b) } else { (self.m.cur_c, self.m.cur_d) };
             let level = |fr: f32| (self.zoom_divs_at(area, fr) * scale - offset) as f64;
             let (la, lb) = (level(fa), level(fb));
             for (fr, l) in [(fa, la), (fb, lb)] {
                 let y = a.y + (fr * a.h as f32) as i32;
-                boxed(cv, a.x + 4, (y - 20).max(a.y + 2), &si(l, unit));
+                level_edge = level_edge.max(boxed(cv, a.x + 4, (y - 20).max(a.y + 2), &si(l, unit), Some(source)) + 6);
             }
             dv = Some(lb - la);
         } else if let (Some(x), Some(y)) = (va, vb) {
@@ -1015,18 +1025,24 @@ impl Ui {
             lines.push(line);
         }
         if lines.is_empty() { return; }
-        let w = lines.iter().map(|l| f.s.width(l)).max().unwrap_or(0) + 16;
+        // the first line starts with the source the cursors read, in its colour
+        let chip = self.cursor_chip_text(source);
+        let chip_w = f.sb.width(&chip) + 8;
+        let w = lines.iter().enumerate().map(|(i, l)| f.s.width(l) + if i == 0 { chip_w } else { 0 }).max().unwrap_or(0) + 16;
         let h = 8 + lines.len() as i32 * 16;
         // both time cursors outside the view: nothing to read here
         let off = |fr: f32| !(0.0..=1.0).contains(&fr);
         if vertical && off(self.m.cur_a) && off(self.m.cur_b) { return; }
         // at the top left of the lane (right of its volts labels), with the colour of its channel; with time cursors
         // under the tags and the two value boxes of the cursors (which stand in the first 44 px of the lane)
-        let r = Rect::new(a.x + 50, a.y + if vertical { 48 } else { 6 }, w + 8, h);
-        cv.round(r, 4, CURSOR, 255);
+        let r = Rect::new(if vertical { a.x + 50 } else { level_edge.max(a.x + 50) }, a.y + if vertical { 48 } else { 6 }, w + 8, h);
+        cv.round(r, 4, self.cursor_tint(source), 255);
         cv.round(r.inset(1), 3, BAR, 255);
         cv.fill(Rect::new(r.x + 3, r.y + 4, 4, r.h - 8), self.wave_color(source));
-        for (i, l) in lines.iter().enumerate() { cv.text(&f.s, r.x + 14, r.y + 16 + i as i32 * 16, l, TEXT); }
+        cv.text(&f.sb, r.x + 14, r.y + 16, &chip, self.cursor_tint(source));
+        for (i, l) in lines.iter().enumerate() {
+            cv.text(&f.s, r.x + 14 + if i == 0 { chip_w } else { 0 }, r.y + 16 + i as i32 * 16, l, TEXT);
+        }
     }
 
     /// The cursors in the overview of a zoomed view: a line at each cursor's time.
@@ -1037,12 +1053,13 @@ impl Ui {
         let tdiv = self.m.time_per_div();
         if !(tdiv > 0.0) { return; }
         let ppx = o.w as f32 / HDIV;
-        for (t, name) in [(ta, "X1"), (tb, "X2")] {
+        let (tint_a, tint_b) = (self.cursor_tint(self.cursor_source()), self.cursor_tint(self.cursor_b_source()));
+        for (t, name, col) in [(ta, "X1", tint_a), (tb, "X2", if self.m.cursor == CursorMode::Track { tint_b } else { tint_a })] {
             let x = o.x + (o.w as f32 / 2.0 + (t as f32 - self.m.delay) / tdiv * ppx) as i32;
             if x < o.x || x >= o.right() { continue; }
-            cv.dashed_vline(x, o.y, o.bottom() - 1, 4, 3, CURSOR);
+            cv.dashed_vline(x, o.y, o.bottom() - 1, 4, 3, col);
             let b = Rect::new(x + 2, o.y + 2, 24, 14);
-            cv.round(b, 2, CURSOR, 255);
+            cv.round(b, 2, col, 255);
             cv.text_in(&f.s, b, 1, name, DARK_TEXT);
         }
     }

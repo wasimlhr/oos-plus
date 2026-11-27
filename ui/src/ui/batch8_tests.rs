@@ -291,15 +291,16 @@ fn cursor_readouts_have_a_box_at_each_cursor_and_a_delta_box() {
     // the delta box is a CURSOR-coloured frame near the bottom of the lane, between the cursors
     let (ta, tb) = u.cursor_times();
     assert!(u.wave_at_source(u.cursor_source(), ta).is_some() && u.wave_at_source(u.cursor_source(), tb).is_some());
+    let tint = u.cursor_tint(u.cursor_source());
     let mut found = 0;
-    for y in a.y..a.bottom() { for x in a.x..a.right() { if px(&cv, x, y) == CURSOR { found += 1; } } }
+    for y in a.y..a.bottom() { for x in a.x..a.right() { if px(&cv, x, y) == tint { found += 1; } } }
     assert!(found > 400, "cursor lines and boxes are drawn ({found} px)");
     // in badge mode the boxes leave the graticule and the chip carries the values
     let before = found;
     u.studio.cur_badge = true;
     u.render(&mut cv);
     let mut after = 0;
-    for y in a.y..a.bottom() { for x in a.x..a.right() { if px(&cv, x, y) == CURSOR { after += 1; } } }
+    for y in a.y..a.bottom() { for x in a.x..a.right() { if px(&cv, x, y) == tint { after += 1; } } }
     assert!(after < before, "boxes gone from the graticule");
     let chip = u.studio_cursor_chip(0).expect("a badge chip").1;
     assert!(chip.contains('X') || chip.contains("t"), "{chip}");
@@ -322,17 +323,18 @@ fn cursors_show_in_the_overview_and_in_the_zoom_view() {
     let tdiv = u.m.time_per_div();
     let x_of = |t: f64| o.x + (o.w as f32 / 2.0 + (t as f32 - u.m.delay) / tdiv * (o.w as f32 / HDIV)) as i32;
     let mut seen = 0;
+    let tint = u.cursor_tint(u.cursor_source());
     for t in [ta, tb] {
         let x = x_of(t);
         if x < o.x || x >= o.right() { continue; }
-        let hits = (o.y..o.bottom()).filter(|&y| px(&cv, x, y) == CURSOR).count();
+        let hits = (o.y..o.bottom()).filter(|&y| px(&cv, x, y) == tint).count();
         if hits > 8 { seen += 1; }
     }
     assert!(seen >= 1, "overview shows a cursor line ({ta} {tb} in {o:?})");
     // and the zoom view has its own lines at the fractions
     let lane = u.plot.area;
     let zx = lane.x + (u.m.cur_a * lane.w as f32) as i32;
-    let hits = (lane.y..lane.bottom()).filter(|&y| px(&cv, zx, y) == CURSOR).count();
+    let hits = (lane.y..lane.bottom()).filter(|&y| px(&cv, zx, y) == tint).count();
     assert!(hits > 8, "zoom view shows cursor A");
     shot(&mut u, "cursors-overview-and-zoom");
 }
