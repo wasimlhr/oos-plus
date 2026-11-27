@@ -139,6 +139,14 @@ pub struct Legacy {
     pub nibbles: u32,
 }
 
+/// The polarity row of a decoder that has one (`ModuleInfo::polarity`): Normal, Inverted, and Auto, which decodes both
+/// ways and keeps the reading with fewer failed fields.
+pub const POLARITY: Opt = Opt { name: "Polarity", choices: &oos_dsp::protocols::POLARITY_NAMES, default: 0 };
+
+/// The same row without Auto, for a decoder whose checks cannot tell a swapped line (ARINC 429: the complement of
+/// an odd-parity word has odd parity too).
+pub const POLARITY_NO_AUTO: Opt = Opt { name: "Polarity", choices: &["Normal", "Inverted"], default: 0 };
+
 /// One option row of the Decode menu: a name and its choices; the setting is the index of the choice.
 pub struct Opt {
     pub name: &'static str,
@@ -500,6 +508,26 @@ pub fn demo(i: u8) -> Option<&'static Demo> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Break it catches: a module whose `ModuleInfo::polarity` slot is not a "Polarity" row of its menu, so Auto or
+    // Inverted would be chosen by another row's value
+    #[test]
+    fn the_polarity_row_is_where_the_info_says() {
+        for m in MODULES {
+            let Some((slot, _)) = m.info().polarity else {
+                assert!(
+                    m.options().iter().all(|o| o.name != "Polarity"),
+                    "{}: a Polarity row, no polarity in its info",
+                    m.name()
+                );
+                continue;
+            };
+            let o = m.options().get(slot).unwrap_or_else(|| panic!("{}: no option row {}", m.name(), slot));
+            assert_eq!(o.name, "Polarity", "{}", m.name());
+            assert_eq!(o.default, 0, "{}: Normal is the default", m.name());
+            assert_eq!(&o.choices[..2], &["Normal", "Inverted"], "{}", m.name());
+        }
+    }
 
     /// Keys are unique and safe for setup files; names are unique; option defaults are in range; every role a module
     /// names has a demo channel when the module has demo traffic.

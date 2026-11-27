@@ -30,7 +30,7 @@ fn uart_demo(words: &[u32], bits: u32, parity: Parity, baud: f64, idle: f64) -> 
 
 pub struct Uart9;
 
-const UART9_OPTIONS: [Opt; 1] = [Opt { name: "Baud", choices: &BAUD_NAMES, default: 3 }];
+const UART9_OPTIONS: [Opt; 2] = [Opt { name: "Baud", choices: &BAUD_NAMES, default: 3 }, POLARITY];
 
 impl Protocol for Uart9 {
     fn info(&self) -> &'static ModuleInfo {

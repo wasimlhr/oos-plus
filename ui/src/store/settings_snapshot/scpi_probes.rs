@@ -173,6 +173,8 @@ const SETTERS: &[(&str, &[&str])] = &[
     (":DECode:DIFFerential", ROLES),
     (":DECode:THReshold", &["1.65", "-10", "10", "100"]),
     (":DECode:CPHY:RATE", &["AUTO", "2.5e9", "0", "1e12", "1.1e12"]),
+    (":DECode:POLarity", &["NORMal", "INVerted", "AUTO", "x"]),
+    (":BUS1:POLarity", &["NORMal", "INVerted", "AUTO", "x"]),
     (":LA:STATe", BOOL),
     (":LA:DIGital1:DISPlay", BOOL),
     (":LA:POD1:THReshold", &["1.4", "-15", "15", "16"]),

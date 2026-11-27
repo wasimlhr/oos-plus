@@ -498,6 +498,7 @@ the sources (above) are written by hand.
 | `:DECode:THReshold[?]` | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. |
 | `:DECode:CPHY:RATE[?]` | `AUTO` or known symbols/second; aliases CPHY:SRATe and DECode:SRATe. |
 | `:DECode:BUSY?` | Worker readiness, without changing acquisition. |
+| `:DECode:POLarity[?]` / `:BUS<n>:POLarity[?]` | `NORMal`, `INVerted` or `AUTO`: how the decoder reads its line (1553, ARINC 429 without `AUTO`, DMX512, UART 9-bit; -224 for the others). `AUTO` keeps the reading with fewer failed fields. |
 | `:DECode:EVENts?` | Physical-time event rows, `index,time,source,text,ok` (the Index, from 1, first), `BUSY` while pending, or an error if unavailable. |
 | `:DECode:EVENts:COUNt?` | The rows of the Events pane in its view ("N packets decoded"), `BUSY` while pending. |
 

@@ -126,7 +126,7 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
     let lines = [lines[0], line(0), line(1), line(2)];
     let chans: [Option<&[f32]>; 4] = std::array::from_fn(|c| ch.get(c).copied().filter(|v| !v.is_empty()));
     let src = [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4];
-    p.info().decode(&crate::protocols::Lines {
+    let (packets, inverted) = p.info().decode_used(&crate::protocols::Lines {
         lines,
         dt,
         thr,
@@ -135,7 +135,34 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
         sh: crate::protocols::shared(m),
         chans,
         src,
-    })
+    })?;
+    if p.info().polarity_of(&m.dec_opts()) == oos_dsp::protocols::Polarity::Auto {
+        POLARITY_USED.lock().unwrap_or_else(|e| e.into_inner()).insert(polarity_key(m), inverted);
+    }
+    Ok(packets)
+}
+
+/// What Polarity Auto chose the last time each decoder setting was decoded: the decoder settings
+/// (`Model::dec_cfg`, as text) and whether the line was read inverted. Decoding runs on several threads, hence a
+/// table of its own.
+static POLARITY_USED: std::sync::Mutex<std::collections::BTreeMap<String, bool>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+fn polarity_key(m: &Model) -> String {
+    format!("{:?}", m.dec_cfg())
+}
+
+/// Whether the decoder of `m` reads its line inverted: Polarity Inverted, or Auto where the last decode of these
+/// settings found the inverted reading better. `false` for a decoder without a polarity row.
+pub fn read_inverted(m: &Model) -> bool {
+    let Proto::Module(i) = m.dec_proto;
+    match crate::protocols::get(i).info().polarity_of(&m.dec_opts()) {
+        oos_dsp::protocols::Polarity::Normal => false,
+        oos_dsp::protocols::Polarity::Inverted => true,
+        oos_dsp::protocols::Polarity::Auto => {
+            POLARITY_USED.lock().unwrap_or_else(|e| e.into_inner()).get(&polarity_key(m)).copied().unwrap_or(false)
+        }
+    }
 }
 
 /// Whether a packet satisfies the protocol trigger condition of `m` on its own. UART and SPI data take the relation,

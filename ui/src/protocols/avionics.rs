@@ -13,7 +13,9 @@ use oos_dsp::decode::Kind;
 /// The ARINC 429 bit rates (`decode::ARINC_RATES`).
 const ARATE_NAMES: [&str; 3] = ["Auto", "12.5 k", "100 k"];
 
-const ARINC_OPTIONS: [Opt; 1] = [Opt { name: "Bit rate", choices: &ARATE_NAMES, default: 0 }];
+const ARINC_OPTIONS: [Opt; 2] = [Opt { name: "Bit rate", choices: &ARATE_NAMES, default: 0 }, POLARITY_NO_AUTO];
+
+const MIL1553_OPTIONS: [Opt; 1] = [POLARITY];
 
 pub struct Arinc429;
 
@@ -110,6 +112,9 @@ fn status_bits(v: u32) -> String {
 impl Protocol for Mil1553 {
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::MIL1553
+    }
+    fn options(&self) -> &'static [Opt] {
+        &MIL1553_OPTIONS
     }
     /// A command word says its terminal, the direction, the subaddress and the number of data words ("RT 17 R SA 02
     /// WC 02"; a mode command its mode code, "MC 18"); a status word its terminal and the flags that are set ("ST 17

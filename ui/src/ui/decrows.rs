@@ -299,7 +299,8 @@ impl Ui {
             }
             let m = self.m.dec_view(k);
             let Ok(p) = self.decode_packets_of(&m) else { continue };
-            let who = format!("{} {}", self.dec_tag(k), m.dec_name());
+            let inverted = if crate::trig::read_inverted(&m) { " (inverted)" } else { "" };
+            let who = format!("{} {}{}", self.dec_tag(k), m.dec_name(), inverted);
             match m.dec_proto.module().and_then(|x| x.events(&p, &m.dec_opts())) {
                 Some(rows) => v.extend(rows.into_iter().map(|(t, text, ok)| {
                     let (hex, errors) = (String::new(), usize::from(!ok));

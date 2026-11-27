@@ -94,6 +94,8 @@ scpi $S/scpi-answers.txt :DECode:CS?
 scpi $S/scpi-answers.txt :DECode:THReshold?
 scpi $S/scpi-answers.txt :DECode:CPHY:RATE?
 scpi $S/scpi-answers.txt :DECode:BUSY?
+scpi $S/scpi-answers.txt :DECode:POLarity?
+scpi $S/scpi-answers.txt :DECode:PROTocol 1553;:DECode:POLarity INV;:DECode:POLarity?;:BUS1:POLarity?;:DECode:POLarity AUTO;:DECode:POLarity?;:DECode:PROTocol UART;:DECode:POLarity AUTO
 scpi $S/scpi-answers.txt :DECode:EVENts?
 scpi $S/scpi-answers.txt :CHANnel1:POSition?
 scpi $S/scpi-answers.txt :CHANnel1:UNITs?

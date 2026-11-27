@@ -9,7 +9,7 @@
 
 use super::{Kind, Packet, Parity, I2C_NAK_END, I2C_TEN_BIT};
 use crate::edges::{edges, states};
-use crate::protocols::{every_word_is_a_frame, BusWhat, Lines, ModuleInfo, OPTS};
+use crate::protocols::{every_word_is_a_frame, BusWhat, Lines, Mirror, ModuleInfo, OPTS};
 use crate::trigger::Slope;
 
 /// The baud rates of the Decode menu, as the options of a module choose them.
@@ -645,6 +645,7 @@ pub static UART9: ModuleInfo = ModuleInfo::new("Uart9", "UART 9-bit", "serial")
     .differential()
     .trigger(every_word_is_a_frame)
     .bit(|opt, _| 1.0 / opt_baud(opt, 0))
+    .polarity(1, Mirror::Threshold)
     .decoder(|l| Ok(uart9(l.main(), l.dt, opt_baud(&l.opt, 0), l.thr, l.hy, false)));
 
 /// 9-bit multidrop UART (start, 9 data bits LSB first, stop; the 9th bit marks an address character, as in RS-485

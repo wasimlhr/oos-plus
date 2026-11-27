@@ -290,13 +290,18 @@ fn the_i2c_lane_has_its_own_sheet_and_the_gear_opens_a_short_main_sheet() {
     }
     // a decoder of one line and no settings of its protocol: its threshold stands in the row of its source, and
     // Settings holds the name and the place of its band
-    u.m.dec_proto = crate::model::Proto::from_key("Mil1553").unwrap();
+    u.m.dec_proto = crate::model::Proto::from_key("Spdif").unwrap();
     let spec = u.sheet_spec(MenuId::Decode).unwrap();
     // (its source is switched off here: the button that turns it on is the last row, as in the menu)
     let rows = [Item::DecSel, Item::DecOn, Item::DecProto, Item::DecSrc, Item::DecThrMid, Item::SrcOn];
     assert_eq!(u.sheet_line_thr(Item::DecSrc), Some(Item::DecThr));
     assert_eq!((spec.tabs.len(), &spec.tabs[0].rows[..]), (2, &rows[..]));
     assert_eq!((spec.tabs[1].name, &spec.tabs[1].rows[..]), ("Settings", &[Item::DecLabel, Item::DecPos][..]));
+    // 1553 has one row of its own, its Polarity, which Studio offers as the menu does
+    u.m.dec_proto = crate::model::Proto::from_key("Mil1553").unwrap();
+    let spec = u.sheet_spec(MenuId::Decode).unwrap();
+    assert_eq!(spec.tabs[1].rows[..], [Item::DecOpt(0), Item::DecLabel, Item::DecPos]);
+    u.m.dec_proto = crate::model::Proto::from_key("Spdif").unwrap();
     u.open_menu(MenuId::Bus);
     let g = u.sheet_geo().unwrap();
     assert!(g.rows.iter().any(|r| r.it == Item::BusOn) && !g.rows.iter().any(|r| r.it == Item::DecProto));

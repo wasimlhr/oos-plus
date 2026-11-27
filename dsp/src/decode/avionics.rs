@@ -9,7 +9,7 @@
 
 use super::{Kind, Packet};
 use crate::edges::{edges, states};
-use crate::protocols::{BusWhat, ModuleInfo, OPTS};
+use crate::protocols::{BusWhat, Mirror, ModuleInfo, OPTS};
 use crate::trigger::Slope;
 
 /// MIL-STD-1553 on one line.
@@ -19,6 +19,7 @@ pub static MIL1553: ModuleInfo = ModuleInfo::new("Mil1553", "1553", "avionics")
     // the sync of a word goes either way
     .starts_with(0, Slope::Either)
     .bit(|_, _| 1e-6)
+    .polarity(0, Mirror::Threshold)
     .decoder(|l| Ok(mil1553(l.main(), l.dt, l.thr, l.hy)));
 
 /// Trigger > Bus > Frame: the command word a message begins with (the ui's `frame_start`). A status word and the
@@ -208,6 +209,7 @@ pub static ARINC429: ModuleInfo = ModuleInfo::new("Arinc429", "ARINC 429", "avio
     // auto: high speed (the finer sampling), with room for a low-speed word
     .bit(|opt, _| 1.0 / arinc_rate(opt).unwrap_or(ARINC_RATES[2]))
     .span(|opt, _| arinc_rate(opt).is_none().then(|| 200.0 / ARINC_RATES[1]))
+    .polarity(1, Mirror::Zero)
     .decoder(|l| Ok(arinc429(l.main(), l.dt, arinc_rate(&l.opt), l.thr, l.hy)));
 
 /// ARINC 429 bit rates of the Decode menu; 0 = from the pulse spacing.
