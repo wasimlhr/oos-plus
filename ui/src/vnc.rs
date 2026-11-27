@@ -5,15 +5,20 @@
 //! (`GET /websockify`), for the noVNC page at `/vnc` (`http.rs`).
 //!
 //! What a viewer costs the scope:
-//!   - one thread (`web-vnc`), on what the scope leaves over (`http::lower_priority`), as the PNG encoder of the live
-//!     picture; the frame loop only hands a screen over when a viewer has asked for one, at most 20 times a second;
+//!   - one thread (`web-vnc`), on the slower cores at nice 10 (`system::viewer_priority`): the comparison and the
+//!     encoding never run in the frame loop, which only hands a screen over, at most 50 times a second and only while a
+//!     viewer has asked within the last half second, so the next screen is there when its next request is;
 //!   - three screens of memory for the first viewer (the newest, the one the viewer has, a spare: 2.4 MB each at
 //!     1024x600) and one more for the second; all of it is given back when the last viewer leaves;
-//!   - only the tiles that changed are sent, as PNG (`store::png`, the encoder of the live picture) or as one colour.
+//!   - only the tiles that changed are sent: as PNG (`store::png`, the encoder of the live picture) or one colour for
+//!     noVNC, as ZRLE (tiles of 64 x 64: one colour, a palette of up to 16, or the pixels, in one zlib stream of
+//!     `png::deflate_sync` blocks) for the desktop viewers, else Raw.
 //!
 //! Protocol: RFB 3.3, 3.7 and 3.8, security type None (as the web remote: bench LAN only). Encodings: Tight with PNG
-//! (-260: fill and PNG rectangles) for a viewer that takes it and has 8 bits a colour, else Raw in the viewer's pixel
-//! format; DesktopSize (-223) when the screen changes its size. The left mouse button is a finger on the screen
+//! (-260: fill and PNG rectangles) for a viewer that takes it and has 8 bits a colour, else ZRLE (16) for 32 bits a
+//! pixel with 8 a colour, else Raw in the viewer's pixel format; DesktopSize (-223) when the screen changes its size;
+//! ContinuousUpdates (-313, with its EnableContinuousUpdates and EndOfContinuousUpdates) and Fence (-312, a request
+//! is answered with its payload). The left mouse button is a finger on the screen
 //! (`down`, `move`, `up`, `cmd.rs`), its wheel the wheel of a mouse on the scope (`wheel`), and the keys are those of
 //! a keyboard on the scope (`keysym`, `ui/pointer.rs`). The right button is the
 //! touch-hold context menu (`context`).
@@ -30,18 +35,23 @@ use std::time::{Duration, Instant};
 
 /// Viewers at once (more are answered 503).
 pub const MAX_VIEWERS: usize = 2;
-/// The fastest a screen is handed over: 20 a second.
-const MIN_GAP: Duration = Duration::from_millis(50);
-/// The time between two screens is at least this many times the last comparison and encoding.
-const DUTY: u32 = 2;
+/// The fastest a screen is handed over: 50 a second (the frame loop draws 25 to 30).
+const MIN_GAP: Duration = Duration::from_millis(20);
 /// While the screen stands still, it is looked at again only this often.
 const STILL: Duration = Duration::from_millis(200);
+/// A screen no viewer has taken is replaced by a newer one after this long (a viewer busy encoding or sending).
+const STALE: Duration = Duration::from_millis(250);
+/// Screens are handed over for this long after a viewer last wanted one, so the newest is there when its next request
+/// comes (a request to the GPU's read-back is answered two frames later, which was most of the time of an update).
+const ACTIVE: Duration = Duration::from_millis(500);
 /// Side of the squares the screen is compared in.
 const TILE: usize = 32;
 /// Most bytes of one WebSocket frame or one RFB message from a viewer (pasted text is the only long one).
 const MAX_IN: usize = 1 << 20;
 /// How long a viewer's thread sleeps at most before it looks at its connection again (the delay of a mouse event).
 const WAIT: Duration = Duration::from_millis(10);
+/// The same while screens are made for the viewer.
+const WAIT_ACTIVE: Duration = Duration::from_millis(3);
 /// A ping this often; a viewer that sent nothing for `SILENT` is gone.
 const PING: Duration = Duration::from_secs(20);
 const SILENT: Duration = Duration::from_secs(60);
@@ -76,8 +86,12 @@ pub struct Frame {
 #[derive(Default)]
 struct State {
     viewers: usize,
-    /// a viewer has asked for an update and has seen the newest screen
-    need: bool,
+    /// screens are handed over until then: a viewer has an update asked for (or was just sent one)
+    active: Option<Instant>,
+    /// a viewer has taken the newest screen (`Session::run`); until one has, the next is not made (`STALE`)
+    taken: bool,
+    /// screens in a row that were the same as the one before (the wait grows to `STILL`)
+    still: u32,
     frame: Option<Arc<Frame>>,
     seq: u64,
     /// when the last screen was handed over, and the time to wait after it
@@ -118,7 +132,12 @@ impl Vnc {
     }
 
     fn wanted(st: &State, now: Instant) -> bool {
-        st.viewers > 0 && st.need && st.at.map_or(true, |t| now.saturating_duration_since(t) >= st.gap)
+        st.viewers > 0
+            && st.active.is_some_and(|t| now < t)
+            && st.at.map_or(true, |t| {
+                let age = now.saturating_duration_since(t);
+                age >= st.gap && (st.taken || age >= STALE)
+            })
     }
 
     fn give(st: &mut State, w: usize, h: usize, px: Vec<u32>, now: Instant) {
@@ -131,7 +150,8 @@ impl Vnc {
             }
         }
         st.at = Some(now);
-        st.need = false;
+        st.gap = MIN_GAP;
+        st.taken = false;
     }
 
     fn copy(&self, st: &mut State, cv: &Canvas, now: Instant) {
@@ -248,6 +268,7 @@ impl Vnc {
             shadow: None,
             seen: 0,
             scratch: Vec::new(),
+            zlib: false,
             last_rx: now,
             last_ping: now,
             updates: 0,
@@ -419,6 +440,32 @@ impl PixFmt {
         self.bytes == 4 && self.depth == 24 && self.max == [255; 3] && self.shift.iter().all(|s| s % 8 == 0)
     }
 
+    /// ZRLE sends such a pixel as three bytes: 32 bits a pixel, 8 a colour, and the colours in three of its bytes.
+    fn cpixel(&self) -> bool {
+        let s = self.shift;
+        self.bytes == 4
+            && self.depth <= 24
+            && self.max == [255; 3]
+            && s.iter().all(|&v| matches!(v, 0 | 8 | 16))
+            && s[0] != s[1]
+            && s[0] != s[2]
+            && s[1] != s[2]
+    }
+
+    /// One pixel of the screen (XRGB8888) as ZRLE's three bytes (`cpixel`): the pixel's four bytes without the one
+    /// that holds no colour.
+    fn cput(&self, px: u32, out: &mut Vec<u8>) {
+        let c = [px >> 16 & 255, px >> 8 & 255, px & 255];
+        let mut b = [0u8; 3];
+        for i in 0..3 {
+            b[(self.shift[i] / 8) as usize] = c[i] as u8;
+        }
+        if self.big {
+            b.reverse();
+        }
+        out.extend_from_slice(&b);
+    }
+
     /// One pixel of the screen (XRGB8888) in this format.
     fn put(&self, px: u32, out: &mut Vec<u8>) {
         let c = [px >> 16 & 255, px >> 8 & 255, px & 255];
@@ -454,7 +501,12 @@ struct Rfb {
     size: (usize, usize),
     pf: PixFmt,
     tight_png: bool,
+    zrle: bool,
     desktop_size: bool,
+    /// the viewer named ContinuousUpdates, and has switched them on: its request stays open, an update goes out
+    /// whenever the screen changes (`continuous`)
+    continuous_ok: bool,
+    continuous: bool,
     /// the viewer asked for an update that it has not got yet; `full`: of the whole screen, not only what changed
     requested: bool,
     full: bool,
@@ -485,12 +537,26 @@ impl Rfb {
             size,
             pf: PixFmt::SERVER,
             tight_png: false,
+            zrle: false,
             desktop_size: false,
+            continuous_ok: false,
+            continuous: false,
             requested: false,
             full: true,
             buttons: 0,
             pos: (0, 0),
             keys: Vec::new(),
+        }
+    }
+
+    /// How this viewer is sent its rectangles: what it named, as far as its pixel format carries it.
+    fn enc(&self) -> Enc {
+        if self.tight_png && self.pf.tpixel() {
+            Enc::TightPng
+        } else if self.zrle && self.pf.cpixel() {
+            Enc::Zrle
+        } else {
+            Enc::Raw
         }
     }
 
@@ -553,7 +619,7 @@ impl Rfb {
                     self.stage = Stage::Run;
                     1
                 }
-                Stage::Run => match self.message(cmds) {
+                Stage::Run => match self.message(out, cmds) {
                     Ok(0) => break,
                     Ok(n) => n,
                     Err(()) => return false,
@@ -565,7 +631,7 @@ impl Rfb {
     }
 
     /// One message of the running protocol at the start of `inb`: its length, 0 when it is not all there yet.
-    fn message(&mut self, cmds: &mut Vec<String>) -> Result<usize, ()> {
+    fn message(&mut self, out: &mut Vec<u8>, cmds: &mut Vec<String>) -> Result<usize, ()> {
         let n = self.inb.len();
         let Some(&kind) = self.inb.first() else { return Ok(0) };
         let be16 = |b: &[u8], i: usize| u16::from_be_bytes([b[i], b[i + 1]]) as usize;
@@ -590,7 +656,14 @@ impl Rfb {
                 let has = |e: i32| {
                     self.inb[4..len].chunks_exact(4).any(|c| i32::from_be_bytes([c[0], c[1], c[2], c[3]]) == e)
                 };
-                (self.tight_png, self.desktop_size) = (has(-260), has(-223));
+                (self.tight_png, self.zrle, self.desktop_size) = (has(-260), has(16), has(-223));
+                let cont = has(-313);
+                if cont && !self.continuous_ok {
+                    // the server has them too: EndOfContinuousUpdates says so
+                    out.push(150);
+                }
+                self.continuous_ok = cont;
+                self.continuous &= cont;
                 Ok(len)
             }
             // FramebufferUpdateRequest
@@ -601,6 +674,39 @@ impl Rfb {
                 self.requested = true;
                 self.full |= self.inb[1] == 0;
                 Ok(10)
+            }
+            // EnableContinuousUpdates (the region it names is the whole screen for every viewer of today)
+            150 => {
+                if n < 10 {
+                    return Ok(0);
+                }
+                let on = self.inb[1] != 0 && self.continuous_ok;
+                if on {
+                    self.requested = true;
+                } else if self.continuous {
+                    out.push(150); // switched off: the answer is EndOfContinuousUpdates again
+                }
+                self.continuous = on;
+                Ok(10)
+            }
+            // ClientFence: answered with the same payload, its request bit cleared (we do nothing out of order)
+            248 => {
+                if n < 9 {
+                    return Ok(0);
+                }
+                let len = self.inb[8] as usize;
+                if len > 64 {
+                    return Err(());
+                }
+                if n < 9 + len {
+                    return Ok(0);
+                }
+                let flags = u32::from_be_bytes([self.inb[4], self.inb[5], self.inb[6], self.inb[7]]) & 7;
+                out.extend_from_slice(&[248, 0, 0, 0]);
+                out.extend_from_slice(&flags.to_be_bytes());
+                out.push(len as u8);
+                out.extend_from_slice(&self.inb[9..9 + len]);
+                Ok(9 + len)
             }
             // KeyEvent
             4 => {
@@ -746,16 +852,89 @@ fn compact_len(o: &mut Vec<u8>, n: usize) {
     }
 }
 
-/// A FramebufferUpdate with `rects` of `f`. `tight_png`: as fill and PNG rectangles, else Raw in the format `pf`.
-/// `resized`: the new size first (DesktopSize). `scratch`: the pixels of one rectangle, kept between calls.
+/// How the rectangles of an update are coded.
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Enc {
+    /// in the viewer's pixel format
+    Raw,
+    /// Tight with PNG: fill and PNG rectangles (noVNC)
+    TightPng,
+    /// ZRLE: tiles of 64 x 64 in one zlib stream (every desktop viewer takes it)
+    Zrle,
+}
+
+/// Side of a ZRLE tile.
+const ZTILE: usize = 64;
+
+/// One ZRLE tile of `w` x `h` pixels in `px` (rows of the screen, `stride` apart) as the viewer reads it: one colour,
+/// a palette of up to 16 colours with packed indexes, or the pixels as they are.
+fn zrle_tile(px: &[u32], stride: usize, w: usize, h: usize, pf: &PixFmt, o: &mut Vec<u8>) {
+    let rows = || (0..h).map(|y| &px[y * stride..y * stride + w]);
+    let mut pal = [0u32; 16];
+    let mut n = 0;
+    'scan: for row in rows() {
+        for &p in row {
+            let p = p & 0xff_ffff;
+            if !pal[..n].contains(&p) {
+                if n == 16 {
+                    n = 17;
+                    break 'scan;
+                }
+                pal[n] = p;
+                n += 1;
+            }
+        }
+    }
+    match n {
+        1 => {
+            o.push(1);
+            pf.cput(pal[0], o);
+        }
+        2..=16 => {
+            o.push(n as u8);
+            pal[..n].iter().for_each(|&p| pf.cput(p, o));
+            let bits = match n {
+                2 => 1,
+                3..=4 => 2,
+                _ => 4,
+            };
+            for row in rows() {
+                let (mut acc, mut left) = (0u32, 8);
+                for &p in row {
+                    let i = pal[..n].iter().position(|&c| c == p & 0xff_ffff).unwrap_or(0) as u32;
+                    left -= bits;
+                    acc |= i << left;
+                    if left == 0 {
+                        o.push(acc as u8);
+                        (acc, left) = (0, 8);
+                    }
+                }
+                if left < 8 {
+                    o.push(acc as u8); // a row ends on a whole byte
+                }
+            }
+        }
+        _ => {
+            o.push(0);
+            rows().for_each(|row| row.iter().for_each(|&p| pf.cput(p, o)));
+        }
+    }
+}
+
+/// A FramebufferUpdate with `rects` of `f`, coded as `enc` (Tight PNG and ZRLE only for a pixel format they can carry,
+/// else Raw in the format `pf`). `resized`: the new size first (DesktopSize). `scratch`: the pixels of one rectangle,
+/// kept between calls. `zlib`: the viewer's ZRLE stream has begun (its header is sent with the first rectangle).
 fn encode_update(
     f: &Frame,
     rects: &[Rect],
     pf: &PixFmt,
-    tight_png: bool,
+    enc: Enc,
     resized: bool,
     scratch: &mut Vec<u32>,
+    zlib: &mut bool,
 ) -> Vec<u8> {
+    let tight_png = enc == Enc::TightPng;
+    let zrle = enc == Enc::Zrle && pf.cpixel();
     let mut o = Vec::with_capacity(64 << 10);
     o.extend_from_slice(&[0, 0]);
     o.extend_from_slice(&((rects.len() + resized as usize) as u16).to_be_bytes());
@@ -789,6 +968,22 @@ fn encode_update(
                 continue;
             }
         }
+        if zrle {
+            let mut z = Vec::with_capacity(r.w * r.h / 4 + 64);
+            for ty in (0..r.h).step_by(ZTILE) {
+                for tx in (0..r.w).step_by(ZTILE) {
+                    let (w, h) = (ZTILE.min(r.w - tx), ZTILE.min(r.h - ty));
+                    let at = (r.y + ty) * f.w + r.x + tx;
+                    zrle_tile(&f.px[at..], f.w, w, h, pf, &mut z);
+                }
+            }
+            let mut d = if std::mem::replace(zlib, true) { Vec::new() } else { crate::gfx::png::ZLIB_HEADER.to_vec() };
+            d.extend_from_slice(&crate::gfx::png::deflate_sync(&z, ZTILE * 3));
+            head(&mut o, r, 16);
+            o.extend_from_slice(&(d.len() as u32).to_be_bytes());
+            o.extend_from_slice(&d);
+            continue;
+        }
         head(&mut o, r, 0);
         o.reserve(r.w * r.h * pf.bytes);
         rows().for_each(|row| row.iter().for_each(|&p| pf.put(p, &mut o)));
@@ -811,6 +1006,8 @@ struct Session {
     /// the newest screen looked at
     seen: u64,
     scratch: Vec<u32>,
+    /// the ZRLE stream of the viewer has begun
+    zlib: bool,
     last_rx: Instant,
     last_ping: Instant,
     updates: u64,
@@ -832,7 +1029,7 @@ impl Drop for Session {
             queue(&mut st.cmds, format!("keysym up {:x}", k));
         }
         if st.viewers == 0 {
-            (st.frame, st.spare, st.need) = (None, Vec::new(), false);
+            (st.frame, st.spare, st.active) = (None, Vec::new(), None);
         }
         if self.started {
             let ms = if self.updates > 0 { self.work.as_secs_f64() * 1e3 / self.updates as f64 } else { 0.0 };
@@ -908,6 +1105,8 @@ impl Session {
         }
         if !cmds.is_empty() {
             let mut st = self.sh.lock();
+            // a touch or a key changes the screen: it is looked at again at once, not after the wait of a still screen
+            (st.gap, st.still) = (st.gap.min(MIN_GAP), 0);
             cmds.into_iter().for_each(|c| queue(&mut st.cmds, c));
         }
         true
@@ -925,18 +1124,24 @@ impl Session {
         let rects = dirty(prev, &f);
         if rects.is_empty() {
             // the same screen: the request stays open, the next look comes later
-            self.sh.lock().gap = STILL.max(t0.elapsed() * DUTY);
+            // the next look is made a little later each time, up to STILL: the first two at once (the screen is
+            // drawn more slowly than screens are made, so one in a few is the same as the one before)
+            let mut st = self.sh.lock();
+            st.still = st.still.saturating_add(1);
+            st.gap = (MIN_GAP * (1 << st.still.saturating_sub(2).min(4))).min(STILL);
             return Ok(());
         }
-        let msg = encode_update(&f, &rects, &self.rfb.pf, self.rfb.tight_png, resized, &mut self.scratch);
+        let msg = encode_update(&f, &rects, &self.rfb.pf, self.rfb.enc(), resized, &mut self.scratch, &mut self.zlib);
         let took = t0.elapsed();
         self.send(&msg).map_err(|_| ())?;
         self.updates += 1;
         self.work += took;
-        (self.rfb.requested, self.rfb.full, self.rfb.size) = (false, false, (f.w, f.h));
+        (self.rfb.requested, self.rfb.full, self.rfb.size) = (self.rfb.continuous, false, (f.w, f.h));
         let old = self.shadow.replace(f);
         let mut st = self.sh.lock();
-        st.gap = MIN_GAP.max(took * DUTY);
+        // the viewer's next request is due: the next screen is made while it is on its way
+        st.active = Some(Instant::now() + ACTIVE);
+        st.still = 0;
         if let Some(Ok(o)) = old.map(Arc::try_unwrap) {
             if st.spare.capacity() == 0 {
                 st.spare = o.px;
@@ -946,7 +1151,7 @@ impl Session {
     }
 
     fn run(mut self, head: String) {
-        crate::system::lower_priority();
+        crate::system::viewer_priority();
         let _ = self.s.set_write_timeout(Some(SEND_TIMEOUT));
         let _ = self.s.set_nodelay(true);
         if self.s.write_all(head.as_bytes()).is_err() || self.send(Rfb::HELLO).is_err() {
@@ -988,13 +1193,21 @@ impl Session {
             if st.epoch[self.ws as usize] != self.epoch {
                 return;
             }
-            let newer = |st: &State, seen: u64| st.frame.clone().filter(|f| f.seq > seen);
-            let mut next = if self.rfb.requested { newer(&st, self.seen) } else { None };
+            let newer = |st: &mut State, seen: u64| {
+                let f = st.frame.clone().filter(|f| f.seq > seen);
+                st.taken |= f.is_some();
+                f
+            };
+            if self.rfb.requested {
+                st.active = Some(Instant::now() + ACTIVE);
+            }
+            let mut next = if self.rfb.requested { newer(&mut st, self.seen) } else { None };
             if next.is_none() {
-                st.need |= self.rfb.requested;
-                st = self.sh.wake.wait_timeout(st, WAIT).unwrap_or_else(|e| e.into_inner()).0;
+                // while screens are being made the next request is waited for in short steps
+                let wait = if st.active.is_some_and(|t| Instant::now() < t) { WAIT_ACTIVE } else { WAIT };
+                st = self.sh.wake.wait_timeout(st, wait).unwrap_or_else(|e| e.into_inner()).0;
                 if self.rfb.requested {
-                    next = newer(&st, self.seen);
+                    next = newer(&mut st, self.seen);
                 }
             }
             drop(st);
@@ -1114,7 +1327,7 @@ mod tests {
         assert!(r.feed(&[4, 1, 0, 0, 0, 0, 0, 0x41, 6, 0, 0, 0, 0, 0, 0, 2, b'h', b'i'], &mut out, &mut cmds));
         assert!(r.inb.is_empty());
         // a message this server never agreed to
-        assert!(!r.feed(&[150, 0], &mut out, &mut cmds));
+        assert!(!r.feed(&[99, 0], &mut out, &mut cmds));
         // an older viewer: 3.3 gets the security type as a word and no result
         let mut r = Rfb::new((1024, 600));
         assert!(r.feed(b"RFB 003.003\n", &mut out, &mut cmds));
@@ -1239,7 +1452,7 @@ mod tests {
         let novnc = PixFmt { bytes: 4, depth: 24, big: false, max: [255; 3], shift: [0, 8, 16] };
         let rects = [Rect { x: 0, y: 0, w: 32, h: 32 }, Rect { x: 32, y: 0, w: 32, h: 32 }];
         let mut scratch = Vec::new();
-        let m = encode_update(&f, &rects, &novnc, true, false, &mut scratch);
+        let m = encode_update(&f, &rects, &novnc, Enc::TightPng, false, &mut scratch, &mut false);
         assert_eq!(m[..4], [0, 0, 0, 2]);
         // the first holds the red pixel: PNG
         assert_eq!(m[4..16], [0, 0, 0, 0, 0, 32, 0, 32, 0xff, 0xff, 0xfe, 0xfc]);
@@ -1254,7 +1467,7 @@ mod tests {
         // the second is one colour: fill, red green blue
         assert_eq!(m[at + png.len()..], [0, 32, 0, 0, 0, 32, 0, 32, 0xff, 0xff, 0xfe, 0xfc, 0x80, 0x33, 0x66, 0x99]);
         // Raw for a viewer without Tight PNG, in its order of bytes; the new size first
-        let m = encode_update(&f, &rects[1..], &novnc, false, true, &mut scratch);
+        let m = encode_update(&f, &rects[1..], &novnc, Enc::Raw, true, &mut scratch, &mut false);
         assert_eq!(m[..4], [0, 0, 0, 2]);
         assert_eq!(m[4..16], [0, 0, 0, 0, 0, 64, 0, 32, 0xff, 0xff, 0xff, 0x21], "DesktopSize");
         assert_eq!(m[16..28], [0, 32, 0, 0, 0, 32, 0, 32, 0, 0, 0, 0]);
@@ -1279,6 +1492,226 @@ mod tests {
             compact_len(&mut o, n);
             assert_eq!(o, bytes, "{}", n);
         }
+    }
+
+    /// What a ZRLE viewer does with the rectangles of one update: inflates the stream they continue and reads the
+    /// tiles. Returns the screen it has made of them (`pf`'s pixels read back as XRGB8888).
+    fn zrle_decode(m: &[u8], w: usize, h: usize, pf: &PixFmt) -> Vec<u32> {
+        assert_eq!(m[0], 0);
+        let n = u16::from_be_bytes([m[2], m[3]]) as usize;
+        let (mut at, mut rects, mut z) = (4, Vec::new(), Vec::new());
+        for i in 0..n {
+            let b = |k: usize| u16::from_be_bytes([m[at + k], m[at + k + 1]]) as usize;
+            assert_eq!(i32::from_be_bytes([m[at + 8], m[at + 9], m[at + 10], m[at + 11]]), 16, "ZRLE");
+            rects.push(Rect { x: b(0), y: b(2), w: b(4), h: b(6) });
+            let len = u32::from_be_bytes([m[at + 12], m[at + 13], m[at + 14], m[at + 15]]) as usize;
+            let mut d = &m[at + 16..at + 16 + len];
+            if i == 0 {
+                assert_eq!(d[..2], crate::gfx::png::ZLIB_HEADER, "the stream begins with the first rectangle");
+                d = &d[2..];
+            }
+            assert_eq!(d[d.len() - 4..], [0, 0, 0xff, 0xff], "every rectangle ends in a sync flush");
+            z.extend_from_slice(d);
+            at += 16 + len;
+        }
+        assert_eq!(at, m.len());
+        // the sync flushes leave the stream open: a final empty block closes it for the inflate of the tree
+        z.extend_from_slice(&[3, 0]);
+        let (data, _) = oos_hal::update::inflate::inflate(&z, 1 << 26).expect("a valid deflate stream");
+        let cpix = |d: &[u8]| {
+            let mut b = [d[0], d[1], d[2]];
+            if pf.big {
+                b.reverse();
+            }
+            let c = |i: usize| b[(pf.shift[i] / 8) as usize] as u32;
+            c(0) << 16 | c(1) << 8 | c(2)
+        };
+        let (mut out, mut p) = (vec![0u32; w * h], 0);
+        for r in rects {
+            for ty in (0..r.h).step_by(ZTILE) {
+                for tx in (0..r.w).step_by(ZTILE) {
+                    let (tw, th) = (ZTILE.min(r.w - tx), ZTILE.min(r.h - ty));
+                    let sub = data[p] as usize;
+                    p += 1;
+                    let mut tile = vec![0u32; tw * th];
+                    match sub {
+                        0 => {
+                            for t in tile.iter_mut() {
+                                *t = cpix(&data[p..]);
+                                p += 3;
+                            }
+                        }
+                        1 => {
+                            tile.fill(cpix(&data[p..]));
+                            p += 3;
+                        }
+                        2..=16 => {
+                            let pal: Vec<u32> = (0..sub).map(|i| cpix(&data[p + 3 * i..])).collect();
+                            p += 3 * sub;
+                            let bits = [0, 0, 1, 2, 2, 4][sub.min(5)];
+                            for y in 0..th {
+                                for x in 0..tw {
+                                    let bit = x * bits;
+                                    let i = (data[p + bit / 8] >> (8 - bits - bit % 8)) as usize & ((1 << bits) - 1);
+                                    tile[y * tw + x] = pal[i];
+                                }
+                                p += (tw * bits).div_ceil(8);
+                            }
+                        }
+                        _ => panic!("subencoding {}", sub),
+                    }
+                    for y in 0..th {
+                        for x in 0..tw {
+                            out[(r.y + ty + y) * w + r.x + tx + x] = tile[y * tw + x];
+                        }
+                    }
+                }
+            }
+        }
+        assert_eq!(p, data.len(), "every byte of the stream is a tile");
+        out
+    }
+
+    /// ZRLE gives every pixel back for each kind of tile (one colour, 2, 3 to 4 and 5 to 16 colours, noise), at
+    /// the edges of the screen, in both orders of bytes, and the second update continues the stream of the first.
+    #[test]
+    fn zrle_tiles_decode_to_the_pixels() {
+        let (w, h) = (150, 140);
+        let mut f = frame(w, h, 0x00102030);
+        let mut seed = 12345u32;
+        let mut rnd = move || {
+            seed = seed.wrapping_mul(1664525).wrapping_add(1013904223);
+            seed >> 8
+        };
+        for y in 0..h {
+            for x in 0..w {
+                f.px[y * w + x] = match (x / 64, y / 64) {
+                    (0, 0) => 0x00102030,                                      // one colour
+                    (1, 0) => if x % 7 < 3 { 0x00ffffff } else { 0x00000000 }, // two
+                    (2, 0) => [0x00ff0000, 0x0000ff00, 0x000000ff][(x + y) % 3], // three
+                    (0, 1) => (rnd() % 9) * 0x00112233,                          // nine
+                    (1, 1) => rnd() & 0xff_ffff,                                 // noise: Raw
+                    _ => 0x00808080 + ((x / 5 + y / 3) as u32 % 5),              // five
+                };
+            }
+        }
+        let rects = [Rect { x: 0, y: 0, w, h }, Rect { x: 10, y: 20, w: 100, h: 70 }];
+        for pf in [
+            PixFmt { bytes: 4, depth: 24, big: false, max: [255; 3], shift: [0, 8, 16] },
+            PixFmt { bytes: 4, depth: 24, big: false, max: [255; 3], shift: [16, 8, 0] },
+            PixFmt { bytes: 4, depth: 24, big: true, max: [255; 3], shift: [16, 8, 0] },
+            PixFmt { bytes: 4, depth: 24, big: true, max: [255; 3], shift: [8, 16, 24 - 0] },
+        ] {
+            if !pf.cpixel() {
+                assert_eq!(pf.shift[2], 24, "only a pixel with a colour in its fourth byte is refused");
+                continue;
+            }
+            let mut zlib = false;
+            let m = encode_update(&f, &rects[..1], &pf, Enc::Zrle, false, &mut Vec::new(), &mut zlib);
+            assert!(zlib);
+            assert_eq!(zrle_decode(&m, w, h, &pf), f.px.iter().map(|p| p & 0xff_ffff).collect::<Vec<_>>(), "{:?}", pf);
+            assert!(m.len() < w * h * 3, "{} bytes for {} of pixels", m.len(), w * h * 4);
+        }
+        // a second update on the same stream: no header, the part changed
+        let pf = PixFmt::SERVER;
+        let mut zlib = true;
+        f.px[30 * w + 30] ^= 0x00ffffff;
+        let m = encode_update(&f, &rects[1..], &pf, Enc::Zrle, false, &mut Vec::new(), &mut zlib);
+        let n = u32::from_be_bytes([m[16], m[17], m[18], m[19]]) as usize;
+        assert_ne!(m[20..22], crate::gfx::png::ZLIB_HEADER, "the header is sent once");
+        assert_eq!(m.len(), 4 + 16 + n);
+        // a format ZRLE cannot carry (16 bits) goes Raw
+        let rgb565 = PixFmt::parse(&[16, 16, 1, 1, 0, 31, 0, 63, 0, 31, 11, 5, 0, 0, 0, 0]).unwrap();
+        assert!(!rgb565.cpixel());
+        let m = encode_update(&f, &rects[1..], &rgb565, Enc::Zrle, false, &mut Vec::new(), &mut true);
+        assert_eq!(m[12..16], [0, 0, 0, 0], "Raw");
+    }
+
+    /// Which encoding a viewer is sent: Tight PNG for noVNC, ZRLE for the desktop viewers, else Raw.
+    #[test]
+    fn the_encoding_follows_what_the_viewer_named() {
+        let mut r = Rfb::new((64, 32));
+        let (mut out, mut cmds) = (Vec::new(), Vec::new());
+        assert!(r.feed(b"RFB 003.008\n\x01\x01", &mut out, &mut cmds));
+        let enc =|r: &mut Rfb, encs: &[i32], out: &mut Vec<u8>, cmds: &mut Vec<String>| {
+            let mut m = vec![2, 0, 0, encs.len() as u8];
+            encs.iter().for_each(|e| m.extend_from_slice(&e.to_be_bytes()));
+            assert!(r.feed(&m, out, cmds));
+            r.enc()
+        };
+        assert_eq!(r.enc(), Enc::Raw, "nothing named");
+        assert_eq!(enc(&mut r, &[0], &mut out, &mut cmds), Enc::Raw);
+        // TigerVNC, RealVNC: ZRLE among others
+        assert_eq!(enc(&mut r, &[7, 16, 5, 2, 0, -223], &mut out, &mut cmds), Enc::Zrle);
+        // noVNC: both; PNG goes first
+        assert_eq!(enc(&mut r, &[-260, 16, 0], &mut out, &mut cmds), Enc::TightPng);
+        // a viewer that wants 16 bits gets what it can read
+        let rgb565 = [0, 0, 0, 0, 16, 16, 1, 1, 0, 31, 0, 63, 0, 31, 11, 5, 0, 0, 0, 0];
+        assert!(r.feed(&rgb565, &mut out, &mut cmds));
+        assert_eq!(r.enc(), Enc::Raw);
+    }
+
+    /// ContinuousUpdates and Fence as TigerVNC and noVNC use them: a viewer that names the encoding is told the server
+    /// has it, switches it on, and its request then stays open after each update; a fence is answered.
+    #[test]
+    fn continuous_updates_and_fence() {
+        let mut r = Rfb::new((64, 32));
+        let (mut out, mut cmds) = (Vec::new(), Vec::new());
+        assert!(r.feed(b"RFB 003.008\n\x01\x01", &mut out, &mut cmds));
+        out.clear();
+        // not named: switching them on is not taken
+        assert!(r.feed(&[150, 1, 0, 0, 0, 0, 0, 64, 0, 32], &mut out, &mut cmds));
+        assert!(!r.continuous && !r.requested && out.is_empty());
+        let mut m = vec![2, 0, 0, 3];
+        for e in [-313i32, -312, 0] {
+            m.extend_from_slice(&e.to_be_bytes());
+        }
+        assert!(r.feed(&m, &mut out, &mut cmds));
+        assert_eq!(std::mem::take(&mut out), [150], "EndOfContinuousUpdates: the server has them");
+        assert!(r.feed(&m, &mut out, &mut cmds) && out.is_empty(), "named again: said once");
+        assert!(r.feed(&[150, 1, 0, 0, 0, 0, 0, 64, 0, 32], &mut out, &mut cmds));
+        assert!(r.continuous && r.requested && out.is_empty());
+        assert!(r.feed(&[150, 0, 0, 0, 0, 0, 0, 64, 0, 32], &mut out, &mut cmds));
+        assert!(!r.continuous);
+        assert_eq!(std::mem::take(&mut out), [150], "switched off: EndOfContinuousUpdates again");
+        // a fence with a request bit and a payload, cut in two
+        let f = [248, 0, 0, 0, 0x80, 0, 0, 5, 3, b'a', b'b', b'c'];
+        assert!(r.feed(&f[..10], &mut out, &mut cmds) && out.is_empty());
+        assert!(r.feed(&f[10..], &mut out, &mut cmds));
+        assert_eq!(out, [248, 0, 0, 0, 0, 0, 0, 5, 3, b'a', b'b', b'c'], "the same flags, without the request bit");
+        assert!(!r.feed(&[248, 0, 0, 0, 0, 0, 0, 0, 200], &mut out, &mut cmds), "a payload no viewer sends");
+    }
+
+    /// Screens are made for a viewer that has asked, and kept coming for `ACTIVE` after its last request, one at a
+    /// time until a viewer has taken it: the next request finds a screen made while it was on its way.
+    #[test]
+    fn screens_are_made_ahead_of_the_request() {
+        let vnc = Vnc::new();
+        let mut cv = Canvas::new(8, 4);
+        let now = Instant::now();
+        {
+            let mut st = vnc.sh.lock();
+            st.viewers = 1;
+            assert!(!Vnc::wanted(&st, now), "no request yet");
+            st.active = Some(now + ACTIVE);
+            assert!(Vnc::wanted(&st, now), "a request");
+        }
+        cv.px.fill(1);
+        vnc.tick(&cv);
+        let mut st = vnc.sh.lock();
+        let t = st.at.unwrap();
+        assert!(st.frame.is_some() && !st.taken);
+        assert!(!Vnc::wanted(&st, t + MIN_GAP * 2), "the screen is not taken yet: no second");
+        assert!(Vnc::wanted(&st, t + STALE), "but one that is too old is replaced");
+        st.taken = true;
+        assert!(!Vnc::wanted(&st, t + MIN_GAP / 2), "not faster than MIN_GAP");
+        assert!(Vnc::wanted(&st, t + MIN_GAP), "taken: the next one, with no request in between");
+        assert!(!Vnc::wanted(&st, t + ACTIVE + MIN_GAP), "a viewer that stopped asking stops it");
+        st.gap = STILL;
+        assert!(!Vnc::wanted(&st, t + MIN_GAP), "a still screen is looked at less often");
+        st.active = None;
+        st.viewers = 0;
+        assert!(!Vnc::wanted(&st, t + STALE * 2));
     }
 
     /// One server message of the test's connection: the payload of the next binary frame (pings are passed over).

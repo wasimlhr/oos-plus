@@ -50,8 +50,8 @@ pub fn fifo_current_thread(priority: i32) -> io::Result<()> {
     sched_current_thread(libc::SCHED_FIFO | libc::SCHED_RESET_ON_FORK, priority, None).1
 }
 
-/// The calling thread to scheduling class `policy` at `priority`, else (with `nice`) to that nice value: its id and
-/// whether the class was taken.
+/// The calling thread to scheduling class `policy` at `priority`, else (with `nice`) to that nice value (also for
+/// `SCHED_OTHER`, whose threads differ only by it): its id and whether the class was taken.
 #[cfg(target_os = "linux")]
 fn sched_current_thread(policy: libc::c_int, priority: i32, nice: Option<i32>) -> (libc::pid_t, io::Result<()>) {
     // SAFETY: gettid takes no pointer; zero fills every field of sched_param (musl's struct has more fields) before the
@@ -63,7 +63,8 @@ fn sched_current_thread(policy: libc::c_int, priority: i32, nice: Option<i32>) -
         // the system call itself: musl's sched_setscheduler() is a stub that always fails
         let rc = libc::syscall(libc::SYS_sched_setscheduler, tid, policy, &p as *const libc::sched_param);
         let taken = status(rc as libc::c_int);
-        if let (Err(_), Some(n)) = (&taken, nice) {
+        // the class that failed, or the normal class, which has no priority of its own: the nice value
+        if let (true, Some(n)) = (taken.is_err() || policy == libc::SCHED_OTHER, nice) {
             libc::setpriority(libc::PRIO_PROCESS, tid as libc::id_t, n);
         }
         (tid, taken)
@@ -144,6 +145,17 @@ pub fn lower_priority() {
     #[cfg(target_os = "linux")]
     if !cfg!(any(test, feature = "testkit")) {
         let tid = crate::system::idle_current_thread(WEB_NICE);
+        let _ = crate::system::pin_thread(tid, &crate::placement::little_cores());
+    }
+}
+
+/// The thread of a VNC viewer: on the slower cores as the other web threads (`lower_priority`), but in the normal
+/// scheduling class at nice `WEB_NICE`. At `SCHED_IDLE` it got a core only while nothing else wanted one, and with
+/// the scope running a viewer got one or two screens a second where the scope draws 25 to 30.
+pub fn viewer_priority() {
+    #[cfg(target_os = "linux")]
+    if !cfg!(any(test, feature = "testkit")) {
+        let tid = sched_current_thread(libc::SCHED_OTHER, 0, Some(WEB_NICE)).0;
         let _ = crate::system::pin_thread(tid, &crate::placement::little_cores());
     }
 }
