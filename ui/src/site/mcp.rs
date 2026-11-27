@@ -1127,7 +1127,13 @@ fn table_rows(run: &mut Run, name: &str, offset: usize, rows: usize, extra: Vec<
                 .skip(offset)
                 .take(rows)
                 .map(|cells| {
-                    J::obj(&head.iter().zip(cells).map(|(h, c)| (h.as_str(), J::Str(c.clone()))).collect::<Vec<_>>())
+                    let mut fields: Vec<(&str, J)> =
+                        head.iter().zip(cells).map(|(h, c)| (h.as_str(), J::Str(c.clone()))).collect();
+                    // a row with an Error is not ok: the flag follows the column of the Events pane
+                    if let Some(e) = head.iter().position(|h| h == "Error") {
+                        fields.push(("ok", J::Bool(cells.get(e).is_none_or(|c| c.is_empty()))));
+                    }
+                    J::obj(&fields)
                 })
                 .collect();
             let next = offset + shown.len();
