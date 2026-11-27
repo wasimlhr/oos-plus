@@ -150,11 +150,10 @@ Plot bus lane.
 
 ### What a stopped deep record gives each reader
 
-| Reader | Stopped record above 1 M points |
-|---|---|
-| Decoder (bands, Events, `:DECode:EVENts?`) | the raw window of the stop: its source's samples across the screen, the centre part within the budget |
-| Measurement, cursor readout | the same window (Mean, RMS, Std dev, Area from samples) |
-| `:WAVeform:DATA?` in RAW | the same window, not all of the memory |
-| `:WAVeform:DATA?` in NORMal, the picture | the screen record (3600 points of min/max) |
+A record above 1 M points, stopped:
 
-Running, a deep record is read as pairs: the decoder says "stop it", measurements of the mean type read from the last raw window.
+- The decoder (bands, Events, `:DECode:EVENts?`) reads the raw window of the stop: its source's samples across the screen, the centre part within the budget.
+- Measurements and the cursor readout read the same window (Mean, RMS, Std dev and Area from samples).
+- `:WAVeform:DATA?` in RAW is the same window, not all of the memory; in NORMal and in the picture it is the screen record (3600 points of min/max).
+
+Running, a deep record is read as pairs: the decoder says "stop it", and the mean-type measurements keep the last raw window.
