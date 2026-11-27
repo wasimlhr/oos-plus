@@ -29,6 +29,7 @@ demo traffic, a view), with one line that registers it:
 | frames | what a message is on the band and in the Events pane: a frame from one start field to the next, whatever pauses it has inside; marks the module adds that are no field of the bus; and the field every message begins with, which the text of a message leaves out | `frame_start` (messages by idle time), `mark` (none), `lead` (none) |
 | columns | the Events pane where it lists the frames of one protocol and is wide enough: a column for the identifier, the data, the CRC ... in place of one text | `columns` (one text) |
 | columns of a field | the Events pane where it lists single fields: a column for each part of a field that has parts (a word of MIL-STD-1553: what it is, terminal, direction, subaddress, mode code or word count, data, status), and what failed in it in place of the number of errors | `field_columns`, `field_cells` (the field's text), `field_error` (the count) |
+| polarity | the Polarity row (Normal, Inverted, Auto) of a decoder that reads one line and whose bus can be connected the other way round: the line is mirrored for Inverted, Auto decodes both ways and keeps the reading with fewer failed fields | `info`: `polarity(slot, Mirror)` (none), and the row `protocols::POLARITY` at that place of `options` |
 | own view | Display > Second pane > Bus view: a status line and columns of rows, with a memory across records | `view` (none) |
 
 Only `info` is required, and in it the `decoder` and the `bit` time
@@ -68,6 +69,21 @@ CH3.
    demo traffic or its entry in `NO_DEMO` with the reason.
 6. **Try it** on the host: `cargo run` in `ui/` ([wiki/Building.md](../wiki/Building.md#try-it-without-a-scope)),
    Decode > Protocol, decoder on. With demo traffic the signals come up on their channels by themselves.
+
+## Polarity
+
+`ModuleInfo::polarity(slot, mirror)` says that option row `slot` is the Polarity row, and `oos_dsp::protocols`
+mirrors the main line about the threshold (`Mirror::Threshold`) or 0 V (`Mirror::Zero`, a bipolar line whose
+threshold is a magnitude) for Inverted, and for Auto reads both ways and keeps the reading with fewer failed fields (a
+tie keeps Normal; a line that gave nothing as it is and a clean reading inverted goes to the inverted one). The module
+lists `protocols::POLARITY` (or `POLARITY_NO_AUTO`) at that place of `options`
+(`ui/src/protocols/mod.rs::the_polarity_row_is_where_the_info_says`). The row is the module's last, Normal is its
+default, so a setup saved before it loads as Normal. Offered: MIL-STD-1553, ARINC 429 (no Auto: a swapped pair
+complements the 32 bits of a word and its odd parity stays odd, so no check can tell), DMX512 and UART 9-bit. Not
+offered, with the reason: UART (its Polarity row, "Inverted" in Trigger > Serial, is idle low and also the trigger's),
+Manchester (its "A one is" row is the polarity of the code, and its four rows are used), S/PDIF (biphase mark carries
+no polarity), USB (swap the D+ and D- sources), I2S, SPI, I2C, CAN, LIN, FlexRay, SENT, 1-Wire and the others (more
+than one line, or the line's levels are the protocol's own).
 
 ## Leaving decoders out
 

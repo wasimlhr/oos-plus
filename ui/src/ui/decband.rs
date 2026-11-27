@@ -471,6 +471,8 @@ impl Ui {
         } else {
             format!("{} {}", self.dec_tag(k), m.dec_name())
         };
+        // a line read inverted says so, also where Auto chose it
+        let name = if crate::trig::read_inverted(m) { format!("{name} (inverted)") } else { name };
         // in a plot it stands right of the channel markers at the left edge (Studio: of the lane badges), which are
         // drawn after the band and would cover it
         let px = a.x + if row.is_some() { 4 } else if studio { 50 } else { MARK_W + 2 };

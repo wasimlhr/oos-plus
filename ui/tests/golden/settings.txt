@@ -208,6 +208,14 @@ scpi :BUS1:MODE "SPI" -> query: SPI; errors: none
 scpi :BUS1:MODE "UART" -> query: RS232; errors: none
 scpi :BUS1:MODE "x" -> query: RS232; errors: -224,"Illegal parameter value" x
 scpi :BUS1:MODE default -> query: RS232; errors: none
+scpi :BUS1:POLarity "" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" | -224,"Illegal decoder parameter"
+scpi :BUS1:POLarity "-1" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" -1 | -224,"Illegal decoder parameter"
+scpi :BUS1:POLarity "1e9" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" 1e9 | -224,"Illegal decoder parameter"
+scpi :BUS1:POLarity "AUTO" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" AUTO | -224,"Illegal decoder parameter"
+scpi :BUS1:POLarity "INVerted" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" INVerted | -224,"Illegal decoder parameter"
+scpi :BUS1:POLarity "NORMal" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" NORMal | -224,"Illegal decoder parameter"
+scpi :BUS1:POLarity "x" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" x | -224,"Illegal decoder parameter"
+scpi :BUS1:POLarity default -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter"
 scpi :BUS1:POSition "" -> query: BOTT; errors: -224,"Illegal parameter value"
 scpi :BUS1:POSition "-1" -> query: -1.000000E+00; errors: none
 scpi :BUS1:POSition "-3.9" -> query: -3.900000E+00; errors: none
@@ -730,6 +738,14 @@ scpi :DECode:INPut "LA" -> query: WAVEFORM; errors: -224,"Illegal decoder parame
 scpi :DECode:INPut "WAVEFORM" -> query: WAVEFORM; errors: none
 scpi :DECode:INPut "x" -> query: WAVEFORM; errors: -224,"Illegal decoder parameter" x
 scpi :DECode:INPut default -> query: WAVEFORM; errors: none
+scpi :DECode:POLarity "" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" | -224,"Illegal decoder parameter"
+scpi :DECode:POLarity "-1" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" -1 | -224,"Illegal decoder parameter"
+scpi :DECode:POLarity "1e9" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" 1e9 | -224,"Illegal decoder parameter"
+scpi :DECode:POLarity "AUTO" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" AUTO | -224,"Illegal decoder parameter"
+scpi :DECode:POLarity "INVerted" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" INVerted | -224,"Illegal decoder parameter"
+scpi :DECode:POLarity "NORMal" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" NORMal | -224,"Illegal decoder parameter"
+scpi :DECode:POLarity "x" -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter" x | -224,"Illegal decoder parameter"
+scpi :DECode:POLarity default -> query: -224,"Illegal decoder parameter"; errors: -224,"Illegal decoder parameter"
 scpi :DECode:PROTocol "" -> query: UART; errors: -224,"Illegal decoder parameter"
 scpi :DECode:PROTocol "-1" -> query: UART; errors: -224,"Illegal decoder parameter" -1
 scpi :DECode:PROTocol "1e9" -> query: UART; errors: -224,"Illegal decoder parameter" 1e9

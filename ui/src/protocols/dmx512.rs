@@ -12,6 +12,9 @@ impl Protocol for Dmx512 {
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::DMX512
     }
+    fn options(&self) -> &'static [Opt] {
+        &[POLARITY]
+    }
     /// A break, the start code and eight slots, 3.3 V logic.
     fn demo(&self) -> Option<Demo> {
         let mut w = decode::gen::Wave::new(0.0, 3.3, 20e-9);

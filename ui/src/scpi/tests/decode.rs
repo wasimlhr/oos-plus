@@ -297,3 +297,29 @@ fn a_cursor_can_read_the_result_of_a_math_channel() {
     line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce MATH1");
     assert_eq!(line(&mut s, &mut ui, &cv, ":CURSor:MANual:SOURce?"), want);
 }
+
+// Break it catches: the polarity commands writing another option row, answering for a decoder that has no such row,
+// taking AUTO for ARINC 429 (a swapped pair keeps its parity: no Auto there), or changing the decoder the menu edits
+#[test]
+fn the_polarity_of_a_decoder_is_set_and_read_over_scpi() {
+    let (mut s, mut ui, cv) = session();
+    // UART has its own Polarity row (the idle level), no option row of this kind: -224
+    line(&mut s, &mut ui, &cv, ":DECode:POLarity INV");
+    assert!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?").starts_with("-224"));
+    line(&mut s, &mut ui, &cv, ":DECode:PROTocol 1553");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "NORMAL");
+    line(&mut s, &mut ui, &cv, ":DECode:POLarity INVerted");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?;:BUS1:POLarity?"), "INVERTED;INVERTED");
+    assert_eq!(ui.m.dec_opt[0], 1);
+    line(&mut s, &mut ui, &cv, ":BUS1:POLarity AUTO");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "AUTO");
+    line(&mut s, &mut ui, &cv, ":DECode:POLarity norm");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "NORMAL");
+    // ARINC 429: Normal and Inverted; its Bit rate row stays where it was
+    line(&mut s, &mut ui, &cv, ":DECode:PROTocol ARINC429;:DECode:POLarity INV");
+    assert_eq!((ui.m.dec_opt[0], ui.m.dec_opt[1]), (0, 1));
+    line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?");
+    line(&mut s, &mut ui, &cv, ":DECode:POLarity AUTO");
+    assert!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?").starts_with("-224"));
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "INVERTED");
+}

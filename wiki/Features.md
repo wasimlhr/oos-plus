@@ -53,6 +53,10 @@ in the README. How to use it: the guides listed on [[Home]].
 - In Minimal and Studio each decoder can have a name on its band (Decode > Label) and a place of its own on the plot
   (Decode > Position)
   ("Loco 5  Fwd 50/128")
+- Polarity (Decode > Polarity) for MIL-STD-1553, ARINC 429, DMX512 and UART 9-bit: a bus connected the wrong way round
+  is read inverted without inverting the channel on the screen; Auto decodes both ways and keeps the reading with
+  fewer errors, and the decoder's name says "(inverted)". UART has its own idle-level row; the other decoders do not
+  offer it (see [docs/protocol-modules.md](https://github.com/dekajoule/oos/blob/main/docs/protocol-modules.md#polarity))
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes the bit rate of each
   frame from its sync field, so a bus at a rate that Baud does not list is read. The FlexRay trigger on Frame is the

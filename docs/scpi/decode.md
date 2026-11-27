@@ -76,6 +76,13 @@ Part of the [SCPI reference](README.md).
 | `:BUS<n>:OPTion3` | Set / Query | Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. | empty | Decode and bus > Option | OOS extension |
 | `:BUS<n>:OPTion4` | Set / Query | Option of the protocol module, in the order of the menu rows; -224 when the protocol has no such option. | empty | Decode and bus > Option | OOS extension |
 
+### Polarity
+
+| Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes | What it does | See also |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `:DECode:POLarity` | Set / Query | `NORMal\|INVerted\|AUTO`: how the selected decoder reads its line. `INVerted` reads it as if its polarity were swapped, without touching the channel; `AUTO` decodes both ways and keeps the reading with fewer failed fields (a tie keeps `NORMal`). Offered by 1553, ARINC 429 (`NORMal` and `INVerted` only: a swapped pair keeps the parity of its words), DMX512 and UART 9-bit; -224 for another decoder, and for `AUTO` where it is not offered. The decoder's label says "(inverted)" while the line is read inverted. | `NORMAL` | Decode > Polarity | OOS extension | Reads a decoder's line inverted, or finds out which way is right: for a bus connected the wrong way round, where every word fails its parity, without inverting the channel on the screen. | `:BUS<n>:POLarity`, `:CHANnel<n>:INVert` |
+| `:BUS<n>:POLarity` | Set / Query | The same for decoder n; the decoder the menu edits stays the same. | `NORMAL` | Decode > Polarity | OOS extension | The polarity of decoder n: normal, inverted or automatic, so a bus wired the wrong way round decodes without inverting its channel. | `:DECode:POLarity` |
+
 ### Plot bus
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |

@@ -178,8 +178,35 @@ pub(super) fn parse_proto(arg: &str) -> Option<Proto> {
 impl Scpi {
     /// One of the four decoders. RS232 is the screen's UART. The Event table (Default) or the Events pane (Minimal,
     /// Studio) is one list for every bus.
+    /// `:BUS<n>:POLarity` and `:DECode:POLarity`: the Polarity row of decoder `k` (`NORMal`, `INVerted`, `AUTO`);
+    /// -224 for a decoder that has no such row, and for `AUTO` where its row has no Auto.
+    fn polarity_cmd(&mut self, ui: &mut Ui, k: usize, query: bool, arg: &str) -> Option<Vec<u8>> {
+        let Proto::Module(i) = ui.m.dec_slot(k).proto;
+        let module = crate::protocols::get(i);
+        let Some((slot, _)) = module.info().polarity else {
+            self.push_err(format!("-224,\"Illegal decoder parameter\" {}", arg));
+            return None;
+        };
+        if query {
+            let at = crate::protocols::opt_fit(i, ui.m.dec_slot(k).opt)[slot];
+            return t(&oos_dsp::protocols::POLARITY_NAMES[at.min(2)].to_ascii_uppercase());
+        }
+        let want = [kw(arg, "NORMal"), kw(arg, "INVerted"), kw(arg, "AUTO")].iter().position(|&x| x);
+        match want.filter(|&w| w < module.options()[slot].choices.len()) {
+            Some(w) => {
+                with_bus(ui, k, |m| m.dec_opt[slot] = w as u8);
+                ui.mark_changed();
+            }
+            None => self.push_err(format!("-224,\"Illegal parameter value\" {}", arg)),
+        }
+        None
+    }
+
     pub(super) fn bus_cmd(&mut self, ui: &mut Ui, k: usize, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
         let n0 = n.first().copied().unwrap_or("");
+        if n.len() == 1 && kw(n0, "POLarity") {
+            return self.polarity_cmd(ui, k, query, arg);
+        }
         let cfg = ui.m.dec_slot(k);
         if n.len() == 1 && kw(n0, "MODE") {
             if query {
@@ -494,6 +521,10 @@ impl Scpi {
                     None
                 }
             };
+        }
+        if kw(node, "POLarity") {
+            let k = ui.m.dec_sel;
+            return self.polarity_cmd(ui, k, query, arg);
         }
         if kw(node, "BUSY") && query {
             return text(if ui.decode_busy() { "1" } else { "0" }.into());

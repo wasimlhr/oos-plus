@@ -128,7 +128,43 @@ pub struct ModuleInfo {
     pub bit: BitTime,
     /// The record length the protocol trigger needs, when 200 bit times are not right ([`ModuleInfo::frame_span`]).
     pub span: FrameSpan,
+    /// The option row that chooses the polarity of the line ([`Polarity`]) and the level the line is mirrored about;
+    /// `None`: the decoder has no such row ([`ModuleInfo::decode_used`]).
+    pub polarity: Option<(usize, Mirror)>,
 }
+
+/// The polarity of a decoder's line: read as it is, as if swapped, or both ways with the better one kept. The index
+/// of the choice in the module's polarity row ([`POLARITY_NAMES`]).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Polarity {
+    Normal,
+    Inverted,
+    Auto,
+}
+
+/// The names of the choices of a polarity row, in the order of [`Polarity`]; a stored setting is the index.
+pub const POLARITY_NAMES: [&str; 3] = ["Normal", "Inverted", "Auto"];
+
+impl Polarity {
+    pub fn from_index(i: usize) -> Polarity {
+        match i {
+            1 => Polarity::Inverted,
+            2 => Polarity::Auto,
+            _ => Polarity::Normal,
+        }
+    }
+}
+
+/// The level a line is mirrored about when its polarity is swapped: the decision threshold (a unipolar line, or a
+/// bus that idles at the threshold) or 0 V (a bipolar line such as ARINC 429, whose threshold is a magnitude).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Mirror {
+    Threshold,
+    Zero,
+}
+
+/// The decode of a line with the polarity applied: the packets and whether the line was read inverted.
+pub type Decoded = (Vec<Packet>, bool);
 
 impl ModuleInfo {
     /// A decoder of one single-ended line, the main one ("Source").
@@ -145,7 +181,13 @@ impl ModuleInfo {
             decoder: |_| Err(NO_DECODER),
             bit: |_, _| 0.0,
             span: |_, _| None,
+            polarity: None,
         }
+    }
+
+    /// The decoder with a polarity row at option `slot`; the line is mirrored about `mirror` to read it inverted.
+    pub const fn polarity(self, slot: usize, mirror: Mirror) -> ModuleInfo {
+        ModuleInfo { polarity: Some((slot, mirror)), ..self }
     }
 
     /// The decoder with these lines.
@@ -189,9 +231,43 @@ impl ModuleInfo {
         ModuleInfo { span, ..self }
     }
 
-    /// Decodes the lines.
+    /// Decodes the lines, with the polarity of the module's polarity row where it has one.
     pub fn decode(&self, l: &Lines) -> Result<Vec<Packet>, &'static str> {
-        (self.decoder)(l)
+        self.decode_used(l).map(|d| d.0)
+    }
+
+    /// The polarity the option rows choose: `Normal` for a module without a polarity row.
+    pub fn polarity_of(&self, opt: &[usize; OPTS]) -> Polarity {
+        self.polarity.map_or(Polarity::Normal, |(slot, _)| Polarity::from_index(opt[slot]))
+    }
+
+    /// Decodes the lines and says whether the line was read inverted. Auto decodes both ways and keeps the reading
+    /// with fewer failed fields; a tie keeps Normal, except that a line that gave nothing as it is and a clean
+    /// reading inverted goes to the inverted one.
+    pub fn decode_used(&self, l: &Lines) -> Result<Decoded, &'static str> {
+        let Some((_, mirror)) = self.polarity else { return (self.decoder)(l).map(|p| (p, false)) };
+        let pol = self.polarity_of(&l.opt);
+        if pol == Polarity::Normal {
+            return (self.decoder)(l).map(|p| (p, false));
+        }
+        let inverted = {
+            let main: Vec<f32> = l.main().iter().map(|&x| mirror_of(x, l.thr, mirror)).collect();
+            let mut lines = l.lines;
+            lines[0] = Some(&main[..]);
+            (self.decoder)(&Lines { lines, ..*l }).map(|p| (p, true))
+        };
+        if pol == Polarity::Inverted {
+            return inverted;
+        }
+        let normal = (self.decoder)(l).map(|p| (p, false));
+        let (Ok(n), Ok(i)) = (&normal, &inverted) else { return normal };
+        let failed = |p: &[Packet]| p.iter().filter(|x| !x.ok).count();
+        let better = failed(&i.0) < failed(&n.0) || (n.0.is_empty() && !i.0.is_empty() && failed(&i.0) == 0);
+        if better {
+            inverted
+        } else {
+            normal
+        }
     }
 
     /// Bit time (s) with these options and shared rows: the protocol trigger samples at a twentieth of it and searches
@@ -215,6 +291,14 @@ impl ModuleInfo {
 /// The trigger rule of a decoder whose every word starts a frame (UART, SPI, a parallel bus).
 pub(crate) fn every_word_is_a_frame(what: BusWhat, _value: u32, p: &Packet) -> Option<bool> {
     (what == BusWhat::Frame && p.kind == Kind::Data).then_some(true)
+}
+
+/// `x` mirrored about the level of `mirror`.
+fn mirror_of(x: f32, thr: f32, mirror: Mirror) -> f32 {
+    match mirror {
+        Mirror::Threshold => 2.0 * thr - x,
+        Mirror::Zero => -x,
+    }
 }
 
 /// The generic rule of the protocol trigger.

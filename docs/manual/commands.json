@@ -9396,6 +9396,70 @@
    "after": []
   },
   {
+   "title": "Decoders and bus: Polarity",
+   "intro": [],
+   "commands": [
+    {
+     "header": ":DECode:POLarity",
+     "set": ":DECode:POLarity <value>",
+     "query": ":DECode:POLarity?",
+     "desc": "Reads a decoder's line inverted, or finds out which way is right: for a bus connected the wrong way round, where every word fails its parity, without inverting the channel on the screen.",
+     "related": [
+      ":BUS<n>:POLarity",
+      ":CHANnel<n>:INVert"
+     ],
+     "params": [
+      [
+       "<value>",
+       "Discrete",
+       "{NORMal|INVerted|AUTO}",
+       "NORMAL"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Decode > Polarity.",
+      "- : how the selected decoder reads its line.",
+      "- `INVerted` reads it as if its polarity were swapped, without touching the channel; `AUTO` decodes both ways and keeps the reading with fewer failed fields (a tie keeps `NORMal`).",
+      "- Offered by 1553, ARINC 429 (`NORMal` and `INVerted` only: a swapped pair keeps the parity of its words), DMX512 and UART 9-bit; -224 for another decoder, and for `AUTO` where it is not offered.",
+      "- The decoder's label says \"(inverted)\" while the line is read inverted.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `NORMAL`.",
+     "ext": true
+    },
+    {
+     "header": ":BUS<n>:POLarity",
+     "set": ":BUS<n>:POLarity <value>",
+     "query": ":BUS<n>:POLarity?",
+     "desc": "The polarity of decoder n: normal, inverted or automatic, so a bus wired the wrong way round decodes without inverting its channel.",
+     "related": [
+      ":DECode:POLarity"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:BUS1:POLarity` is `n` = 1",
+       "—"
+      ],
+      [
+       "<value>",
+       "Text",
+       "The same for decoder n; the decoder the menu edits stays the same.",
+       "NORMAL"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Decode > Polarity.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `NORMAL`.",
+     "ext": true
+    }
+   ],
+   "after": []
+  },
+  {
    "title": "Decoders and bus: Plot bus",
    "intro": [],
    "commands": [
