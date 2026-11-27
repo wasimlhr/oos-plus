@@ -303,6 +303,18 @@ fn window_below(s: &Settings, p: &hz::Params, cap: i64) -> Option<(u32, i64)> {
     Some((n as u32, lo - pre))
 }
 
+/// The largest window of fewer than `cap` points (a multiple of 8) centred on the screen's centre of the record,
+/// for a screen window that does not fit (`deep_raw_settings` with `wide`). None with the LA, or no rate.
+fn widest_window(s: &Settings, p: &hz::Params, cap: i64) -> Option<(u32, i64)> {
+    if s.la.is_some() || p.rate == 0 {
+        return None;
+    }
+    let (mem, pre) = (p.memsel as i64, p.pre as i64);
+    let n = ((cap - 1) / 8 * 8).min(mem / 8 * 8);
+    let lo = ((mem / 2 - n / 2).max(0) / 8 * 8).min(mem - n);
+    (n > 0).then_some((n as u32, lo - pre))
+}
+
 /// STOP: what of the stored record (parameters `p`, read live with the settings `b`) to read again for a view of
 /// `tdiv` per division at `delay`, and where the trigger lies in the frame that read gives (in its points, may be
 /// outside it). The view with a quarter screen on each side at every sample when that fits `LIVE_READ` points; else
@@ -341,7 +353,7 @@ pub(super) fn prearm_keeps_replay(
     p: &hz::Params,
     deep: Option<crate::board::policy::deep::Want>,
 ) -> bool {
-    !raw_newest(b, p) && (deep.is_none() || deep_raw_settings(b, p).is_none())
+    !raw_newest(b, p) && deep.is_none_or(|w| deep_raw_settings(b, p, w.wide).is_none())
 }
 
 /// The raw read at STOP (docs/fork/stop-exact.md) of the newest frame of the batch `b` with `count` frames read just
@@ -362,13 +374,15 @@ pub(super) fn final_replay(
     if raw_newest(b, p) {
         return Some(oos_hal::dho::seq::raw_settings(b));
     }
-    deep.and_then(|_| deep_raw_settings(b, p))
+    deep.and_then(|w| deep_raw_settings(b, p, w.wide))
 }
 
 /// The raw read of a deep record's screen window for the measurements (deepmeas.rs): the batch `b` read the whole
 /// record through the compression (`batch_plan`, above 1 M points), Normal acquisition, no LA; the window of
 /// `screen_window` with the record's edge allowed, at most `policy::deep::MAX_BYTES`. Settings for `seq::read_raw_again`.
-pub(super) fn deep_raw_settings(b: &Settings, p: &hz::Params) -> Option<Settings> {
+/// With `wide` (a decoder wants the samples, `policy::deep::Want`) a screen window that is too large for the budget is
+/// read as the largest window of the budget around the screen's centre, not left on pairs.
+pub(super) fn deep_raw_settings(b: &Settings, p: &hz::Params, wide: bool) -> Option<Settings> {
     if b.compress < 2
         || b.window.is_some()
         || p.memsel <= crate::board::policy::compress::MAX_DEPTH
@@ -379,6 +393,7 @@ pub(super) fn deep_raw_settings(b: &Settings, p: &hz::Params) -> Option<Settings
     let cap = (crate::board::policy::deep::MAX_BYTES / (2 * p.ratio.max(1) as usize)) as i64 + 1;
     // the whole record when the window would reach past it (`window_below` refuses a window beyond the end)
     let w = window_below(b, p, cap)
-        .or_else(|| ((p.memsel as i64) < cap && b.la.is_none()).then(|| (p.memsel, -(p.pre as i64))))?;
+        .or_else(|| ((p.memsel as i64) < cap && b.la.is_none()).then(|| (p.memsel, -(p.pre as i64))))
+        .or_else(|| wide.then(|| widest_window(b, p, cap)).flatten())?;
     Some(oos_hal::dho::seq::raw_settings(&Settings { window: Some(w), ..b.clone() }))
 }

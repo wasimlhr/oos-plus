@@ -763,6 +763,18 @@ impl Ui {
         self.decode_packets_of(&self.m).map(|packets| packets.as_ref().clone())
     }
 
+    /// Why a deep record is on pairs for a decoder: it runs (stop it), raw reads are off, or the read at STOP is missing.
+    fn deep_pairs_message(&self) -> &'static str {
+        use super::reference_decode::{DEEP_PAIRS, DEEP_STOP_LOST, DEEP_STOP_OFF};
+        if self.m.run == RunState::Run {
+            DEEP_PAIRS
+        } else if !crate::deepmeas::enabled() {
+            DEEP_STOP_OFF
+        } else {
+            DEEP_STOP_LOST
+        }
+    }
+
     /// The same for the decoder that m is the view of; cached per record and settings, up to four decoders run every frame.
     pub(super) fn decode_packets_of(
         &self,
@@ -782,7 +794,7 @@ impl Ui {
         }
         // a record above 1 M points read only as min/max pairs has no bit timing: say so, not "Nothing decoded"
         if self.memory_raw().is_some_and(|raw| crate::deepmeas::deep_pairs(&raw.frame)) {
-            return Err(super::reference_decode::DEEP_PAIRS);
+            return Err(self.deep_pairs_message());
         }
         if let Some(p) = self.decode_native(m, rec) {
             return p;

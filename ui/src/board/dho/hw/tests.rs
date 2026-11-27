@@ -7,8 +7,8 @@
 use super::decode::decode;
 use super::plan::{
     batch_plan, deep_raw_settings, edge_check, final_replay, frame0_check_wanted, frame0_left_out,
-    frame1_left_out_unseen, frame1_off_trigger, prearm_keeps_replay, stop_plan, zone_batch, zone_batch_from,
-    Edge, FRAME0_CHECK_MAX_FRAMES, FRAME0_KEEP, FRAME1_CHECK_MAX, PREARM,
+    frame1_left_out_unseen, frame1_off_trigger, prearm_keeps_replay, stop_plan, zone_batch, zone_batch_from, Edge,
+    FRAME0_CHECK_MAX_FRAMES, FRAME0_KEEP, FRAME1_CHECK_MAX, PREARM,
 };
 use super::serial::{i2c_of, serial_debug, serial_lines_acquired, spi_of, uart_debug, uart_of, SERIAL_HW};
 use super::settings::{
@@ -1035,8 +1035,8 @@ fn final_replay_at_stop() {
     let s = settings(&m, false);
     let p = hz::prep(s.mask, oos_hal::dho::seq::tdiv_fs(s.tdiv), s.depth, oos_hal::dho::seq::tdiv_fs(s.delay));
     let b = batch_plan(&s, &p);
-    let w = Some(crate::board::policy::deep::Want { every: false });
-    assert_eq!(final_replay(&b, &p, 3, false, false, w), deep_raw_settings(&b, &p));
+    let w = Some(crate::board::policy::deep::Want { every: false, wide: false });
+    assert_eq!(final_replay(&b, &p, 3, false, false, w), deep_raw_settings(&b, &p, false));
     assert!(final_replay(&b, &p, 3, false, false, w).is_some());
     assert!(final_replay(&b, &p, 3, true, false, w).is_none(), "newest frame already raw");
     assert!(final_replay(&b, &p, 3, false, true, w).is_none(), "armed ahead");
@@ -1082,7 +1082,7 @@ fn deep_raw_window_for_the_measurements() {
         let s = settings(&m, false);
         let p = hz::prep(s.mask, oos_hal::dho::seq::tdiv_fs(s.tdiv), s.depth, oos_hal::dho::seq::tdiv_fs(s.delay));
         let b = batch_plan(&s, &p);
-        (b.clone(), p, deep_raw_settings(&b, &p))
+        (b.clone(), p, deep_raw_settings(&b, &p, false))
     };
     // 10 M at 1 ms/div, CH1: the batch reads pairs, the measurement window raw: the whole record, 20 MB
     let (b, p, d) = plan(1e-3, 10_000_000, false);
@@ -1104,8 +1104,26 @@ fn deep_raw_window_for_the_measurements() {
     // the decoded frame is raw and knows its trigger point
     let f = decode(&vec![0u8; bytes], &d, &p, 1);
     assert!(!f.envelope && f.ch[0].len() == n as usize && f.pre == (p.pre - start) as usize);
-    // 2 channels at 10 M: 40 MB, beyond the budget
+    // 2 channels at 10 M: 40 MB, beyond the budget; a decoder (`wide`) gets the window of the budget around the centre
     assert!(plan(1e-3, 10_000_000, true).2.is_none());
+    {
+        let mut m = Model {
+            tscale: tscales().iter().position(|&t| (t as f64 - 1e-2).abs() < 1e-8).unwrap(),
+            mdepth: mdepths().iter().position(|d| d.1 == 10_000_000).unwrap(),
+            ..Default::default()
+        };
+        m.ch[1].on = true;
+        let s = settings(&m, false);
+        let p = hz::prep(s.mask, oos_hal::dho::seq::tdiv_fs(s.tdiv), s.depth, oos_hal::dho::seq::tdiv_fs(s.delay));
+        let b = batch_plan(&s, &p);
+        assert!(deep_raw_settings(&b, &p, false).is_none(), "100 ms of 2 channels: over the budget");
+        let d = deep_raw_settings(&b, &p, true).expect("a decoder reads the largest window of the budget");
+        let (n, start) = oos_hal::dho::seq::window(&d, &p);
+        assert!(oos_hal::dho::seq::frame_bytes(&d, &p) <= crate::board::policy::deep::MAX_BYTES);
+        assert!(n > 1_000_000 && start < p.pre && start + n > p.pre && start + n <= p.memsel, "{start} + {n}");
+        // centred on the record (within a read's rounding)
+        assert!((2 * start + n).abs_diff(p.memsel) <= 16, "{start} + {n} of {}", p.memsel);
+    }
     // 25 M at 2 ms/div: 50 MB
     assert!(plan(2e-3, 25_000_000, false).2.is_none());
     // a deep record at a short time base is read raw already (screen window), 1 M is the live path
@@ -1113,7 +1131,7 @@ fn deep_raw_window_for_the_measurements() {
     assert!(plan(1e-3, 1_000_000, false).2.is_none());
     // Peak: the memory holds peak pairs
     let (b, p, _) = plan(1e-3, 10_000_000, false);
-    assert!(deep_raw_settings(&Settings { mode: oos_hal::dho::acq::Mode::Peak, ..b }, &p).is_none());
+    assert!(deep_raw_settings(&Settings { mode: oos_hal::dho::acq::Mode::Peak, ..b }, &p, false).is_none());
 }
 
 #[test]

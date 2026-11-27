@@ -386,6 +386,14 @@ impl Source {
         true
     }
 
+    /// What the model wants of raw deep reads, handed to the thread now: the STOP's final read takes it in the same
+    /// pass as the hold, before the next record of the screen step would carry it (`acquire_hw`).
+    pub fn hw_deep_want(&self, m: &Model) {
+        if let Source::Hw { shared, .. } = self {
+            hw(shared).deep_raw = crate::deepmeas::want(m);
+        }
+    }
+
     pub fn publish_afg(&self, m: &Model) {
         if let Source::Hw { shared, .. } = self {
             let mut g = hw(shared);

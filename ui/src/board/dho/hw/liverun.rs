@@ -83,6 +83,8 @@ enum Act {
     Force,
     /// the measurements want the screen window of a deep record raw, for every batch (`Shared::deep_raw`)
     DeepRaw,
+    /// the same for a decoder (`Want::wide`): a screen window above the budget is read as the largest window of it
+    DeepRawWide,
     /// the loop busy this many microseconds before the pass (its work on the batch it read, such as decoding): the
     /// unit's clock runs on, and a batch armed ahead records
     Busy(u64),
@@ -473,6 +475,19 @@ const CASES: &[Case] = &[
         period_us: Some(1_000),
         passes: 6,
         script: &[(1, Act::DeepRaw)],
+        ..BASE
+    },
+    Case {
+        // the owner's case: two channels and a screen window of 100 ms of a 10 M record, over the 24 MiB budget of
+        // a raw read; a decoder wants the samples, so the window is clamped, not left on pairs
+        name: "auto-ch1-ch2-deep-10m-decoder-window",
+        compress: true,
+        model: |m| (ch(m, &[0, 1]), tdiv(m, 1e-2), depth(m, "10M")).0,
+        freq_hz: 1e3,
+        square: true,
+        period_us: Some(1_000),
+        passes: 6,
+        script: &[(1, Act::DeepRawWide)],
         ..BASE
     },
     Case {
@@ -1438,7 +1453,8 @@ fn run_case(case: &Case) -> Ran {
                 Act::FinalRaw => g.final_req += 1,
                 Act::StopView(t, d) => g.stop_view = Some((*t, *d)),
                 Act::Force => g.force = true,
-                Act::DeepRaw => g.deep_raw = Some(crate::board::policy::deep::Want { every: true }),
+                Act::DeepRaw => g.deep_raw = Some(crate::board::policy::deep::Want { every: true, wide: false }),
+                Act::DeepRawWide => g.deep_raw = Some(crate::board::policy::deep::Want { every: true, wide: true }),
                 Act::Busy(us) => sim.borrow_mut().pass_us(*us),
                 Act::Deposit => DEPOSIT.with(|d| d.accepting = true),
             }
@@ -1550,13 +1566,13 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
             assert!(!last.envelope, "{}: the newest frame read raw at STOP", case.name);
         }
         // live compression: the batches before the STOP came through it (frames of min/max pairs)
-        if case.compress && !case.script.iter().any(|(_, a)| matches!(a, Act::DeepRaw)) {
+        if case.compress && !case.script.iter().any(|(_, a)| matches!(a, Act::DeepRaw | Act::DeepRawWide)) {
             let before = &frames[..frames.len().saturating_sub(1)];
             assert!(before.iter().any(|f| f.envelope), "{}: no frame through the live compression", case.name);
         }
         // the deep measurements: the record read compressed, then its screen window raw, every sample of more than
         // the deepest compressed record
-        if asked(|a| matches!(a, Act::DeepRaw)) > 0 {
+        if asked(|a| matches!(a, Act::DeepRaw | Act::DeepRawWide)) > 0 {
             let raw = frames
                 .iter()
                 .filter(|f| !f.envelope && f.ch[0].len() > crate::board::policy::compress::MAX_DEPTH as usize);
@@ -1569,6 +1585,12 @@ fn the_acquisition_loop_runs_the_matrix_on_the_simulated_unit() {
             plays.sort_unstable();
             plays.dedup();
             assert!(plays.len() >= 2, "{}: the compressed read and the raw window: {:?}", case.name, plays);
+            // a window of a decoder carries every channel that is on, within the budget of one read
+            if asked(|a| matches!(a, Act::DeepRawWide)) > 0 {
+                let f = frames.iter().find(|f| !f.envelope && f.ch[0].len() > 1_000_000).unwrap();
+                assert!(!f.ch[1].is_empty(), "{}: CH2 is in the raw window", case.name);
+                assert!(f.ch[0].len() * 4 <= crate::board::policy::deep::MAX_BYTES, "{}: over the budget", case.name);
+            }
         }
         // the calibration reaches the configuration: the same case without it writes other values
         if case.cal {

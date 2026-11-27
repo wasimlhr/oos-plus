@@ -35,7 +35,18 @@ const OFF: crate::sysconf::Flag = crate::sysconf::Flag { key: "meas.deep_raw", e
 pub fn want(m: &Model) -> Option<Want> {
     let needs = m.meas.iter().any(|&(k, s)| s.ch().is_some_and(|c| m.ch[c].on) && crate::framestats::needs_samples(k))
         || (m.dvm_on && m.ch[m.dvm_src].on);
-    (enabled() && needs && m.acq == AcqMode::Normal).then_some(Want { every: m.trig_mode == TrigMode::Single })
+    let wide = decoding(m);
+    (enabled() && (needs || wide) && m.acq == AcqMode::Normal)
+        .then_some(Want { every: m.trig_mode == TrigMode::Single, wide })
+}
+
+/// A decoder is on and the record is final (STOP, or Single, whose one record is the answer): the decoder needs the
+/// samples of its source, which a deep record holds only in the raw window. Not while running: the pairs of a running
+/// deep record stay (the raw reads cost screen rate), and the decoder says so.
+fn decoding(m: &Model) -> bool {
+    (m.run == RunState::Stop || m.trig_mode == TrigMode::Single)
+        && !m.dec_on_la()
+        && (0..DECODERS).any(|k| m.dec_is_on(k))
 }
 
 /// A frame of the deep-memory read through the compression (min/max pairs of a record above 1 M points).
@@ -97,9 +108,9 @@ mod tests {
         m.meas = vec![(Meas::Vmax, crate::model::WaveId::Ch(0))];
         assert_eq!(want(&m), None, "max needs no samples");
         m.meas.push((Meas::Vavg, crate::model::WaveId::Ch(0)));
-        assert_eq!(want(&m), Some(Want { every: false }));
+        assert_eq!(want(&m), Some(Want { every: false, wide: false }));
         m.trig_mode = TrigMode::Single;
-        assert_eq!(want(&m), Some(Want { every: true }));
+        assert_eq!(want(&m), Some(Want { every: true, wide: false }));
         m.acq = AcqMode::Peak;
         assert_eq!(want(&m), None);
         m.acq = AcqMode::Normal;
@@ -108,6 +119,29 @@ mod tests {
         (m.ch[0].on, m.meas, m.dvm_on, m.dvm_src) = (true, Vec::new(), true, 0);
         assert!(want(&m).is_some(), "the software DVM reads the mean");
         force(Some(false));
+        assert_eq!(want(&m), None);
+        force(None);
+    }
+
+    #[test]
+    fn a_decoder_wants_the_samples_of_a_final_record_only() {
+        force(Some(true));
+        let mut m = Model::default();
+        m.ch[0].on = true;
+        m.run = RunState::Run;
+        m.dec_on = true;
+        assert_eq!(want(&m), None, "running: the pairs stay, the decoder says so");
+        m.run = RunState::Stop;
+        assert_eq!(want(&m), Some(Want { every: false, wide: true }));
+        m.run = RunState::Run;
+        m.trig_mode = TrigMode::Single;
+        assert_eq!(want(&m), Some(Want { every: true, wide: true }));
+        m.trig_mode = TrigMode::Auto;
+        m.run = RunState::Stop;
+        m.acq = AcqMode::Peak;
+        assert_eq!(want(&m), None);
+        m.acq = AcqMode::Normal;
+        m.dec_on = false;
         assert_eq!(want(&m), None);
         force(None);
     }
@@ -155,12 +189,12 @@ mod tests {
         assert!(fits(1.25e9, 1e-3, 3_000_000, 3));
         let t = 5_000_000u64;
         let us = |d: std::time::Duration| d.as_micros() as u64;
-        let w = Want { every: false };
+        let w = Want { every: false, wide: false };
         let small = PERIOD_BYTES / 2;
         assert!(due(w, None, t, small));
         assert!(!due(w, Some(t), t + 999_000, small));
         assert!(due(w, Some(t), t + us(PERIOD), small));
-        assert!(due(Want { every: true }, Some(t), t, 10 * PERIOD_BYTES));
+        assert!(due(Want { every: true, wide: false }, Some(t), t, 10 * PERIOD_BYTES));
         // a read of ten times the bytes waits ten times as long
         assert!(!due(w, Some(t), t + us(PERIOD * 9), 10 * PERIOD_BYTES));
         assert!(due(w, Some(t), t + us(PERIOD * 10), 10 * PERIOD_BYTES));
