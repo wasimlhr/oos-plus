@@ -222,7 +222,71 @@ fn polarity_rows_have_one_set_of_names_and_are_where_the_info_says() {
     assert_eq!(POLARITY_NAMES, ["Normal", "Inverted", "Auto"]);
     assert_eq!(Polarity::from_index(2), Polarity::Auto);
     let with: Vec<&str> = MODULES.iter().filter(|m| m.polarity.is_some()).map(|m| m.key).collect();
-    assert_eq!(with, ["Uart", "Dmx512", "Uart9", "ModbusRtu", "ModbusAscii", "Arinc429", "Mil1553"]);
+    let want = ["Uart", "Can", "Lin", "Dmx512", "Uart9", "ModbusRtu", "ModbusAscii", "CanFd", "FlexRay", "Arinc429"];
+    assert_eq!(with, [&want[..], &["Mil1553"]].concat());
+}
+
+fn every_value(p: &[Packet]) -> Vec<u32> {
+    p.iter().map(|x| x.value).collect()
+}
+
+// Break it catches: CAN that reads a bus with the signal row on the wrong choice (CAN_H against RX) as errors
+// without Inverted or Auto finding the other reading
+#[test]
+fn an_inverted_can_line_is_read_with_inverted_or_auto() {
+    use oos_dsp::sim::{can_logic, CanFrame};
+    let f = [
+        CanFrame { id: 0x123, ext: false, rtr: false, data: vec![1, 2, 3, 4] },
+        CanFrame { id: 0x1abc_def0, ext: true, rtr: false, data: vec![0xde, 0xad] },
+    ];
+    let dt = 1.0 / 500e3 / 16.0;
+    let good = can_logic(&f, 500e3, 0.0, 3.3).sample(dt, 20.0 / 500e3);
+    assert_swap_is_read("Can", &good, dt, [0; OPTS], shared(), every_value);
+}
+
+// Break it catches: CAN-FD likewise, with the bit rate switch
+#[test]
+fn an_inverted_can_fd_line_is_read_with_inverted_or_auto() {
+    let f = [gen::FdFrame { id: 0x123, ext: false, fd: true, brs: true, esi: false, data: (1..=12).collect() }];
+    let dt = 1.0 / 2e6 / 8.0;
+    let good = gen::can_fd_logic(&f, 500e3, 2e6, 0.0, 3.3).sample(dt, 20.0 / 500e3);
+    // bit rate 500 kbit/s (2), data rate 2 Mbit/s (1), the signal RX/TX (0)
+    assert_swap_is_read("CanFd", &good, dt, [2, 1, 0, 0], shared(), every_value);
+}
+
+// Break it catches: LIN (idle high, checksum) that is not read on an inverted line
+#[test]
+fn an_inverted_lin_line_is_read_with_inverted_or_auto() {
+    let dt = 1.0 / 19200.0 / 16.0;
+    let good = oos_dsp::sim::lin_logic(&[(0x21, vec![0x10, 0x20, 0x30, 0x40], true)], 19200.0, 0.0, 3.3)
+        .sample(dt, 10.0 / 19200.0);
+    let sh = Shared { baud: 19200.0, ..shared() };
+    assert_swap_is_read("Lin", &good, dt, [0; OPTS], sh, every_value);
+}
+
+// Break it catches: FlexRay (a swapped BP/BM pair) whose header and frame CRCs fail without Auto finding it
+#[test]
+fn an_inverted_flexray_line_is_read_with_inverted_or_auto() {
+    let fr = |id: u16, payload: Vec<u8>| gen::FrFrame {
+        ppi: false,
+        nf: true,
+        sync: false,
+        startup: false,
+        id,
+        cycle: 3,
+        payload,
+        channel_b: false,
+    };
+    let frames = [fr(5, (0..8).collect()), fr(100, vec![0xa5, 0x5a])];
+    let mut bits = Vec::new();
+    for f in &frames {
+        bits.extend(gen::flexray_bits(f, 11));
+        bits.extend([true; 20]);
+    }
+    let tb = 1e-7;
+    let dt = tb / 8.0;
+    let good = oos_dsp::sim::bits_logic(&bits, tb, 20, 0.0, 3.3).sample(dt, 20.0 * tb);
+    assert_swap_is_read("FlexRay", &good, dt, [0; OPTS], shared(), every_value);
 }
 
 /// The sentences the diagnosis of module `key` gives for `v` decoded with the polarity Normal.
@@ -282,4 +346,18 @@ fn a_swapped_pair_reads_the_same_in_the_decoders_without_a_polarity_row() {
     };
     assert!(pd(&good).iter().all(|x| x.1) && pd(&good).len() > 4);
     assert_eq!(pd(&swapped), pd(&good));
+    // SENT: every nibble is the time between two falling edges, and the same between two rising ones
+    let fr = [
+        gen::SentFrame { status: 0x3, data: vec![0x7, 0x8, 0x9, 0x5, 0x5, 0x5], crc: None, pause: 56 },
+        gen::SentFrame { status: 0xf, data: vec![0x1, 0x2, 0x3, 0x4, 0x5, 0x6], crc: None, pause: 0 },
+        gen::SentFrame { status: 0x0, data: vec![0xa, 0xb, 0xc, 0x1, 0x2, 0x3], crc: None, pause: 0 },
+    ];
+    let dt = 0.3e-6;
+    let good = gen::sent(&fr, 3e-6, 0.0, 5.0).sample(dt, 20e-6);
+    let swapped: Vec<f32> = good.iter().map(|x| 5.0 - x).collect();
+    let sent = |v: &[f32]| -> Vec<(u32, bool)> {
+        oos_dsp::decode::sent(v, dt, Some(3e-6), 6, 2.5, 0.5).iter().map(|x| (x.value, x.ok)).collect()
+    };
+    assert!(sent(&good).len() > 8 && sent(&good).iter().all(|x| x.1));
+    assert_eq!(sent(&swapped), sent(&good));
 }

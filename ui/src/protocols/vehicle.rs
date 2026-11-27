@@ -21,10 +21,11 @@ const CAN_RATE_NAMES: [&str; 5] = ["125 kbit/s", "250 kbit/s", "500 kbit/s", "80
 /// The data phase rates (`decode::FD_RATES`).
 const FD_RATE_NAMES: [&str; 5] = ["1 M", "2 M", "4 M", "5 M", "8 M"];
 
-const CANFD_OPTIONS: [Opt; 3] = [
+const CANFD_OPTIONS: [Opt; 4] = [
     Opt { name: "Bit rate", choices: &CAN_RATE_NAMES, default: 2 },
     Opt { name: "Data rate", choices: &FD_RATE_NAMES, default: 1 },
     Opt { name: "Signal", choices: &["RX/TX", "CAN_H"], default: 0 },
+    POLARITY,
 ];
 
 pub struct CanFd;
@@ -66,8 +67,8 @@ impl Protocol for CanFd {
 pub struct FlexRay;
 
 /// The bit rates of a FlexRay cluster (`oos_dsp::decode::FLEXRAY_RATES`).
-const FLEXRAY_OPTIONS: [Opt; 1] =
-    [Opt { name: "Bit rate", choices: &["10 Mbit/s", "5 Mbit/s", "2.5 Mbit/s"], default: 0 }];
+const FLEXRAY_OPTIONS: [Opt; 2] =
+    [Opt { name: "Bit rate", choices: &["10 Mbit/s", "5 Mbit/s", "2.5 Mbit/s"], default: 0 }, POLARITY];
 
 impl Protocol for FlexRay {
     fn options(&self) -> &'static [Opt] {

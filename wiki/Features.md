@@ -59,7 +59,7 @@ in the README. How to use it: the guides listed on [[Home]].
 - `:DECode:AUTO` (or `auto` of the MCP tool `setup_decoder`) sets a decoder up for its signal in one step: the
   threshold between the levels, Polarity Auto, the time base and depth for 10 samples a bit and a whole frame, one
   acquisition, and a report of every change
-- Polarity (Decode > Polarity) for UART, UART 9-bit, Modbus RTU and ASCII, MIL-STD-1553, ARINC 429 and DMX512: a bus
+- Polarity (Decode > Polarity) for UART, UART 9-bit, Modbus RTU and ASCII, CAN, CAN-FD, LIN, FlexRay, MIL-STD-1553, ARINC 429 and DMX512: a bus
   connected the wrong way round (or an idle-low UART) is read inverted without inverting the channel on the screen;
   Auto decodes both ways and keeps the reading with fewer errors, and the decoder's name says "(inverted)". The
   other decoders do not offer it, each for a reason (see [docs/protocol-modules.md](https://github.com/dekajoule/oos/blob/main/docs/protocol-modules.md#polarity))
