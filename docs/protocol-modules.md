@@ -89,13 +89,15 @@ decoders that have the row):
 | MIL-STD-1553, DMX512 | Normal, Inverted, Auto | a swapped pair; parity and the frame checks tell |
 | ARINC 429 | Normal, Inverted | a swapped pair complements the 32 bits of a word and its odd parity stays odd, so no check can tell |
 | Manchester | none | its "A one is" row is the polarity of the code, and its four rows are used |
-| S/PDIF, USB PD, MLT-3 | none | biphase mark, BMC and MLT-3 carry the data in the transitions, not in the level: a swapped pair decodes as it is |
+| S/PDIF, USB PD, MLT-3, SENT | none | biphase mark, BMC, MLT-3 and SENT carry the data in the transitions (SENT: the time between two edges of one kind), not in the level: a swapped pair decodes as it is |
 | I2C, DS2482, I3C | none | open drain: one idle level, the lines are the protocol's own |
 | SPI, Quad-SPI | none | the clock polarity is in the mode row, the data and select polarity have rows of their own |
 | JTAG, SWD, I2S, Parallel | none | clocked buses: the clock, select and data levels are the protocol's own |
 | 1-Wire | none | open drain with a pull-up: the master pulls low, the line idles high, no other way |
 | C-PHY | none | three wires in three levels: swapping two wires permutes the states, which the decoder reads from the symbols |
-| CAN, CAN-FD, LIN, FlexRay, SENT, DCC, USB | decided in the next pull requests | |
+| CAN, CAN-FD | Normal, Inverted, Auto | CAN_H against RX/TX, or a pair swapped; stuffing and CRC errors tell. The row is relative to the Signal row (CAN_H or RX/TX), which the decoder follows as it always did |
+| LIN, FlexRay | Normal, Inverted, Auto | LIN: the line as an isolator or transceiver inverts it, the checksum tells; FlexRay: a swapped BP/BM pair, the header and frame CRCs tell |
+| DCC, USB | decided in the next pull request | |
 
 ## Leaving decoders out
 
