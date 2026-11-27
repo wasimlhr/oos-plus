@@ -25,6 +25,7 @@ pub static UART: ModuleInfo = ModuleInfo::new("Uart", "UART", "serial")
     .differential()
     .trigger(every_word_is_a_frame)
     .bit(|_, sh| 1.0 / sh.baud)
+    .polarity(0, Mirror::Threshold)
     .decoder(|l| Ok(uart(l.main(), l.dt, l.sh.baud, l.sh.bits, l.sh.parity, l.thr, l.hy, l.sh.uart_inv)));
 
 /// The most characters at the start of a record that `uart` leaves out because the record begins inside one.

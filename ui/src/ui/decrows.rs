@@ -810,13 +810,14 @@ mod tests {
             u.step(0.1);
         }
         let items = u.decode_items();
-        assert!(items.contains(&Item::DecThrMid) && items.contains(&Item::UartPol), "{:?}", items);
+        assert!(items.contains(&Item::DecThrMid) && items.contains(&Item::DecOpt(0)), "{:?}", items);
+        assert_eq!(u.item_label(Item::DecOpt(0)), "Polarity");
         u.m.dec_thr = 9.0;
         u.activate(Item::DecThrMid);
         assert!((u.m.dec_thr - 1.65).abs() < 0.3, "the demo's UART line swings from 0 to 3.3 V: {}", u.m.dec_thr);
         // a decoder of another protocol has no polarity row
         u.m.dec_proto = Proto::I2C;
-        assert!(!u.decode_items().contains(&Item::UartPol));
+        assert!(!u.decode_items().contains(&Item::DecOpt(2)));
     }
 
     /// An SPI word 9F on MOSI at 3.3 V, with the clock and the chip select at a tenth of that level.

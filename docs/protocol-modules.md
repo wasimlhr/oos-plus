@@ -78,12 +78,24 @@ threshold is a magnitude) for Inverted, and for Auto reads both ways and keeps t
 tie keeps Normal; a line that gave nothing as it is and a clean reading inverted goes to the inverted one). The module
 lists `protocols::POLARITY` (or `POLARITY_NO_AUTO`) at that place of `options`
 (`ui/src/protocols/mod.rs::the_polarity_row_is_where_the_info_says`). The row is the module's last, Normal is its
-default, so a setup saved before it loads as Normal. Offered: MIL-STD-1553, ARINC 429 (no Auto: a swapped pair
-complements the 32 bits of a word and its odd parity stays odd, so no check can tell), DMX512 and UART 9-bit. Not
-offered, with the reason: UART (its Polarity row, "Inverted" in Trigger > Serial, is idle low and also the trigger's),
-Manchester (its "A one is" row is the polarity of the code, and its four rows are used), S/PDIF (biphase mark carries
-no polarity), USB (swap the D+ and D- sources), I2S, SPI, I2C, CAN, LIN, FlexRay, SENT, 1-Wire and the others (more
-than one line, or the line's levels are the protocol's own).
+default, so a setup saved before it loads as Normal. Which decoder offers which values, and why the others do not
+(the one list; `dsp/tests/polarity.rs::polarity_rows_have_one_set_of_names_and_are_where_the_info_says` names the
+decoders that have the row):
+
+| Decoder | Polarity | Why |
+| --- | --- | --- |
+| UART | Normal, Inverted, Auto | idle level; a start bit, parity and stop bit fail on a line of the other polarity. The row is relative to the serial trigger's polarity (Trigger > Serial, `:TRIGger:RS232:POLarity`), which the decoder follows as it always did; the decode menu's own copy of that row is gone |
+| UART 9-bit, Modbus RTU, Modbus ASCII | Normal, Inverted, Auto | the same line, with the checks of the frames (parity, CRC, LRC) |
+| MIL-STD-1553, DMX512 | Normal, Inverted, Auto | a swapped pair; parity and the frame checks tell |
+| ARINC 429 | Normal, Inverted | a swapped pair complements the 32 bits of a word and its odd parity stays odd, so no check can tell |
+| Manchester | none | its "A one is" row is the polarity of the code, and its four rows are used |
+| S/PDIF, USB PD, MLT-3 | none | biphase mark, BMC and MLT-3 carry the data in the transitions, not in the level: a swapped pair decodes as it is |
+| I2C, DS2482, I3C | none | open drain: one idle level, the lines are the protocol's own |
+| SPI, Quad-SPI | none | the clock polarity is in the mode row, the data and select polarity have rows of their own |
+| JTAG, SWD, I2S, Parallel | none | clocked buses: the clock, select and data levels are the protocol's own |
+| 1-Wire | none | open drain with a pull-up: the master pulls low, the line idles high, no other way |
+| C-PHY | none | three wires in three levels: swapping two wires permutes the states, which the decoder reads from the symbols |
+| CAN, CAN-FD, LIN, FlexRay, SENT, DCC, USB | decided in the next pull requests | |
 
 ## Leaving decoders out
 

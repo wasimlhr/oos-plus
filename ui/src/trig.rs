@@ -484,6 +484,38 @@ mod polarity_tests {
         (m, v, dt)
     }
 
+    // Break it catches: a UART line wired the wrong way round that Normal reads as garbage without the diagnosis naming
+    // the Polarity row, or Auto that does not say it read the line inverted (the band's "(inverted)")
+    #[test]
+    fn an_inverted_uart_line_is_diagnosed_and_read_right_with_auto() {
+        let baud = crate::decode::BAUDS[Model::default().dec_baud];
+        let mut w = oos_dsp::decode::gen::Wave::new(3.3, 0.0, 0.02 / baud);
+        w.level(true, 30.0 / baud);
+        for b in b"Hello" {
+            w.uart(*b as u32, 8, oos_dsp::decode::Parity::Even, 1, baud);
+            w.level(true, 3.0 / baud);
+        }
+        let dt = 1.0 / baud / 16.0;
+        // low where the line should be high: idle low, start bit high
+        let v = w.done().sample(dt, 20.0 / baud);
+        let mut m = Model::default();
+        (m.dec_proto, m.dec_src, m.dec_thr, m.dec_on) = (Proto::from_key("Uart").unwrap(), 0, 1.65, true);
+        m.dec_parity = oos_dsp::decode::Parity::Even;
+        m.dec_bits = 8;
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if c == 0 { &v[..] } else { &[][..] });
+        let good: Vec<f32> = v.iter().map(|x| 3.3 - x).collect();
+        let chg: [&[f32]; NCH] = std::array::from_fn(|c| if c == 0 { &good[..] } else { &[][..] });
+        assert!(decode(&m, chg, dt).unwrap().iter().all(|x| x.ok));
+        assert!(diagnosis(&m).unwrap().lines.is_empty());
+        let p = decode(&m, ch, dt).unwrap();
+        assert!(p.is_empty() || p.iter().any(|x| !x.ok));
+        let d = diagnosis(&m).unwrap();
+        assert!(d.lines.join(" ").contains("set Polarity to Auto or Inverted"), "{:?}", d.lines);
+        m.dec_opt[0] = 2;
+        let p = decode(&m, ch, dt).unwrap();
+        assert!(p.len() >= 5 && p.iter().all(|x| x.ok) && read_inverted(&m));
+    }
+
     // Break it catches: the diagnosis of a decode not kept where the band, the Events pane, SCPI and MCP read it, Auto
     // not saying it read inverted, or Normal's sentence missing the row that fixes it
     #[test]

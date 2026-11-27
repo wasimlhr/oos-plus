@@ -376,7 +376,7 @@ These are OOS functions, not stock Rigol commands. Their limits are in [referenc
 | `:DECode:CPHY:RATE[?]` | `AUTO` or symbols/s |
 | `:DECode:AUTO`, `:DECode:AUTO?` | sets the decoder up for its signal in one step (threshold, Polarity Auto, time base and depth for 10 samples a bit and a whole frame, one acquisition); the query says what it changed and what the decoder says now |
 | `:DECode:DIAGnosis?`, `:BUS<n>:DIAGnosis?` | why the decoder decoded nothing or mostly errors, one sentence a line and the setting to change; empty when fine. `...:FIGures?` adds the measured bit rate (Hz), lowest and highest sample (V) and the share of failed fields |
-| `:DECode:POLarity[?]`, `:BUS<n>:POLarity[?]` | `NORMal`, `INVerted`, `AUTO`: read the line as it is, as if swapped, or both ways with the better one kept (1553, ARINC 429 without `AUTO`, DMX512, UART 9-bit) |
+| `:DECode:POLarity[?]`, `:BUS<n>:POLarity[?]` | `NORMal`, `INVerted`, `AUTO`: read the line as it is, as if swapped, or both ways with the better one kept (UART, UART 9-bit, Modbus RTU and ASCII, 1553, ARINC 429 without `AUTO`, DMX512) |
 | `:DECode:BUSY?`, `:DECode:EVENts?`, `:DECode:EVENts:COUNt?` | still decoding? / the events, numbered from 1, with their times / how many rows the decode table has |
 | `:TABLe:LIST?`, `:TABLe:COUNt? <name>`, `:TABLe:DATA? <name>`, `:TABLe:SAVE <name>` | every table of the screen (decode table, search events, segments, peaks, measurements) by name: its names, its row count, its rows as CSV with the Index first, a CSV file |
 

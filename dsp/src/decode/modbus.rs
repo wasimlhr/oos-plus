@@ -8,7 +8,7 @@
 //! (ADR 0002).
 
 use super::{field_be, modbus_crc, opt_baud, uart, Byte, Kind, Packet, Parity};
-use crate::protocols::{BusWhat, ModuleInfo};
+use crate::protocols::{BusWhat, Mirror, ModuleInfo};
 
 /// Modbus ASCII LRC: two's complement of the 8-bit sum.
 pub fn modbus_lrc(bytes: &[u8]) -> u8 {
@@ -25,6 +25,7 @@ pub static MODBUS_RTU: ModuleInfo = ModuleInfo::new("ModbusRtu", "Modbus RTU", "
     // Trigger > Bus > Frame never fired)
     .trigger(|what, _, p| (what == BusWhat::Frame).then(|| matches!(p.kind, Kind::Addr { .. })))
     .bit(|opt, _| 1.0 / opt_baud(opt, 0))
+    .polarity(2, Mirror::Threshold)
     .decoder(|l| Ok(modbus_rtu(l.main(), l.dt, opt_baud(&l.opt, 0), PARITIES[l.opt[1]], l.thr, l.hy, false)));
 
 /// Modbus RTU (Modbus over serial line V1.02): characters from `decode::uart` (8 data bits, `parity`), frames
@@ -75,6 +76,7 @@ pub fn modbus_rtu(v: &[f32], dt: f64, baud: f64, parity: Parity, thr: f32, hyst:
 pub static MODBUS_ASCII: ModuleInfo = ModuleInfo::new("ModbusAscii", "Modbus ASCII", "modbus")
     .differential()
     .bit(|opt, _| 1.0 / opt_baud(opt, 0))
+    .polarity(3, Mirror::Threshold)
     .decoder(|l| {
         // always a parity bit
         let parity = if l.opt[2] == 1 { Parity::Odd } else { Parity::Even };

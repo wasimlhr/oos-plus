@@ -528,7 +528,6 @@ impl Ui {
                 Row::UsbSpeed => DecUsbSpeed,
                 Row::CphyRate => DecCphyRate,
                 Row::Fmt => DecFmt,
-                Row::Pol => UartPol,
                 Row::SpiCs => SpiCs,
             });
         }

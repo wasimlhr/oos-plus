@@ -9420,7 +9420,7 @@
       "- Menu equivalent: Decode > Polarity.",
       "- : how the selected decoder reads its line.",
       "- `INVerted` reads it as if its polarity were swapped, without touching the channel; `AUTO` decodes both ways and keeps the reading with fewer failed fields (a tie keeps `NORMal`).",
-      "- Offered by 1553, ARINC 429 (`NORMal` and `INVerted` only: a swapped pair keeps the parity of its words), DMX512 and UART 9-bit; -224 for another decoder, and for `AUTO` where it is not offered.",
+      "- Offered by UART, UART 9-bit, Modbus RTU, Modbus ASCII, 1553, ARINC 429 (`NORMal` and `INVerted` only: a swapped pair keeps the parity of its words) and DMX512 (the reason for every other decoder is in docs/protocol-modules.md#polarity); on UART it is relative to the serial trigger's polarity, which the decoder follows; -224 for another decoder, and for `AUTO` where it is not offered.",
       "- The decoder's label says \"(inverted)\" while the line is read inverted.",
       "- Origin: OOS extension"
      ],
