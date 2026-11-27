@@ -18,7 +18,7 @@ Part of the [SCPI reference](README.md).
 | `:DECode:INPut` | Set / Query | `WAVEFORM\|LA`; `ANALOG` aliases waveform. LA requires available/enabled logic inputs. | `WAVEFORM` | Decode and bus > Input | OOS extension |
 | `:DECode:SOURce` | Set / Query | Main data role; `CHANn\|Rn`. | `CHAN3` | Decode > Source | OOS extension |
 | `:DECode:SOURce2` | Set / Query | Clock role; `CHANn\|Rn`. | `CHAN4` | Decode > Clock | OOS extension |
-| `:DECode:CS` | Set / Query | Chip-select role; optional roles accept `NONE`. Roles depend on the protocol. | `CHAN2` | Decode > CS | OOS extension |
+| `:DECode:CS` | Set / Query | The third role (chip select for SPI); optional roles accept `NONE`. Roles depend on the protocol; for USB (low and full speed) it is **D-**: D+ is `:DECode:SOURce`, USB has no clock role (`:DECode:SOURce2` is not used), and D- is optional (`NONE` reads D+ alone). | `CHAN2` | Decode > CS | OOS extension |
 | `:DECode:SOURce4` | Set / Query | Fourth role; optional, `NONE` clears it. | `NONE` | Decode and bus > Source / clock / CS / source 4 / B line | OOS extension |
 | `:DECode:DIFFerential` | Set / Query | Differential (B line) role; optional, `NONE` clears it. | `NONE` | Decode and bus > Source / clock / CS / source 4 / B line | OOS extension |
 | `:DECode:THReshold` | Set / Query | Configured threshold. For C-PHY this is minimum adjacent-wire level separation. `AUTO` sets it once to the middle of the signal on the decoder's source, half way between the lowest and the highest sample of the record on the screen, and each further line's to the middle of its own (-230 without a signal); the query answers the value. | `1.650000E+00` | Decode > Threshold | OOS extension |
