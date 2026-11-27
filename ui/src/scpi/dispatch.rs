@@ -506,6 +506,10 @@ impl Scpi {
         {
             return Some(self.decode_cphy_rate_cmd(ui, query, arg));
         }
+        if nodes.len() == 3 && query && kw(nodes[0], "DECode") && kw(nodes[1], "DIAGnosis") && kw(nodes[2], "FIGures") {
+            let k = ui.m.dec_sel;
+            return Some(self.diagnosis_query(ui, k, true));
+        }
         if nodes.len() == 2 && kw(nodes[0], "DECode") {
             return Some(self.decode_cmd(ui, nodes[1], query, arg));
         }

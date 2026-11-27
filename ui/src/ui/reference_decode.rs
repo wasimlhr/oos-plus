@@ -223,6 +223,7 @@ pub(super) fn decode_borrowed(original: &Model, waves: &[BorrowedWave<'_>], hyst
         model.dec_src = 0;
     }
     let mut packets = crate::trig::decode_at(&model, ch, dt, model.dec_thr, hysteresis)?;
+    crate::trig::share_findings(&model, original);
     if packets.len() > MAX_PACKETS {
         return Err("Decode exceeds 250000 packets; shorten the record");
     }
@@ -483,6 +484,29 @@ impl Ui {
         }
         Ok(self.events_text())
     }
+    /// What decoder `k` found out about its line in the last decode, as `oos_dsp::diagnosis::diagnose` says it, or
+    /// the reason it could not decode (a record over the limit, a source that is off, min/max pairs): one sentence.
+    /// `Err("Decode computing")` while it is still working. Empty `lines` when the decode is fine.
+    pub fn decoder_diagnosis(&self, k: usize) -> Result<oos_dsp::diagnosis::Diagnosis, &'static str> {
+        let m = self.m.dec_view(k);
+        match self.decode_packets_of(&m) {
+            Err(COMPUTING) => Err(COMPUTING),
+            Err(why) => Ok(oos_dsp::diagnosis::Diagnosis { lines: vec![why.to_string()], ..Default::default() }),
+            Ok(_) => Ok(crate::trig::diagnosis(&m).unwrap_or_default()),
+        }
+    }
+
+    /// The first sentence of the diagnosis of a decoder that is on and decoded nothing, for the places that have one
+    /// line (the band, the Events pane when it is empty).
+    pub(super) fn decoder_note(&self, k: usize) -> Option<String> {
+        let first = self.decoder_diagnosis(k).ok()?.lines.into_iter().next()?;
+        Some(if first.to_ascii_lowercase().starts_with("nothing decoded") {
+            first
+        } else {
+            format!("Nothing decoded: {first}")
+        })
+    }
+
     pub(super) fn decoder_sources(&self) -> Vec<usize> {
         (0..n_ch())
             .chain((0..NREF).filter(|&i| self.refs[i].is_some()).map(|i| DEC_REF_BASE + i))

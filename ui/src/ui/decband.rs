@@ -495,8 +495,8 @@ impl Ui {
         };
         if packets.is_empty() {
             // an empty band says so: too few samples a bit, a wrong baud rate and a wrong threshold all look like it
-            let note = "Nothing decoded";
-            cv.text_in(&f.s, Rect::new(left + 2, y, f.s.width(note), h), 0, note, DIM);
+            let note = self.decoder_note(k).unwrap_or_else(|| "Nothing decoded".to_string());
+            cv.text_in(&f.s, Rect::new(left + 2, y, f.s.width(&note), h), 0, &note, DIM);
         }
         let (tdiv, delay) = self.view();
         let ppx = a.w as f64 / HDIV as f64;

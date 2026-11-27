@@ -202,8 +202,35 @@ impl Scpi {
         None
     }
 
+    /// `:DECode:DIAGnosis?` and `:BUS<n>:DIAGnosis?` (the sentences, one a line, empty when the decode is fine), and
+    /// with `figures` the `:FIGures?` form: the bit rate the edges suggest (Hz), the lowest and highest sample (V) and
+    /// the share of fields that failed a check, comma separated, `NAN` where unknown. `BUSY` while decoding.
+    pub(super) fn diagnosis_query(&mut self, ui: &mut Ui, k: usize, figures: bool) -> Option<Vec<u8>> {
+        match ui.decoder_diagnosis(k) {
+            Ok(d) if figures => {
+                let x = |v: f64| if v.is_finite() { e(v) } else { "NAN".to_string() };
+                t(&format!(
+                    "{},{},{},{}",
+                    x(d.bit_rate.unwrap_or(f64::NAN)),
+                    x(d.vmin as f64),
+                    x(d.vmax as f64),
+                    x(d.error_fraction())
+                ))
+            }
+            Ok(d) => t(&d.lines.join("
+")),
+            Err(_) => t("BUSY"),
+        }
+    }
+
     pub(super) fn bus_cmd(&mut self, ui: &mut Ui, k: usize, n: &[&str], query: bool, arg: &str) -> Option<Vec<u8>> {
         let n0 = n.first().copied().unwrap_or("");
+        if query && n.len() == 1 && kw(n0, "DIAGnosis") {
+            return self.diagnosis_query(ui, k, false);
+        }
+        if query && n.len() == 2 && kw(n0, "DIAGnosis") && kw(n[1], "FIGures") {
+            return self.diagnosis_query(ui, k, true);
+        }
         if n.len() == 1 && kw(n0, "POLarity") {
             return self.polarity_cmd(ui, k, query, arg);
         }
@@ -521,6 +548,10 @@ impl Scpi {
                     None
                 }
             };
+        }
+        if query && kw(node, "DIAGnosis") {
+            let k = ui.m.dec_sel;
+            return self.diagnosis_query(ui, k, false);
         }
         if kw(node, "POLarity") {
             let k = ui.m.dec_sel;

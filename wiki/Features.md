@@ -53,6 +53,9 @@ in the README. How to use it: the guides listed on [[Home]].
 - In Minimal and Studio each decoder can have a name on its band (Decode > Label) and a place of its own on the plot
   (Decode > Position)
   ("Loco 5  Fwd 50/128")
+- A decoder that decoded nothing, or mostly errors, says why: the sample rate against the bit rate, a threshold outside
+  the signal, a flat line, a record shorter than a frame, an inverted bus; on the band, in the empty Events pane, over
+  SCPI (`:DECode:DIAGnosis?`) and in the MCP answers of `decode_results` and `setup_decoder`
 - Polarity (Decode > Polarity) for MIL-STD-1553, ARINC 429, DMX512 and UART 9-bit: a bus connected the wrong way round
   is read inverted without inverting the channel on the screen; Auto decodes both ways and keeps the reading with
   fewer errors, and the decoder's name says "(inverted)". UART has its own idle-level row; the other decoders do not
