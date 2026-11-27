@@ -1316,6 +1316,12 @@ fn the_acquisition_loop_runs_on_the_simulated_unit() {
     let out: HwShared = std::sync::Arc::new(std::sync::Mutex::new(crate::board::Shared::default()));
     lock(&out).want = Some(want.clone());
     let mut passes = 0;
+    // the drawing workers are another test's when its screen switched them on (one set for the whole process): this
+    // loop keeps out of them, as the live run does. Its batches went to them while such a screen had its view set,
+    // were drawn with that view and merged into that test's picture and statistics: a record too many there, in
+    // about one run of five of the whole suite (`timed_persistence_fades_a_record_from_the_next_one_on` and others
+    // of `ui::acquisition_tests`), and this test's own frames went another way than when it runs alone
+    let _out = crate::drawpipe::keep_out();
     super::run(hw, want.mask, false, "/nonexistent".into(), out.clone(), || {
         passes += 1;
         passes <= 40
