@@ -559,8 +559,11 @@ impl Source {
     }
 
     /// Sample rate and depth as the top bar shows them: of the hardware when it runs, else the model's choice.
+    ///
+    /// A setting just made is in force at once for the answer: the live record is the one of the acquisition before
+    /// it until the next one is read back (seconds at a deep record), so `settled_rate_depth` says which to give.
     pub fn rate_depth(&self, m: &Model) -> (f64, u64) {
-        self.hw_rate_depth().map(|(r, n)| (r, n as u64)).unwrap_or_else(|| m.srate_depth())
+        settled_rate_depth(self.hw_rate_depth(), m, board().slow_mode(m) != crate::board::Slow::Off)
     }
 
     /// Hardware segments: tells the thread the recording number and whether the acquisition runs; returns phase,
@@ -1303,6 +1306,27 @@ fn trace_points(
 
 #[cfg(test)]
 mod tests {
+    /// `:ACQuire:SRATe?` and `:MDEPth?` right after a depth or time base set: the live record is still the one of the
+    /// settings before, the answer is what the settings give now (it was the old record for seconds and an acquisition).
+    #[test]
+    fn rate_and_depth_follow_a_setting_just_made_not_the_record_before() {
+        use crate::model::{mdepths, Model};
+        let mut m = Model::default();
+        m.mdepth = mdepths().iter().position(|d| d.1 == 1_000_000).unwrap();
+        let want = m.srate_depth();
+        let before = (want.0 * 10.0, 100_000usize); // a record of an earlier depth
+        assert_eq!(super::settled_rate_depth(Some(before), &m, false), want, "explicit depth: the setting's");
+        assert_eq!(super::settled_rate_depth(Some(before), &m, true), (before.0, before.1 as u64), "roll: the stream");
+        m.mdepth = 0;
+        let auto = m.srate_depth();
+        let current = (auto.0, auto.1 as usize / 2 + 1);
+        let same = (auto.0, ((auto.1 as f64) * 0.9) as usize);
+        assert_eq!(super::settled_rate_depth(Some(same), &m, false), (same.0, same.1 as u64), "Auto: the live record");
+        let older = (auto.0 * 10.0, current.1);
+        assert_eq!(super::settled_rate_depth(Some(older), &m, false), auto, "Auto, other time base: the new one's");
+        assert_eq!(super::settled_rate_depth(None, &m, false), auto);
+    }
+
     /// One span a column (`trace_points`): a square of 3600 points is as bright on its vertical edge as on its flat
     /// parts, every lit pixel once the weight, the edge column lit over the whole step.
     #[test]
@@ -1513,4 +1537,29 @@ mod tests {
         let mid = at(&r, 0, 0.0);
         assert!(mid > 0.8 && mid < 1.4, "{}", mid);
     }
+}
+
+/// The sample rate and record length to answer for the settings `m`, given the latest hardware record `hw` (rate,
+/// points) if there is one. The record is what the unit really acquires, so it is answered where it can be trusted to
+/// be current; the model's numbers (what the settings give) where the record is the one of the settings before:
+/// - an explicit depth (not Auto) in Normal mode, without hardware segments, roll or scan: the depth and the rate the
+///   settings give, the same numbers the unit works with once it has applied them (`Model::srate_depth`);
+/// - Auto depth: the record, unless it spans a different time than the screen's window (the time base was just
+///   changed), then what the new time base gives;
+/// - roll, scan, average, peak and segments: the record, it is not the model's choice.
+pub fn settled_rate_depth(hw: Option<(f64, usize)>, m: &Model, slow: bool) -> (f64, u64) {
+    let Some((rate, n)) = hw else { return m.srate_depth() };
+    let hw_answer = (rate, n as u64);
+    if slow || m.acq != AcqMode::Normal || m.segments > 1 {
+        return hw_answer;
+    }
+    if m.mdepth != 0 {
+        return m.srate_depth();
+    }
+    let window = m.hw_time_per_div() as f64 * HDIV as f64;
+    let span = if rate > 0.0 { n as f64 / rate } else { 0.0 };
+    if window > 0.0 && (span / window - 1.0).abs() > 0.25 {
+        return m.srate_depth();
+    }
+    hw_answer
 }

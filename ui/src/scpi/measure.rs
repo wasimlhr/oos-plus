@@ -620,23 +620,44 @@ impl Scpi {
             self.push_err("-224,\"Illegal parameter value\"".into());
             return t("9.9E37");
         };
-        let source = |s: &mut Self, word: Option<&str>, fallback: WaveId| -> Option<WaveId> {
+        // a MATH source is read on the row of its reference copy (`:MEASure:ITEM <item>,MATHn` adds it), which keeps
+        // the statistics; with no copy there is no row to ask
+        let source = |s: &mut Self, ui: &Ui, word: Option<&str>, fallback: WaveId| -> Option<WaveId> {
             match word.filter(|w| !w.is_empty()) {
                 None => Some(fallback),
-                Some(word) => s.named_source(word),
+                Some(word) => match math_index(word) {
+                    Some(k) => match ui.ref_math_held(k) {
+                        Some(slot) => Some(WaveId::Ref(slot)),
+                        None => {
+                            s.push_err(format!(
+                                "-221,\"Settings conflict; {} has no row: add it with :MEASure:ITEM {},{} or :MEASure:SLOT<n> {},{} first\"",
+                                word, item, word, item, word
+                            ));
+                            None
+                        }
+                    },
+                    None => s.named_source(word),
+                },
             }
         };
-        let (n, current, min, max, mean, dev) = if let Some(k) = meas_kind(item) {
-            let Some(src) = source(self, parts.next(), ui.meas_source()) else { return t("9.9E37") };
-            ui.meas_remote_stat(k, src)
+        let (row, (n, current, min, max, mean, dev)) = if let Some(k) = meas_kind(item) {
+            let Some(src) = source(self, ui, parts.next(), ui.meas_source()) else { return t("9.9E37") };
+            (ui.meas_has_row(k, src), ui.meas_remote_stat(k, src))
         } else if let Some(k) = pair_kind(item) {
-            let Some(a) = source(self, parts.next(), ui.meas_source()) else { return t("9.9E37") };
-            let Some(b) = source(self, parts.next(), ui.meas_source_b()) else { return t("9.9E37") };
-            ui.pair_remote_stat(k, a, b)
+            let Some(a) = source(self, ui, parts.next(), ui.meas_source()) else { return t("9.9E37") };
+            let Some(b) = source(self, ui, parts.next(), ui.meas_source_b()) else { return t("9.9E37") };
+            (ui.pair_has_row(k, a, b), ui.pair_remote_stat(k, a, b))
         } else {
             self.push_err(format!("-224,\"Illegal parameter value\" {}", item));
             return t("9.9E37");
         };
+        if !row && kind != 2 && kind != 5 {
+            self.push_err(format!(
+                "-221,\"Settings conflict; {} has no row, so no statistics: add it with :MEASure:ITEM or :MEASure:SLOT<n> first\"",
+                item
+            ));
+            return t("9.9E37");
+        }
         let v = match kind {
             0 => max,
             1 => min,
