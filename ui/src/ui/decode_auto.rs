@@ -10,6 +10,11 @@
 use super::*;
 use oos_dsp::diagnosis::{si, MIN_SAMPLES_PER_BIT};
 
+thread_local! {
+    /// What the last `:DECode:AUTO` did, one sentence a line. The commands run on the thread of the screen.
+    static REPORT: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
 impl Ui {
     /// Sets the selected decoder up for its signal and returns what it did, one sentence a line: each setting it
     /// changed with its old value, each it kept, and what it could not do. The same lines are kept for
@@ -71,13 +76,13 @@ impl Ui {
             say.push("the scope is running: the next record is decoded with these settings".into());
         }
         self.settings_changed();
-        self.decode_auto_report = say.clone();
+        REPORT.with(|r| *r.borrow_mut() = say.clone());
         say
     }
 
     /// The report of the last [`Ui::decode_auto`] and, below it, the diagnosis of the selected decoder now.
     pub fn decode_auto_text(&self) -> String {
-        let mut out = self.decode_auto_report.clone();
+        let mut out = REPORT.with(|r| r.borrow().clone());
         if let Ok(d) = self.decoder_diagnosis(self.m.dec_sel) {
             out.extend(d.lines.into_iter().map(|l| format!("diagnosis: {l}")));
         }

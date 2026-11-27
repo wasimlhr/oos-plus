@@ -1204,8 +1204,6 @@ pub struct Ui {
     auto_on: Vec<usize>,
     /// the decoded lines of the records shown, analog and LA, with times in s (render_derived.rs)
     decoded: render_derived::Decoded,
-    /// what the last `:DECode:AUTO` set up, one sentence a line (decode_auto.rs)
-    decode_auto_report: Vec<String>,
     /// the table window over the plot: what it shows and its first row shown (tables.rs)
     table: tables::Window,
     /// the boxes of the decoder bands drawn in this frame: where a finger finds one, its decoder, its start time

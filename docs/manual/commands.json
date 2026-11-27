@@ -9532,11 +9532,9 @@
      "set": ":DECode:AUTO",
      "desc": "Sets a decoder up for its signal in one call, and tells what it changed.",
      "related": [
-      ":DECode:AUTO?",
       ":DECode:DIAGnosis",
       ":DECode:POLarity",
-      ":ACQuire:MDEPth",
-      ":TIMebase[:MAIN]:SCALe"
+      ":ACQuire:MDEPth"
      ],
      "remarks": [
       "- Menu equivalent: Decode > Threshold to middle.",
@@ -9551,7 +9549,6 @@
      "query": ":DECode:AUTO?",
      "desc": "What the automatic decoder set-up did and what the decoder says about its signal now.",
      "related": [
-      ":DECode:AUTO",
       ":DECode:DIAGnosis"
      ],
      "remarks": [
