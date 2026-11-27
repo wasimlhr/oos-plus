@@ -549,6 +549,15 @@ impl Scpi {
                 }
             };
         }
+        // set the decoder up for its signal in one step (ui/src/ui/decode_auto.rs); the query is what it did and the
+        // diagnosis now
+        if kw(node, "AUTO") {
+            if query {
+                return text(ui.decode_auto_text());
+            }
+            ui.decode_auto();
+            return None;
+        }
         if query && kw(node, "DIAGnosis") {
             let k = ui.m.dec_sel;
             return self.diagnosis_query(ui, k, false);

@@ -91,6 +91,13 @@ Part of the [SCPI reference](README.md).
 | `:DECode:DIAGnosis:FIGures` | Query | What the diagnosis measured, four numbers: the bit rate the edges of the line suggest (Hz; twice the bit rate for a Manchester line, whose edge is in the middle of a bit), the lowest and highest sample (V) and the share of decoded fields that failed their check; `NAN` where unknown. | `NAN,NAN,NAN,0.000000E+00` | - | OOS extension | The bit rate, the signal levels and the error share the diagnosis is made from. | `:DECode:DIAGnosis` |
 | `:BUS<n>:DIAGnosis` | Query | The same for decoder n (`:BUS<n>:DIAGnosis:FIGures` for its figures). | empty | Events pane, when it is empty | OOS extension | The diagnosis of decoder n: why it decoded nothing or mostly errors. | `:DECode:DIAGnosis` |
 
+### Automatic set-up
+
+| Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes | What it does | See also |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `:DECode:AUTO` | Action | Sets the selected decoder up for its signal in one step: the threshold to the middle of the signal on the screen (half the peak for a bipolar line such as ARINC 429), Polarity Auto where the decoder has it, the smallest time base whose screen holds a frame and the smallest memory depth that gives at least 10 samples a bit at it (kept when they do already; never cut: where no depth of the unit fits it says so and leaves them), then one acquisition (a single, when the scope is stopped; a running scope decodes its next record). Nothing else is changed; every change is named in the report. -221 does not occur: a setting that cannot be made is reported, not refused. | - | Decode > Threshold to middle | OOS extension | Sets a decoder up for its signal in one call, and tells what it changed. | `:DECode:DIAGnosis`, `:DECode:POLarity`, `:ACQuire:MDEPth` |
+| `:DECode:AUTO?` | Query | The report of the last `:DECode:AUTO`, one sentence a line: each setting it changed with its old value, each it kept, what it could not do, and below it the diagnosis of the decoder now (lines that begin with `diagnosis:`). The diagnosis is of the record on the screen: ask again when the single acquisition has stopped (`:TRIGger:STATus?` is STOP). | empty | - | OOS extension | What the automatic decoder set-up did and what the decoder says about its signal now. | `:DECode:DIAGnosis` |
+
 ### Plot bus
 
 | Command | Set/Query | Parameters and range | Default | Menu equivalent | Notes |

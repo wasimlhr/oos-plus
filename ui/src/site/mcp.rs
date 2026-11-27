@@ -152,16 +152,17 @@ const INSTRUCTIONS: &str = "OOS oscilloscope (Rigol DHO800/DHO900). Rules:
 2. Use the typed tools first: configure, acquire, measure, waveform, decode_results. Use scpi only for what they lack.
 3. Look up, send, verify. Never guess a SCPI command: find it with scpi_reference (search, then header), send it with
 scpi, then check the value read back in its answer. Sent is not done: a setting may be refused, rounded or limited.
-4. waveform answers statistics and a CSV link of its own per call: download the file at once (it is deleted after 2
-minutes); never ask for the samples inline.
+4. waveform gives statistics and a CSV link: download the file at once (deleted after 2 minutes); never ask for
+samples inline.
 5. acquire does not wait: after single, ask scope_state until trigger.status is STOP.
 6. After an error, read its hint. Do not resend the same command.
 7. If a tool says MCP is read only, do not try to change the scope.
-8. The scope does more than the typed tools: it arranges its screen (dock, float, move views), simulates signals,
+8. The scope does more than the typed tools: it arranges its screen, simulates signals,
 opens plots and analysers, presses menus. Before you say something cannot be done, call scpi_reference with no
 arguments: it lists what the scope can do by task.
 9. After a change to the screen, check it with screenshot.
 10. A value for the screen: measure_slot adds it to the measurement table; measure shows nothing.
+11. Decoder empty or failing: decode_results diagnosis; setup_decoder auto:true.
 Values in base units: V, s, Hz.";
 
 const SCPI: &str = "Run SCPI on the oscilloscope: `command`, one program message (commands separated by ';'), answers \
@@ -495,6 +496,16 @@ fn setup_decoder_schema() -> J {
             ("source4", string("Fourth role, or NONE.")),
             ("threshold", number("V")),
             ("state", boolean()),
+            (
+                "auto",
+                J::obj(&[
+                    ("type", J::s("boolean")),
+                    (
+                        "description",
+                        J::s("Set the decoder up for its signal: threshold between the levels, Polarity Auto, the time base and depth that give 10 samples a bit and hold a frame, then one acquisition; the answer names every change."),
+                    ),
+                ]),
+            ),
         ],
         &[],
     )
@@ -1346,7 +1357,7 @@ fn decoder_commands(args: &J) -> Result<Vec<String>, String> {
     }
     let mut rest = args.clone();
     if let J::Obj(fields) = &mut rest {
-        fields.retain(|(k, _)| k != "protocol");
+        fields.retain(|(k, _)| k != "protocol" && k != "auto");
     }
     let table = [
         ("slot", ":DEC:SEL", Kind::Num),
@@ -1384,6 +1395,12 @@ fn setup_decoder(run: &mut Run, args: &J) -> J {
     ]);
     let hint = J::s("The decode table is the Events pane: open it with :DISPlay:LOWer EVENTS (the scope: scpi tool); its rows with decode_results or table EVENTS.");
     let mut out = vec![("applied", J::Arr(applied)), ("decoder", decoder), ("decode_table", hint)];
+    // auto: what it set up, then what the decoder says of its line (the acquisition it arms has not finished here: ask
+    // decode_results, and scope_state for the trigger status)
+    if matches!(args.get("auto"), Some(J::Bool(true))) && run.w(":DEC:AUTO") {
+        let report = run.q(":DEC:AUTO?").unwrap_or_default();
+        out.push(("auto", J::Arr(report.lines().map(J::s).collect())));
+    }
     out.extend(diagnosis_fields(run));
     answer(run, J::obj(&out))
 }

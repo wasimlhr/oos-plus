@@ -291,7 +291,7 @@ struct BitRow<'a> {
 
 impl Ui {
     /// The samples of a decoder source in the record on the screen.
-    fn dec_wave(&self, source: usize) -> Option<&[f32]> {
+    pub(super) fn dec_wave(&self, source: usize) -> Option<&[f32]> {
         match decode_wave(source)? {
             WaveId::Ch(c) => self.last[0].as_ref().map(|r| &r.ch[c][..]),
             WaveId::Ref(i) => self.refs.get(i)?.as_ref().map(|r| &r.v[..]),

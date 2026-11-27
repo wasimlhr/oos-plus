@@ -123,6 +123,7 @@ mod bt;
 mod bus;
 mod busview;
 mod decband;
+mod decode_auto;
 mod decrows;
 mod deskew;
 mod dpt;

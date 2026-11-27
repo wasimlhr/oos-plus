@@ -342,3 +342,31 @@ fn the_diagnosis_of_a_decoder_is_a_query_of_sentences_and_figures() {
     line(&mut s, &mut ui, &cv, ":DECode:THReshold 1.65");
     assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:DIAGnosis?"), "", "{}", line(&mut s, &mut ui, &cv, ":DECode:DIAGnosis?"));
 }
+
+// Break it catches: :DECode:AUTO leaving a time base that gives under 10 samples a bit, clamping a depth instead of
+// choosing one the unit takes, changing a setting its report does not name, or not arming the acquisition
+#[test]
+fn decode_auto_sizes_the_record_for_the_bit_rate_and_names_what_it_changed() {
+    let (mut s, mut ui, cv) = session();
+    // 115200 baud at 10 ms/div: 10 kSa/s with 1000 points, under one sample a bit
+    line(&mut s, &mut ui, &cv, ":TIMebase:MAIN:SCALe 0.01;:ACQuire:MDEPth 1000;:DEC:PROTO UART;:DEC:SOUR CHAN1;:SYST:SET dec_baud = 7");
+    let (sr, _) = ui.m.srate_depth();
+    assert!(sr < 115200.0 * 10.0, "{sr}");
+    let channel_scale = line(&mut s, &mut ui, &cv, ":CHANnel1:SCALe?");
+    line(&mut s, &mut ui, &cv, ":STOP;:DECode:AUTO");
+    let report = line(&mut s, &mut ui, &cv, ":DECode:AUTO?");
+    println!("{report}");
+    let (sr, depth) = ui.m.srate_depth();
+    assert!(sr >= 115200.0 * 10.0, "{sr}\n{report}");
+    assert!(ui.m.time_per_div() as f64 * 10.0 >= 200.0 / 115200.0, "{report}");
+    assert!(report.contains("time base") && report.contains("(was 10.00 ms)"), "{report}");
+    assert!(report.contains("armed a single acquisition"), "{report}");
+    assert!(ui.m.dec_on && depth > 0);
+    // what it does not name it leaves alone
+    assert_eq!(line(&mut s, &mut ui, &cv, ":CHANnel1:SCALe?"), channel_scale);
+    assert_eq!(ui.m.trig_mode, TrigMode::Single);
+    // asked again with the settings right it keeps them
+    line(&mut s, &mut ui, &cv, ":DECode:AUTO");
+    let again = line(&mut s, &mut ui, &cv, ":DECode:AUTO?");
+    assert!(again.contains("kept"), "{again}");
+}
