@@ -9524,6 +9524,48 @@
    "after": []
   },
   {
+   "title": "Decoders and bus: Automatic set-up",
+   "intro": [],
+   "commands": [
+    {
+     "header": ":DECode:AUTO",
+     "set": ":DECode:AUTO",
+     "desc": "Sets a decoder up for its signal in one call, and tells what it changed.",
+     "related": [
+      ":DECode:AUTO?",
+      ":DECode:DIAGnosis",
+      ":DECode:POLarity",
+      ":ACQuire:MDEPth",
+      ":TIMebase[:MAIN]:SCALe"
+     ],
+     "remarks": [
+      "- Menu equivalent: Decode > Threshold to middle.",
+      "- Sets the selected decoder up for its signal in one step: the threshold to the middle of the signal on the screen (half the peak for a bipolar line such as ARINC 429), Polarity Auto where the decoder has it, the smallest time base whose screen holds a frame and the smallest memory depth that gives at least 10 samples a bit at it (kept when they do already; never cut: where no depth of the unit fits it says so and leaves them), then one acquisition (a single, when the scope is stopped; a running scope decodes its next record).",
+      "- Nothing else is changed; every change is named in the report. -221 does not occur: a setting that cannot be made is reported, not refused.",
+      "- Origin: OOS extension"
+     ],
+     "ext": true
+    },
+    {
+     "header": ":DECode:AUTO?",
+     "query": ":DECode:AUTO?",
+     "desc": "What the automatic decoder set-up did and what the decoder says about its signal now.",
+     "related": [
+      ":DECode:AUTO",
+      ":DECode:DIAGnosis"
+     ],
+     "remarks": [
+      "- The report of the last `:DECode:AUTO`, one sentence a line: each setting it changed with its old value, each it kept, what it could not do, and below it the diagnosis of the decoder now (lines that begin with `diagnosis:`).",
+      "- The diagnosis is of the record on the screen: ask again when the single acquisition has stopped (`:TRIGger:STATus?` is STOP).",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `empty`.",
+     "ext": true
+    }
+   ],
+   "after": []
+  },
+  {
    "title": "Decoders and bus: Plot bus",
    "intro": [],
    "commands": [
