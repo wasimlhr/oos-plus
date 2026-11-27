@@ -96,12 +96,12 @@ impl State {
 }
 
 fn open_worker() -> Worker<Job, Answer> {
-    Worker::spawn("waveform-math", |job: Job| Answer {
-        slot: job.slot,
-        key: job.key,
-        signal: compute_job(&job).map(Arc::new),
-    })
-    .expect("start bounded math worker")
+    Worker::spawn("waveform-math", answer).expect("start bounded math worker")
+}
+
+/// What the worker makes of a job: its result, with the slot and the key it belongs to.
+fn answer(job: Job) -> Answer {
+    Answer { slot: job.slot, key: job.key, signal: compute_job(&job).map(Arc::new) }
 }
 
 /// Sample only within the source's physical record. Never extrapolate a rail.
@@ -518,22 +518,22 @@ mod tests {
         assert_eq!(first.v[0], 0.5);
     }
     /// A running acquisition outruns a large computation: the drawing keeps the last finished result, the exact one
-    /// stays "computing" (a stopped scope shows no older one).
+    /// stays "computing" (a stopped scope shows no older one). The test is the worker's thread, so a job is finished
+    /// when the test says so and not when the computer gets to it: with the real thread the second job could finish
+    /// between two of the checks, and the exact result was there where "computing" was expected.
     #[test]
     fn a_running_scope_draws_the_last_finished_math_result_while_a_newer_one_is_computed() {
         let mut ui = refs();
+        let (worker, jobs, results) = Worker::manual();
+        ui.math.state.borrow_mut().worker = Some(worker);
+        let finish = || results.send(answer(jobs.try_recv().expect("a job is out"))).unwrap();
         ui.refs[0].as_mut().unwrap().v = vec![2.0; BACKGROUND + 1].into();
         ui.m.math = MathOp::Lin;
         ui.m.math_lin = (2.0, 1.0);
         assert!(ui.math_record(0).unwrap().is_none());
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        let first = loop {
-            if let Some(w) = ui.math_record(0).unwrap() {
-                break w;
-            }
-            assert!(std::time::Instant::now() < deadline, "the background job finishes");
-            std::thread::sleep(std::time::Duration::from_millis(5));
-        };
+        finish();
+        let first = ui.math_record(0).unwrap().expect("the background job is finished");
+        assert_eq!(first.v[0], 5.0);
         // the next record: a new key, a new job
         ui.refs[0].as_mut().unwrap().v = vec![3.0; BACKGROUND + 1].into();
         assert!(ui.math_record(0).unwrap().is_none(), "the exact result is computing");
@@ -542,6 +542,12 @@ mod tests {
         ui.m.run = RunState::Run;
         let shown = ui.math_record_shown(0).unwrap().expect("running: the last finished result");
         assert!(Arc::ptr_eq(&shown, &first));
+        // the job is finished: the exact result takes the older one's place, running or stopped
+        finish();
+        let exact = ui.math_record_shown(0).unwrap().expect("running: the exact result");
+        assert_eq!(exact.v[0], 7.0);
+        ui.m.run = RunState::Stop;
+        assert!(Arc::ptr_eq(&ui.math_record_shown(0).unwrap().expect("stopped: the exact result"), &exact));
     }
     #[test]
     fn large_reference_math_is_background_cached_and_rejects_stale_settings() {
