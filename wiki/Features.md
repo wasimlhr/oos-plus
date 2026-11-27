@@ -59,10 +59,10 @@ in the README. How to use it: the guides listed on [[Home]].
 - `:DECode:AUTO` (or `auto` of the MCP tool `setup_decoder`) sets a decoder up for its signal in one step: the
   threshold between the levels, Polarity Auto, the time base and depth for 10 samples a bit and a whole frame, one
   acquisition, and a report of every change
-- Polarity (Decode > Polarity) for MIL-STD-1553, ARINC 429, DMX512 and UART 9-bit: a bus connected the wrong way round
-  is read inverted without inverting the channel on the screen; Auto decodes both ways and keeps the reading with
-  fewer errors, and the decoder's name says "(inverted)". UART has its own idle-level row; the other decoders do not
-  offer it (see [docs/protocol-modules.md](https://github.com/dekajoule/oos/blob/main/docs/protocol-modules.md#polarity))
+- Polarity (Decode > Polarity) for UART, UART 9-bit, Modbus RTU and ASCII, MIL-STD-1553, ARINC 429 and DMX512: a bus
+  connected the wrong way round (or an idle-low UART) is read inverted without inverting the channel on the screen;
+  Auto decodes both ways and keeps the reading with fewer errors, and the decoder's name says "(inverted)". The
+  other decoders do not offer it, each for a reason (see [docs/protocol-modules.md](https://github.com/dekajoule/oos/blob/main/docs/protocol-modules.md#polarity))
 - Serial: UART, UART 9-bit, I2C, SPI, Quad-SPI, I3C, 1-Wire, DS2482, SWD, JTAG
 - Automotive and aerospace: CAN, CAN-FD, LIN, FlexRay, SENT, ARINC 429, MIL-STD-1553. LIN takes the bit rate of each
   frame from its sync field, so a bus at a rate that Baud does not list is read. The FlexRay trigger on Frame is the

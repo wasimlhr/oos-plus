@@ -234,16 +234,30 @@ mod tests {
         let report = ui.decode_auto().join("\n");
         assert!((ui.m.dec_thr - 1.65).abs() < 0.02, "{} {}", ui.m.dec_thr, report);
         assert!(report.contains("threshold 1.65 V (was 7.00 V)"), "{report}");
-        // the protocol has no polarity row: nothing is said of one
-        assert!(!report.contains("polarity"), "{report}");
+        // UART has the Polarity row now: Auto chooses it
+        assert!(report.contains("polarity Auto (was Normal)"), "{report}");
         assert_eq!(ui.m.dec_proto, Proto::UART);
         assert!(ui.decode_auto_text().starts_with("decoder 1 UART"));
     }
 
-    // Break it catches: a decoder that is Normal where it has the row, or ARINC 429 given an Auto it has not
+    // Break it catches: a decoder that is Normal where it has the row, or ARINC 429 given an Auto it has not; a
+    // decoder without the row (I2C) that has polarity said of it
     #[test]
     fn auto_chooses_polarity_auto_where_it_is_offered() {
         let mut ui = ui_with_signal();
+        ui.set_dec_proto(Proto::I2C);
+        assert!(!ui.decode_auto().join("
+").contains("polarity"));
+        for key in ["Uart", "ModbusRtu", "ModbusAscii"] {
+            ui.set_dec_proto(Proto::from_key(key).unwrap());
+            let Proto::Module(i) = ui.m.dec_proto;
+            let (slot, _) = crate::protocols::get(i).info().polarity.unwrap();
+            ui.m.dec_opt[slot] = 0;
+            let report = ui.decode_auto().join("
+");
+            assert_eq!(ui.m.dec_opt[slot], 2, "{key}: {report}");
+            assert!(report.contains("polarity Auto (was Normal)"), "{key}: {report}");
+        }
         ui.set_dec_proto(Proto::from_key("Mil1553").unwrap());
         let report = ui.decode_auto().join("\n");
         assert_eq!(ui.m.dec_opt[0], 2, "{report}");

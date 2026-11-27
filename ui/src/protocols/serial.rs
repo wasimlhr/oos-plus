@@ -52,9 +52,10 @@ pub struct ModbusRtu;
 
 const PARITY_NAMES: [&str; 3] = ["None", "Even", "Odd"];
 
-const RTU_OPTIONS: [Opt; 2] = [
+const RTU_OPTIONS: [Opt; 3] = [
     Opt { name: "Baud", choices: &BAUD_NAMES, default: 4 },
     Opt { name: "Parity", choices: &PARITY_NAMES, default: 1 },
+    POLARITY,
 ];
 
 impl Protocol for ModbusRtu {
@@ -81,10 +82,11 @@ const ASCII_BITS: [&str; 2] = ["7", "8"];
 /// Modbus ASCII always has a parity bit (the old shared row's "None" decoded as even).
 const ASCII_PARITY: [&str; 2] = ["Even", "Odd"];
 
-const ASCII_OPTIONS: [Opt; 3] = [
+const ASCII_OPTIONS: [Opt; 4] = [
     Opt { name: "Baud", choices: &BAUD_NAMES, default: BAUD_DEFAULT },
     Opt { name: "Data bits", choices: &ASCII_BITS, default: 0 },
     Opt { name: "Parity", choices: &ASCII_PARITY, default: 0 },
+    POLARITY,
 ];
 
 impl Protocol for ModbusAscii {

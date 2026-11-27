@@ -20,12 +20,20 @@ const fn idle_fall(idle: f32) -> Option<DemoTrig> {
 
 pub struct Uart;
 
+static UART_OPTIONS: [Opt; 1] = [POLARITY];
+
 impl Protocol for Uart {
     fn info(&self) -> &'static ModuleInfo {
         &oos_dsp::decode::UART
     }
     fn shared(&self) -> &'static [Row] {
-        &[Row::Baud, Row::Bits, Row::Parity, Row::Pol, Row::Fmt]
+        &[Row::Baud, Row::Bits, Row::Parity, Row::Fmt]
+    }
+    /// The Polarity row: Inverted reads the line the other way round from the serial trigger's polarity, which the
+    /// decoder follows as it always did (the trigger menu has that row; the decode menu had a copy of it, which the
+    /// Polarity row replaces).
+    fn options(&self) -> &'static [Opt] {
+        &UART_OPTIONS
     }
     fn bit_row(&self) -> bool {
         true

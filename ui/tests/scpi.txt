@@ -101,6 +101,7 @@ scpi $S/scpi-answers.txt :DECode:DIAGnosis:FIGures?
 scpi $S/scpi-answers.txt :BUS1:DIAGnosis?
 scpi $S/scpi-answers.txt :BUS1:DIAGnosis:FIGures?
 scpi $S/scpi-answers.txt :DECode:PROTocol 1553;:DECode:POLarity INV;:DECode:POLarity?;:BUS1:POLarity?;:DECode:POLarity AUTO;:DECode:POLarity?;:DECode:PROTocol UART;:DECode:POLarity AUTO
+scpi $S/scpi-answers.txt :DECode:PROTocol UART;:DECode:POLarity INV;:DECode:POLarity?;:DECode:PROTocol MODBUSRTU;:DECode:POLarity AUTO;:DECode:POLarity?;:DECode:PROTocol MODBUSASCII;:DECode:POLarity INV;:BUS1:POLarity?;:DECode:PROTocol IIC;:DECode:POLarity INV
 scpi $S/scpi-answers.txt :DECode:EVENts?
 scpi $S/scpi-answers.txt :CHANnel1:POSition?
 scpi $S/scpi-answers.txt :CHANnel1:UNITs?

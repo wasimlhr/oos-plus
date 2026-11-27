@@ -21,7 +21,7 @@ impl Ui {
                 Row::CanRate => m.dec_canrate = v as usize,
                 Row::CanH => m.dec_canh = v != 0,
                 Row::UsbSpeed => m.dec_uspeed = v as usize,
-                Row::CphyRate | Row::Fmt | Row::Pol | Row::SpiCs => {}
+                Row::CphyRate | Row::Fmt | Row::SpiCs => {}
             }
         }
     }

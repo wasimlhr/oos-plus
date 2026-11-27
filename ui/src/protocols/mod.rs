@@ -95,8 +95,6 @@ pub enum Row {
     CphyRate,
     /// the event table in ASCII
     Fmt,
-    /// the UART line is inverted (idle low): the polarity of the protocol trigger, `Shared::uart_inv`
-    Pol,
     /// SPI: the chip select is active high (the protocol trigger's, `Shared::spi_cs_high`)
     SpiCs,
 }

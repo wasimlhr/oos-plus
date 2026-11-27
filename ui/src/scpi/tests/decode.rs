@@ -303,9 +303,17 @@ fn a_cursor_can_read_the_result_of_a_math_channel() {
 #[test]
 fn the_polarity_of_a_decoder_is_set_and_read_over_scpi() {
     let (mut s, mut ui, cv) = session();
-    // UART has its own Polarity row (the idle level), no option row of this kind: -224
-    line(&mut s, &mut ui, &cv, ":DECode:POLarity INV");
+    // I2C has no Polarity row: -224 (an open-drain bus has one idle level)
+    line(&mut s, &mut ui, &cv, ":DECode:PROTocol I2C;:DECode:POLarity INV");
     assert!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?").starts_with("-224"));
+    // UART, Modbus RTU and ASCII have it after their own rows (Modbus: baud, parity, then Polarity)
+    line(&mut s, &mut ui, &cv, ":DECode:PROTocol UART;:DECode:POLarity INV");
+    assert_eq!((line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), ui.m.dec_opt[0]), ("INVERTED".to_string(), 1));
+    line(&mut s, &mut ui, &cv, ":DECode:PROTocol MODBUSRTU;:DECode:POLarity AUTO");
+    assert_eq!(ui.m.dec_opt[2], 2);
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "AUTO");
+    line(&mut s, &mut ui, &cv, ":DECode:PROTocol MODBUSASCII;:DECode:POLarity INV");
+    assert_eq!(ui.m.dec_opt[3], 1);
     line(&mut s, &mut ui, &cv, ":DECode:PROTocol 1553");
     assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "NORMAL");
     line(&mut s, &mut ui, &cv, ":DECode:POLarity INVerted");
