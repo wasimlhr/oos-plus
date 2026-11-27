@@ -292,6 +292,32 @@ mod tests {
         assert_eq!(module.message_error(&bad), "Manchester or parity error");
     }
 
+    // A bus that sends a word every 2 ms is no message of words: a word after more than 14 us of quiet bus does not
+    // belong to the command before it (seen on a unit: a command and a data word 2 ms later, "Word count mismatch")
+    #[test]
+    fn a_1553_word_after_a_long_pause_is_a_message_of_its_own() {
+        use oos_dsp::decode::{Kind, Packet, MIL1553_COMMAND as C};
+        let mut m = Model::default();
+        m.dec_proto = Proto::from_key("Mil1553").unwrap();
+        let w = |t: f64, cmd: bool, value2: Option<u32>| Packet {
+            t0: t,
+            t1: t + 20e-6,
+            kind: Kind::Word { cmd },
+            value: 0x0822,
+            value2,
+            ok: true,
+        };
+        // a command, its data word at once, a command 2 ms later, a data word 2 ms after that, a data word at once
+        let p = [
+            w(0.0, true, Some(C)),
+            w(20e-6, false, None),
+            w(2e-3, true, Some(C)),
+            w(4e-3, false, None),
+            w(4e-3 + 20e-6, false, None),
+        ];
+        assert_eq!(crate::ui::decband::messages(&m, &p), vec![0..2, 2..3, 3..5]);
+    }
+
     #[test]
     fn every_table_is_there_by_name_with_its_index_first() {
         let ui = demo_1553();

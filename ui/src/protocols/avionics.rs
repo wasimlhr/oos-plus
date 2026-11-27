@@ -142,6 +142,10 @@ impl Protocol for Mil1553 {
     fn frame_start(&self) -> Option<fn(&Packet) -> bool> {
         Some(|p| p.kind == Kind::Word { cmd: true } && p.value2 == Some(oos_dsp::decode::MIL1553_COMMAND))
     }
+    /// A word after more than 14 us of quiet bus is not part of the message before it.
+    fn frame_gap(&self) -> Option<f64> {
+        Some(14e-6)
+    }
     /// A message in the Events pane: the terminal, the direction, the subaddress and the count of its command (two
     /// of each for a transfer between two terminals), its data words, and what the status says.
     fn columns(&self) -> &'static [(&'static str, Col)] {

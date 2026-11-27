@@ -51,7 +51,7 @@ Rectangles are `x,y,w,h` in screen pixels from the top-left corner. `:UI:SCReen?
 | `:VIEW:TRACes` | Set / Query | `OVERlay\|STACked\|WINDows`: all traces on one graticule, one lane each in one plot, or four separate waveform views (the window of each source is set on Display > Windows). | `OVER` | Right-click > Overlay traces, Stacked traces, Four windows; Display > Traces | OOS extension |
 | `:VIEW:FIT` | Set | Fits the whole record into the screen. | - | Right-click > Fit record | OOS extension |
 | `:ZOOM:HERE` | Set / Query | Time in seconds: opens the zoom window there (or moves it). The query answers the zoom window's centre. | - | Right-click > Zoom here | OOS extension |
-| `:ZOOM:BOX` | Set / Query | `<t0>,<t1>` seconds: the finest zoom step that holds the span, centred on it. The query answers the zoom window as `<t0>,<t1>`, `0,0` when zoom is off. | - | Right-click > Zoom box | OOS extension |
+| `:ZOOM:BOX` | Set / Query | `<t0>,<t1>` seconds: the finest zoom step that holds the span, centred on it. The query answers the zoom window as `<t0>,<t1>`, `0,0` when zoom is off (`:ZOOM:BOX 0,0` is refused with -224: close the zoom with `:ZOOM:CLOSe`). In the Studio layout the zoom window is opened by this command; `:TIMebase:DELay:ENABle` does not draw it there. | - | Right-click > Zoom box | OOS extension |
 | `:ZOOM:RESet` | Set | The zoom window back to its default size and place. | - | Right-click > Reset zoom | OOS extension |
 | `:ZOOM:CLOSe` | Set | Closes the zoom window. | - | Right-click > Close zoom | OOS extension |
 
