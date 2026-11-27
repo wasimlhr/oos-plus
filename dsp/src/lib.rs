@@ -60,6 +60,7 @@ pub mod clock;
 pub mod cphy;
 pub mod dcc_yard;
 pub mod decode;
+pub mod diagnosis;
 pub mod dpt;
 pub mod edges;
 pub mod expr;

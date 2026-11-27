@@ -126,20 +126,50 @@ pub(crate) fn decode_at(m: &Model, ch: [&[f32]; NCH], dt: f64, thr: f32, hy: f32
     let lines = [lines[0], line(0), line(1), line(2)];
     let chans: [Option<&[f32]>; 4] = std::array::from_fn(|c| ch.get(c).copied().filter(|v| !v.is_empty()));
     let src = [Some(m.dec_src), Some(m.dec_src2), m.dec_cs, m.dec_src4];
-    let (packets, inverted) = p.info().decode_used(&crate::protocols::Lines {
-        lines,
-        dt,
-        thr,
-        hy,
-        opt: m.dec_opts(),
-        sh: crate::protocols::shared(m),
-        chans,
-        src,
-    })?;
-    if p.info().polarity_of(&m.dec_opts()) == oos_dsp::protocols::Polarity::Auto {
-        POLARITY_USED.lock().unwrap_or_else(|e| e.into_inner()).insert(polarity_key(m), inverted);
+    let l = crate::protocols::Lines { lines, dt, thr, hy, opt: m.dec_opts(), sh: crate::protocols::shared(m), chans, src };
+    let (packets, inverted) = p.info().decode_used(&l)?;
+    let key = polarity_key(m);
+    if p.info().polarity_of(&l.opt) == oos_dsp::protocols::Polarity::Auto {
+        POLARITY_USED.lock().unwrap_or_else(|e| e.into_inner()).insert(key.clone(), inverted);
     }
+    // what this decode found out about its line: kept for the band, the Events pane, :DECode:DIAGnosis? and MCP
+    let mut kept = DIAGNOSIS.lock().unwrap_or_else(|e| e.into_inner());
+    if kept.len() >= DIAGNOSES {
+        kept.clear();
+    }
+    kept.insert(key, oos_dsp::diagnosis::diagnose(p.info(), &l, &packets));
     Ok(packets)
+}
+
+/// The decoder settings the diagnosis of the last decode is kept for.
+const DIAGNOSES: usize = 32;
+
+/// The diagnosis of the last decode of each decoder setting (`Model::dec_cfg`, as text). A table of its own: decoding
+/// runs on several threads.
+static DIAGNOSIS: std::sync::Mutex<std::collections::BTreeMap<String, oos_dsp::diagnosis::Diagnosis>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+/// What the decode of `from` found out and chose is also what the decoder `to` found: a decode that ran on the
+/// settings of another model (the reference decoder moves the sources into its own slots) is the decode of `to`.
+pub(crate) fn share_findings(from: &Model, to: &Model) {
+    let (a, b) = (polarity_key(from), polarity_key(to));
+    if a == b {
+        return;
+    }
+    let used = POLARITY_USED.lock().unwrap_or_else(|e| e.into_inner()).get(&a).copied();
+    if let Some(u) = used {
+        POLARITY_USED.lock().unwrap_or_else(|e| e.into_inner()).insert(b.clone(), u);
+    }
+    let d = DIAGNOSIS.lock().unwrap_or_else(|e| e.into_inner()).get(&a).cloned();
+    if let Some(d) = d {
+        DIAGNOSIS.lock().unwrap_or_else(|e| e.into_inner()).insert(b, d);
+    }
+}
+
+/// What the last decode of the decoder `m` is the view of found out about its line (`oos_dsp::diagnosis`): `None`
+/// before one ran.
+pub fn diagnosis(m: &Model) -> Option<oos_dsp::diagnosis::Diagnosis> {
+    DIAGNOSIS.lock().unwrap_or_else(|e| e.into_inner()).get(&polarity_key(m)).cloned()
 }
 
 /// What Polarity Auto chose the last time each decoder setting was decoded: the decoder settings
@@ -436,5 +466,40 @@ mod serial_tests {
         (m.ser.bytes, m.ser.mask, m.ser.rel, m.trig_bus_val, m.ser.max) = (1, u64::MAX, Rel::In, 0x10, 0xaf);
         // the first byte of each frame: 0x12, 0xab and 0xa5 (the 7-bit reading of the third frame's address)
         assert_eq!(points(&m, &p), [2.0, 7.0, 11.0]);
+    }
+}
+
+#[cfg(test)]
+mod polarity_tests {
+    use super::*;
+
+    /// An inverted 1553 message on CH1, 50 samples a microsecond.
+    fn inverted_1553() -> (Model, Vec<f32>, f64) {
+        let words = [(true, 0x0c23, 7.0), (true, 0x0800, 0.0), (false, 0xbeef, 0.0), (false, 0x1234, 0.0)];
+        let l = oos_dsp::sim::mil1553_message(&words, 7.0);
+        let dt = 1e-6 / 50.0;
+        let v: Vec<f32> = oos_dsp::sim::sample(|t| -l.v(t), 0.0, dt, 50 * 120);
+        let mut m = Model::default();
+        (m.dec_proto, m.dec_src, m.dec_thr, m.dec_on) = (Proto::from_key("Mil1553").unwrap(), 0, 0.0, true);
+        (m, v, dt)
+    }
+
+    // Break it catches: the diagnosis of a decode not kept where the band, the Events pane, SCPI and MCP read it, Auto
+    // not saying it read inverted, or Normal's sentence missing the row that fixes it
+    #[test]
+    fn an_inverted_bus_is_diagnosed_as_it_is_and_read_right_with_auto() {
+        let (mut m, v, dt) = inverted_1553();
+        let ch: [&[f32]; NCH] = std::array::from_fn(|c| if c == 0 { &v[..] } else { &[][..] });
+        let p = decode(&m, ch, dt).unwrap();
+        assert!(p.iter().any(|x| !x.ok));
+        let d = diagnosis(&m).unwrap();
+        assert!(d.lines.join(" ").contains("set Polarity to Auto or Inverted"), "{:?}", d.lines);
+        assert!(d.error_fraction() > 0.5 && !read_inverted(&m));
+        // Auto reads it right, says so, and has nothing to diagnose
+        m.dec_opt[0] = 2;
+        let p = decode(&m, ch, dt).unwrap();
+        assert!(p.iter().all(|x| x.ok) && !p.is_empty());
+        assert!(read_inverted(&m));
+        assert!(diagnosis(&m).unwrap().lines.is_empty());
     }
 }

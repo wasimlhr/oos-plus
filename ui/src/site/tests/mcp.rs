@@ -296,6 +296,13 @@ fn mcp_decoder_set_up_and_its_rows() {
     // the decode table says where it is on the screen, and its rows begin with the Index
     assert!(data(&r).get("table_hint").and_then(J::str).is_some_and(|h| h.contains(":DISPlay:LOWer EVENTS")), "{r}");
     assert_eq!(data(&r).get("columns").map(|c| items(Some(c))[0].str()), Some(Some("Index")), "{r}");
+    // what the decoder found out about its line comes with the rows: sentences (none here) and the figures
+    assert!(matches!(data(&r).get("diagnosis"), Some(J::Arr(_))), "{r}");
+    let signal = data(&r).get("signal").unwrap();
+    for key in ["bit_rate_hz", "min_v", "max_v", "error_fraction"] {
+        assert!(signal.get(key).is_some(), "{key}: {r}");
+    }
+    assert!(data(&call(&mut ui, &cv, &mut scpi, "setup_decoder", r#"{"state":true}"#)).get("diagnosis").is_some());
 }
 
 // Break it catches: a table that cannot be listed or read by name through MCP, a row without its Index

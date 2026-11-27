@@ -1150,6 +1150,25 @@ fn table_rows(run: &mut Run, name: &str, offset: usize, rows: usize, extra: Vec<
     answer(run, J::obj(&out))
 }
 
+/// What the selected decoder found out about its line, for `decode_results` and `setup_decoder`: `diagnosis`, the
+/// sentences that say why it decoded nothing or mostly errors and what to change (empty when it is fine), and
+/// `signal`, what it measured (the bit rate the edges suggest, the lowest and highest sample, the share of fields that
+/// failed a check). Nothing while the decoder is still working.
+fn diagnosis_fields(run: &mut Run) -> Vec<(&'static str, J)> {
+    let Some(text) = run.q(":DEC:DIAG?").filter(|t| t != "BUSY") else { return Vec::new() };
+    let lines: Vec<J> = text.lines().filter(|l| !l.is_empty()).map(J::s).collect();
+    let figures = run.q(":DEC:DIAG:FIG?").unwrap_or_default();
+    let n: Vec<J> = figures.split(',').map(|v| v.trim().parse::<f64>().map_or(J::Null, J::Num)).collect();
+    let at = |k: usize| n.get(k).cloned().unwrap_or(J::Null);
+    let signal = J::obj(&[
+        ("bit_rate_hz", at(0)),
+        ("min_v", at(1)),
+        ("max_v", at(2)),
+        ("error_fraction", at(3)),
+    ]);
+    vec![("diagnosis", J::Arr(lines)), ("signal", signal)]
+}
+
 fn decode_results(run: &mut Run, args: &J) -> J {
     let (offset, rows) =
         match (count(args, "offset", 0, 0, usize::MAX), count(args, "max_rows", ROWS_DEFAULT, 1, ROWS_MAX)) {
@@ -1157,7 +1176,8 @@ fn decode_results(run: &mut Run, args: &J) -> J {
             (Err(e), _) | (_, Err(e)) => return refuse(&e),
         };
     let view = run.q(":DEC:EVEN:VIEW?").unwrap_or_default().to_ascii_lowercase();
-    let extra = vec![("view", J::Str(view)), ("table_hint", J::s(DECODE_TABLE_HINT))];
+    let mut extra = vec![("view", J::Str(view)), ("table_hint", J::s(DECODE_TABLE_HINT))];
+    extra.extend(diagnosis_fields(run));
     table_rows(run, "EVENTS", offset, rows, extra)
 }
 
@@ -1363,5 +1383,7 @@ fn setup_decoder(run: &mut Run, args: &J) -> J {
         ("threshold", q(":DEC:THR?")),
     ]);
     let hint = J::s("The decode table is the Events pane: open it with :DISPlay:LOWer EVENTS (the scope: scpi tool); its rows with decode_results or table EVENTS.");
-    answer(run, J::obj(&[("applied", J::Arr(applied)), ("decoder", decoder), ("decode_table", hint)]))
+    let mut out = vec![("applied", J::Arr(applied)), ("decoder", decoder), ("decode_table", hint)];
+    out.extend(diagnosis_fields(run));
+    answer(run, J::obj(&out))
 }

@@ -9460,6 +9460,70 @@
    "after": []
   },
   {
+   "title": "Decoders and bus: Diagnosis",
+   "intro": [],
+   "commands": [
+    {
+     "header": ":DECode:DIAGnosis",
+     "query": ":DECode:DIAGnosis?",
+     "desc": "Says why a decoder shows nothing or errors: the cause and the setting to change, so a bus is not left undecoded without a reason.",
+     "related": [
+      ":DECode:DIAGnosis:FIGures",
+      ":BUS<n>:DIAGnosis",
+      ":DECode:POLarity",
+      ":DECode:EVENts"
+     ],
+     "remarks": [
+      "- Menu equivalent: Events pane, when it is empty.",
+      "- Why the selected decoder decoded nothing, or mostly errors, in short sentences one a line, each naming the setting to change (\"sample rate 15.6 kSa/s is too low for 1.00 Mb/s: ...\", \"all 21 words fail their check, but the inverted line decodes with 0 errors in 21: ... set Polarity to Auto or Inverted ...\", a threshold outside the signal, a flat line, a record shorter than 20 bit times, a bit rate the edges do not show).",
+      "- A record the decoder cannot read says why in one line (the limit of a deep record, a source that is off).",
+      "- Empty when the decode is fine; `BUSY` while decoding.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `empty`.",
+     "ext": true
+    },
+    {
+     "header": ":DECode:DIAGnosis:FIGures",
+     "query": ":DECode:DIAGnosis:FIGures?",
+     "desc": "The bit rate, the signal levels and the error share the diagnosis is made from.",
+     "related": [
+      ":DECode:DIAGnosis"
+     ],
+     "remarks": [
+      "- What the diagnosis measured, four numbers: the bit rate the edges of the line suggest (Hz; twice the bit rate for a Manchester line, whose edge is in the middle of a bit), the lowest and highest sample (V) and the share of decoded fields that failed their check; `NAN` where unknown.",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `NAN,NAN,NAN,0.000000E+00`.",
+     "ext": true
+    },
+    {
+     "header": ":BUS<n>:DIAGnosis",
+     "query": ":BUS<n>:DIAGnosis?",
+     "desc": "The diagnosis of decoder n: why it decoded nothing or mostly errors.",
+     "related": [
+      ":DECode:DIAGnosis"
+     ],
+     "params": [
+      [
+       "<n>",
+       "Integer",
+       "Numeric suffix of the header; `:BUS1:DIAGnosis` is `n` = 1",
+       "—"
+      ]
+     ],
+     "remarks": [
+      "- Menu equivalent: Events pane, when it is empty.",
+      "- The same for decoder n (`:BUS<n>:DIAGnosis:FIGures` for its figures).",
+      "- Origin: OOS extension"
+     ],
+     "returns": "On a freshly started default model the query returns `empty`.",
+     "ext": true
+    }
+   ],
+   "after": []
+  },
+  {
    "title": "Decoders and bus: Plot bus",
    "intro": [],
    "commands": [

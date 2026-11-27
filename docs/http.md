@@ -406,7 +406,10 @@ answers as `9.9E37` (none) is `null`.
   else then), else `pending` false, `table`, `view` (messages, fields or lines), `columns`, `total_rows`, `offset`,
   `rows` (an object per row, keyed by the column titles, `Index` first: for a MIL-STD-1553 word Type, RT, T/R, SA, Mode
   code / words, Data, Status, Status bits, C/S payload, Error) and `next_offset` (null after the last row), and a hint
-  how to show the table on the screen (`:DISPlay:LOWer EVENTS`).
+  how to show the table on the screen (`:DISPlay:LOWer EVENTS`). Also `diagnosis`, the sentences of the selected
+  decoder that say why it decoded nothing or mostly errors and what to change (an empty array when it is fine;
+  absent while it computes), and `signal`: `bit_rate_hz` (the rate the edges suggest), `min_v`, `max_v` and
+  `error_fraction` (null where unknown): the same as `:DECode:DIAGnosis?` and `:DECode:DIAGnosis:FIGures?`.
 
 ### MCP tool `table`
 
@@ -488,7 +491,8 @@ answers as `9.9E37` (none) is `null`.
   `source`, `source2`, `cs`, `source4`, `threshold`, `state`.
 - Answer: `applied`, the commands that ran (`:DEC:SEL`, then `:DEC:PROT`, then the others), and `decoder`, the slot
   read back (`slot`, `protocol`, `state`, `input`, `source`, `source2`, `threshold`), and `decode_table`, a hint that
-  the decode table is the Events pane, opened by `:DISPlay:LOWer EVENTS` and read by `decode_results`.
+  the decode table is the Events pane, opened by `:DISPlay:LOWer EVENTS` and read by `decode_results`. Also
+  `diagnosis` and `signal` as in `decode_results`.
 
 ### MCP tool `screenshot`
 

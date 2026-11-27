@@ -644,7 +644,11 @@ impl Ui {
             } else {
                 "No decoder events in this record"
             };
-            let note = startup::fit_text(&f.sb, note, r.w - 20);
+            // an empty list says why, where a decoder knows
+            let why = (total == 0 && !self.decode_busy())
+                .then(|| (0..DECODERS).filter(|&k| self.m.dec_is_on(k)).find_map(|k| self.decoder_note(k)))
+                .flatten();
+            let note = startup::fit_text(&f.sb, why.as_deref().unwrap_or(note), r.w - 20);
             cv.text(&f.sb, r.x + 12, r.y + head_h + 15, &note, DIM);
             return;
         }

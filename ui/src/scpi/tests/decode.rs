@@ -323,3 +323,22 @@ fn the_polarity_of_a_decoder_is_set_and_read_over_scpi() {
     assert!(line(&mut s, &mut ui, &cv, ":SYSTem:ERRor?").starts_with("-224"));
     assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:POLarity?"), "INVERTED");
 }
+
+// Break it catches: :DECode:DIAGnosis? answering for a decoder that is fine, or not saying that the threshold is
+// outside the signal, or its figures not parsing as four numbers
+#[test]
+fn the_diagnosis_of_a_decoder_is_a_query_of_sentences_and_figures() {
+    let (mut s, mut ui, cv) = session();
+    decoded_reference_fixture(&mut ui, 4000);
+    line(&mut s, &mut ui, &cv, ":DEC:PROTO UART;:DEC:SOUR R1;:DEC:THR 9;:DEC:STAT ON;:SYST:SET dec_baud = 7");
+    let text = line(&mut s, &mut ui, &cv, ":DECode:DIAGnosis?");
+    assert!(text.contains("threshold 9.00 V is outside the signal (0 V to 3.30 V)"), "{text}");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":BUS1:DIAGnosis?"), text);
+    let figures = line(&mut s, &mut ui, &cv, ":DECode:DIAGnosis:FIGures?");
+    let n: Vec<f64> = figures.split(',').map(|x| x.parse().unwrap()).collect();
+    assert_eq!(n.len(), 4, "{figures}");
+    assert!((n[1] - 0.0).abs() < 0.01 && (n[2] - 3.3).abs() < 0.01, "{figures}");
+    // with the threshold between the levels the byte decodes and there is nothing to say
+    line(&mut s, &mut ui, &cv, ":DECode:THReshold 1.65");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DECode:DIAGnosis?"), "", "{}", line(&mut s, &mut ui, &cv, ":DECode:DIAGnosis?"));
+}
