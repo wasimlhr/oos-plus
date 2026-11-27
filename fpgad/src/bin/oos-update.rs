@@ -405,7 +405,10 @@ fn start_kexec(sp: &Path, s: update::Staged, f: kexec::Flags) {
     let undo = |why: &str, stopped: Option<&Quiet>| -> ! {
         let _ = kexec::unload();
         if stopped.is_some() {
-            let _ = std::process::Command::new("mount").args(["-o", "remount,rw", "/oos"]).status();
+            if let Err(e) = oos_hal::fsutil::data_close("reopen") {
+                println!("warning: {}", e);
+                let _ = std::process::Command::new("mount").args(["-o", "remount,rw", "/oos"]).status();
+            }
         }
         let _ = update::kexec_clear(sp, &format!("kexec start of build {} failed ({}): nothing installed", short, why));
         if let Some(q) = stopped {
@@ -442,10 +445,13 @@ fn start_kexec(sp: &Path, s: update::Staged, f: kexec::Flags) {
     let q = quiesce();
     // the lock file is open for writing: /oos can only go read only without it
     drop(lock);
-    unsafe { libc::sync() };
-    // the kernel does not sync or unmount on kexec
-    if !std::process::Command::new("mount").args(["-o", "remount,ro", "/oos"]).status().is_ok_and(|x| x.success()) {
-        println!("warning: /oos stays writable (busy); synced");
+    // the kernel does not sync or unmount on kexec: the stick unmounted, everything synced, /oos read only
+    match oos_hal::fsutil::data_close("close") {
+        Ok(l) => println!("{}", l),
+        Err(e) => {
+            unsafe { libc::sync() };
+            println!("warning: {}; synced", e);
+        }
     }
     let e = kexec::start();
     undo(&e, Some(&q));

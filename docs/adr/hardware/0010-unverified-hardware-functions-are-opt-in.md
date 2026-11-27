@@ -25,7 +25,7 @@ The keys on 2026-11-15, as read by the code (`crate::sysconf::flag` and `setting
 | Key | Function | State |
 |---|---|---|
 | `acq.pipeline = frames` | the Standard draw path, the way back (ADR 0029) | Batch on by default since it was verified on the unit 2026-11-16 (until then `acq.pipeline = batch`, off by default) |
-| `acq.prearm = on` | arm the next batch before the current one is decoded | off by default |
+| `acq.prearm = off` | no arming of the next batch before the current one is decoded | arming ahead on by default since it was verified on the unit 2026-11-27 (the whole device test with it on, no failed disarm; until then `acq.prearm = on`, off by default) |
 | `acq.compress = on` | min/max pairs from the FPGA instead of every sample, 1 us/div and slower | off by default |
 | `acq.interp = fast` | the fast interpolation of sparse frames | off by default |
 | `perf.place = on` | the threads and the DMA interrupts on fixed cores | off by default |

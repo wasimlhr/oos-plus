@@ -60,7 +60,12 @@ pub struct DmaBuf {
     cap: usize,
     /// valid bytes from `off`
     len: usize,
+    /// the next read asks for `STALL_EXTRA` bytes more than the play holds, so it times out (`stall_next_read`)
+    stall: bool,
 }
+
+/// What a read made to stall asks for beyond its play (`DmaBuf::stall_next_read`).
+const STALL_EXTRA: usize = 8;
 
 impl DmaBuf {
     pub fn new() -> DmaBuf {
@@ -79,6 +84,12 @@ impl DmaBuf {
         self.cap = cap;
     }
 
+    /// A test of the timeout path on a unit (`OOS_DMA_STALL` of oos-ui): the next read asks for a few bytes more than
+    /// the FPGA plays, which it never delivers, so xdma.ko ends the read with ETIMEDOUT after its `c2h_timeout`.
+    pub fn stall_next_read(&mut self) {
+        self.stall = true;
+    }
+
     /// Reads `bytes` from `c2h` to the start of the region. `short(got, k)` is called for every read shorter than
     /// what was left.
     pub fn read(
@@ -87,13 +98,14 @@ impl DmaBuf {
         bytes: usize,
         mut short: impl FnMut(usize, usize),
     ) -> std::io::Result<&mut [u8]> {
-        self.reserve(bytes);
+        let ask = bytes + if std::mem::take(&mut self.stall) { STALL_EXTRA } else { 0 };
+        self.reserve(ask);
         self.len = 0;
         let off = self.off;
         let mut got = 0;
-        while got < bytes {
+        while got < ask {
             // at most `MAX_READ` per read(): the rest of the stream follows in the next one, as after a short read
-            let want = (bytes - got).min(MAX_READ);
+            let want = (ask - got).min(MAX_READ);
             match c2h.read(&mut self.raw[off + got..off + got + want])? {
                 0 => {
                     return Err(std::io::Error::new(

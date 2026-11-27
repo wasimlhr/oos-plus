@@ -58,7 +58,7 @@ also holds the parts listed here. Each keeps its own licence.
 | noVNC (`core/rfb.js` and what it imports, one minified module) | 1.7.0 | MPL-2.0; parts under BSD and MIT licences, as its notice says | inside `oos-ui`, sent to the browser as `/novnc.js` of the web remote, unchanged | [ui/web/novnc/LICENSE.txt](ui/web/novnc/LICENSE.txt) | `@novnc/novnc` 1.7.0 on npm; [ui/web/novnc/README.md](ui/web/novnc/README.md) makes the file again |
 | Roboto (roboto-classic) | as in `ui/tools/fonts/` | Apache-2.0 | its glyphs, drawn into `oos-ui` | `Apache-2.0.txt` ([ui/tools/fonts/LICENSE-Roboto.txt](ui/tools/fonts/LICENSE-Roboto.txt)) | not required |
 
-The versions are those of release 0.2.2. `rootfs/deps.lock` pins the archives the image builds from, with their
+The versions are those of release 0.2.3. `rootfs/deps.lock` pins the archives the image builds from, with their
 checksums; the Ubuntu and Alpine packages come from the container images the build scripts name (`ubuntu:26.04`,
 `alpine:3.22`), and a release carries the source packages of the versions that were in its image. Up to 0.1.15 the
 image's BusyBox was Ubuntu's `busybox-static` package, and a release carried its source package and that of the glibc

@@ -1,6 +1,7 @@
 # ADR 0001: Three crates; the hardware layer and the signal processing are pure functions
 
 - Status: accepted, amended by ADR 0064 (`oos-ui` is a workspace: a layer without crossings is a crate below `ui/`)
+  and ADR 0083 (hot paths keep codes in their layout; kernels with a portable reference in `oos-dsp`)
 - Date: 2026-11-07 (first public version; in use before)
 - Category: code
 

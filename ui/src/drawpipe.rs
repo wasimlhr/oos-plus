@@ -72,8 +72,8 @@ pub fn draw_frame(ph: &mut Phosphor, m: &Model, f: &Frame, stats: Option<Stats>)
     };
     let deposit = |c: usize, map: &mut [u16], xm: &crate::fastdraw::Map| {
         if pairs {
-            crate::compress::deposit_pairs(map, w, h, &f.ch[c], xm, 24, m.dots);
-        } else if m.dots {
+            crate::compress::deposit_pairs(map, w, h, &f.ch[c], xm, 24, m.dots.yt());
+        } else if m.dots.yt() {
             crate::fastdraw::deposit_dots(map, w, h, &f.ch[c], xm, 24);
         } else {
             crate::fastdraw::deposit(map, w, h, &f.ch[c], xm, 24);
@@ -252,7 +252,7 @@ pub fn draw_frame_codes(
         || f.envelope
         || f.roll
         || f.scan
-        || m.dots
+        || m.dots.yt()
         || crate::wave::drawn_as_record(f, m)
         || !matches!(m.trig_coupling(), TrigCoup::Dc | TrigCoup::HfReject)
     {
@@ -433,7 +433,7 @@ impl Key {
             ),
             acq: m.acq,
             avg_count: (m.acq == AcqMode::Average).then_some(m.avg_count),
-            dots: m.dots,
+            dots: m.dots.yt(),
             size: (w, h),
             zoom: None,
         }

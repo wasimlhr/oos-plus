@@ -297,7 +297,7 @@ mod tests {
                             (0.0, 2.0, false, TrigCoup::Ac),
                         ] {
                             let mut m = model(tdiv, chans);
-                            (m.slope, m.delay, m.trig_level, m.dots) = (slope, delay, level, dots);
+                            (m.slope, m.delay, m.trig_level, m.dots) = (slope, delay, level, dots.into());
                             m.trig_coup = coup;
                             let f = frame(len, chans, f_sig, k as u64 * 7 + len as u64);
                             let x_per_sample = f.dt / tdiv * w as f64 / HDIV as f64;

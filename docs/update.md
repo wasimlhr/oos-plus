@@ -48,8 +48,9 @@ OOS has no loader of its own, so nothing counts the starts before rcS. An image 
    (the archive is unpacked before any driver probes). Under the update lock the start-up watcher and oos-ui are
    stopped. Then what writes to memory on its own stops: every network link goes down (the Ethernet controller has
    no shutdown hook, its receive DMA would write packets into memory of the next kernel) and the display subsystem is
-   unbound (it lets go of the VOPs and their IOMMUs, which the next kernel cannot take over otherwise). `/oos` is
-   remounted read only, then the kernel starts.
+   unbound (it lets go of the VOPs and their IOMMUs, which the next kernel cannot take over otherwise).
+   `oos-data-close close` unmounts a USB stick, syncs and remounts `/oos` read only (a plain sync when `/oos` is
+   busy), then the kernel starts; a failed start makes `/oos` writable again (`reopen`).
 4. The new image's rcS: `oos-oneshot`, `/oos` mounted, then `oos-update boot` finds the word and the package and
    runs the ordinary install from there: rollback slot, `recovery`, read back, `OOSK`. This start is no trial start:
    its device tree and loader path are the old build's, and the display comes up from another state. The watcher

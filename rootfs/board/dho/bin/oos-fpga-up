@@ -18,20 +18,22 @@ for try in 1 2 3 4 5 6; do
 done
 [ -e /sys/bus/pci/devices/0000:01:00.0 ] || { echo "oos-fpga-up: FPGA did not appear on PCIe"; exit 1; }
 echo "PCIe: $(cat /sys/bus/pci/devices/0000:01:00.0/vendor):$(cat /sys/bus/pci/devices/0000:01:00.0/device) $(cat /sys/bus/pci/devices/0000:01:00.0/current_link_speed) x$(cat /sys/bus/pci/devices/0000:01:00.0/current_link_width)"
-# xdma.ko parameters: `xdma.params` in the system settings (oos-conf), the same check as oos-fpgad; poll_mode=1 when unset
+# xdma.ko parameters: `xdma.params` in the system settings (oos-conf), the same check as oos-fpgad (bringup.rs
+# xdma_params); poll_mode=1 when unset, and c2h_timeout=1 unless they set it (a stalled C2H read ends after 1 s)
 p=$(/bin/oos-conf xdma.params 2>/dev/null)
 seen=
 set -f
 for w in $p; do
 	case "$w" in
-	poll_mode=[01] | interrupt_mode=[0-3]) ;;
-	*) echo "oos-fpga-up: xdma.params: $w not allowed, using poll_mode=1"; p=; break;;
+	poll_mode=[01] | interrupt_mode=[0-3] | c2h_timeout=[1-9] | c2h_timeout=10 | h2c_timeout=[1-9] | h2c_timeout=10) ;;
+	*) echo "oos-fpga-up: xdma.params: $w not allowed, using poll_mode=1"; p=; seen=; break;;
 	esac
-	case " $seen " in *" ${w%%=*} "*) echo "oos-fpga-up: xdma.params: ${w%%=*} twice, using poll_mode=1"; p=; break;; esac
+	case " $seen " in *" ${w%%=*} "*) echo "oos-fpga-up: xdma.params: ${w%%=*} twice, using poll_mode=1"; p=; seen=; break;; esac
 	seen="$seen ${w%%=*}"
 done
 set +f
 [ -n "$p" ] || p=poll_mode=1
+case " $seen " in *" c2h_timeout "*) ;; *) p="$p c2h_timeout=1";; esac
 echo "insmod xdma.ko $p"
 insmod $M/updates/xdma.ko $p || exit 1
 sleep 1

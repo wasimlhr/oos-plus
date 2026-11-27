@@ -1076,7 +1076,7 @@ fn fast_path_bands_draw_as_the_whole_map() {
             ui.m.tscale = tscales().iter().position(|&x| (x as f64 - tdiv).abs() < tdiv * 1e-3).unwrap();
             ui.m.trig_level = 0.0;
             ui.m.ch[0].offset = 0.0;
-            ui.m.dots = dots;
+            ui.m.dots = dots.into();
             let (w, h) = (ui.ph.w, ui.ph.h);
             let mut want = vec![0u16; w * h];
             for f in &frames {
@@ -1639,7 +1639,7 @@ fn the_frame_loop_counts_a_frame_on_the_other_slope_and_does_not_draw_it() {
     let m = Model {
         tscale: tscales().iter().position(|&t| (t as f64 - 5e-4).abs() < 1e-7).unwrap(),
         trig_level: 0.0,
-        dots: false,
+        dots: Dots::Off,
         trig_mode: TrigMode::Normal,
         ..Default::default()
     };

@@ -65,6 +65,9 @@ there. These instructions are the same for every agent and every person; the rea
   never made longer to get a test to pass. A new kind of extension comes with all three.
 - Hardware code builds step lists of `(offset, value)` in `oos-hal`; signal processing in `oos-dsp` stays free of
   hardware (ADR 0001).
+- A loop over every sample is a kernel: it keeps codes in their layout and works in batches; its portable reference
+  is in `oos-dsp`, and a family's faster version is plugged in next to it with a test that both give the same result
+  (ADR 0083).
 - Reuse before you add: look for code that already does the job (`git grep` for the idea, not only for a name) and
   call it. A second implementation of something says in the pull request why it has to be one. Remove what your
   change leaves unused, in the same pull request. A change that is not a feature leaves the tree no larger.

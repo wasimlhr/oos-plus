@@ -7,14 +7,15 @@ fork at 0.1.11 + fork features, `upstream-audit.md` (P1). Host timings. Nothing 
 
 Data path per batch (`ui/src/board/dho/hw.rs`, `hal/src/dho/seq.rs`):
 
-1. hw thread: arm, poll 0x4080 every 500 us, let the ring fill up to 25 ms, play, one C2H read of up to 4 MB.
+1. hw thread: arm, poll 0x4080 every 500 us, let the ring fill up to 25 ms (not at all when one record lasts 25 ms
+   or longer: no further frame can be complete in the wait), play, one C2H read of up to 4 MB.
 2. hw thread: `decode` every frame of the batch to `Vec<f32>` per channel (up to `1000 / ratio` frames).
 3. hw thread: push into `Shared::queue`, then trim it to `QUEUE_MAX` = 96. At short time bases 1000 frames are
    decoded and about 900 are dropped unseen.
 4. UI thread, once per screen frame: `drain_but_last` (up to 95 frames), per frame `edge_smooth` + `deposit`
    (dense frames) or `Frame::clone` + `to_record` + `draw_ex` (sparse frames, `x_per_sample > 0.5`, envelope).
    Then `acquire` makes the newest frame a record for measurements, decay, layers, GPU.
-5. Re-arm only after decode, unless `OOS_PREARM`.
+5. Re-arm before the decode (arming ahead, on by default since 2026-11-27; `acq.prearm = off` re-arms after it).
 
 Consequence: displayed wfm/s is capped at about 95 x UI frame rate (about 3k to 6k), whatever the FPGA and PCIe
 deliver. `fpga.md` puts the PCIe ceiling near 80k frames/s at 1 ch for 0x11f0-point frames; stock reaches about 190k
@@ -345,8 +346,9 @@ frames per batch, decode + draw 117 -> 12.9 us per frame. Unit procedure in comp
   at 1 us/div, 163 us at 10 us/div; 4 workers 75 k / 116 k / 16 k frames/s. Estimate (not measured; A72 about 4x the host, A53
   about 8x): 4 A53 reach about 10 k frames/s at 100 ns/div, 20 k at 1 us/div, 3 k at 10 us/div; the A72 helper adds up
   to 5 k / 10 k / 1.5 k when its wait is long.
-  Arm ahead, opt-in `acq.prearm = on` in system.conf or OOS_PREARM (any value; set wins over the key): `seq::prearm`
-  arms the next batch before the decode of the current one. Default off until it is checked on a unit.
+  Arm ahead (`seq::prearm`): the next batch is armed before the decode of the current one. On by default since it
+  was verified on the unit 2026-11-27 (the whole device test with it on); `acq.prearm = off` in system.conf or
+  OOS_PREARM=0 is the way back.
   Fast interpolation, opt-in `acq.interp = fast` / OOS_INTERP=fast (`sparse::fast_many`): the exact 16-tap sinc
   on a grid of 24 points per sample (one fixed filter per phase over consecutive samples, vectorised), linear in
   between, used where the grid has at most 4x the screen's 3600 points (else exact). A 4-lobe kernel at the same

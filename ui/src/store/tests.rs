@@ -205,6 +205,17 @@ fn tdiv_by_value_and_legacy_index() {
     assert!(parse_setup("tdiv = 3e-9").is_err());
 }
 
+// Break it catches: a setup of before Auto (dots = true / false) loading as another choice, or Auto not kept
+#[test]
+fn dots_of_older_setups_and_auto_round_trip() {
+    for (line, want) in [("dots = true\n", Dots::On), ("dots = false\n", Dots::Off), ("dots = auto\n", Dots::Auto)] {
+        let m = parse_setup(line).unwrap();
+        assert_eq!(m.dots, want, "{}", line);
+        assert_eq!(parse_setup(&setup_text(&m)).unwrap().dots, want);
+    }
+    assert!(setup_text(&parse_setup("dots = true\n").unwrap()).contains("dots = true"));
+}
+
 #[test]
 fn vdiv_by_value_and_legacy_index() {
     let m = parse_setup("ch1.vdiv = 0.0001\nch2.vscale = 10\n").unwrap();
@@ -305,7 +316,7 @@ pub(super) fn custom() -> Model {
     m.math_filt.resp = crate::math::FiltResp::Bessel;
     m.zones[1] =
         crate::zone::Zone { on: true, src: 2, inside: false, pts: vec![(-1e-4, 0.5), (2.5e-5, 1.25), (3e-5, -0.75)] };
-    m.dots = true;
+    m.dots = Dots::On;
     m.z_src = Some(3);
     m.hist = Hist::Horizontal;
     m.hist_src = Some(1);
@@ -1292,4 +1303,21 @@ fn a_setup_loads_what_it_can() {
     assert!(!back.dec_on, "the decoder without its protocol is off");
     assert!(bad.len() == 2 && bad[0].contains("dec_proto") && bad[1].contains("avg_hw"), "{:?}", bad);
     assert_eq!(parse_setup_lenient(&setup_text(&m)).1, Vec::<String>::new());
+}
+
+// Break it catches: a setup or mask slot written in place (`write`), which a power cut can leave half written, or a
+// durable write that skips the target check `write` makes (a link on the way, a directory in the file's place).
+#[test]
+fn a_slot_file_is_replaced_in_one_step() {
+    let d = std::env::temp_dir().join(format!("oos-store-durable-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&d);
+    let p = d.join("setups").join("setup1.txt");
+    write_durable(&p, b"first").unwrap();
+    write_durable(&p, b"second").unwrap();
+    assert_eq!(std::fs::read(&p).unwrap(), b"second");
+    assert!(!p.with_file_name("setup1.txt.new").exists(), "the temporary file is renamed, not left beside it");
+    let dir_in_place = d.join("setups").join("mask1.txt");
+    std::fs::create_dir_all(&dir_in_place).unwrap();
+    assert!(write_durable(&dir_in_place, b"x").is_err(), "a directory in the file's place is refused");
+    let _ = std::fs::remove_dir_all(&d);
 }

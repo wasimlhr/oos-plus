@@ -24,7 +24,7 @@ A decision that touches two categories goes where its consequences are largest a
 <!-- index: written by tools/adr-index.py from the records; run it instead of editing these lines -->
 | ADR | Category | Decision | Status |
 |---|---|---|---|
-| [0001](code/0001-three-crates-with-pure-hal-and-dsp.md) | code | Three crates; the hardware layer and the signal processing are pure functions | accepted, amended by ADR 0064 |
+| [0001](code/0001-three-crates-with-pure-hal-and-dsp.md) | code | Three crates; the hardware layer and the signal processing are pure functions | accepted, amended by ADR 0064 and ADR 0083 |
 | [0002](code/0002-extension-by-registered-modules.md) | code | Decoders, measurements and analyser pages are modules behind one registration | accepted, amended by ADR 0058 |
 | [0003](code/0003-gpu-drawing-in-a-helper-process.md) | code | The GPU draws from commands in a helper process; the CPU stays the fallback | accepted |
 | [0004](code/0004-standard-draw-path-by-default.md) | code | Two draw paths: Standard by default, Batch to choose | superseded by ADR 0029 |
@@ -114,6 +114,7 @@ A decision that touches two categories goes where its consequences are largest a
 | [0079](system/0079-the-rear-usb-port-is-a-network-link-to-one-computer.md) | system | The rear USB port is a network link to one computer, off by default | proposed |
 | [0081](code/0081-the-acquisition-arms-only-what-the-deposit-workers-can-draw.md) | code | The acquisition arms only what the deposit workers can draw | proposed |
 | [0082](code/0082-a-measurement-slot-is-a-number-for-a-row-of-the-table.md) | code | a measurement slot is a number for a row of the table; an empty slot is an error | proposed |
+| [0083](code/0083-hot-paths-are-data-oriented-and-a-family-may-plug-in-its-own-kernels.md) | code | Hot paths are data-oriented, and a family may plug in its own kernels next to the portable reference | accepted |
 <!-- end of the index -->
 
 ## Reading order for agents

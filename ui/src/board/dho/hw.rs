@@ -12,6 +12,8 @@ mod batch;
 #[cfg(any(target_os = "linux", test))]
 mod config;
 mod decode;
+#[cfg(any(target_os = "linux", test))]
+mod dmafault;
 #[cfg(test)]
 mod liverun;
 mod plan;
@@ -227,6 +229,8 @@ struct Loop<P: port::Port> {
     count_n: u64,
     /// the mask/zone unit's stall guard
     guard: UnitGuard,
+    /// C2H reads the FPGA did not finish, and the wait before the next arm (`dmafault.rs`)
+    dma: dmafault::DmaFault,
     /// the measure unit's side jobs: the DVM block, the levels, the debug slots (`units.rs`)
     units: UnitJobs,
 }
@@ -311,6 +315,7 @@ impl<P: port::Port> Loop<P> {
             counting: None,
             count_n: 0,
             guard: UnitGuard::default(),
+            dma: dmafault::DmaFault::default(),
             units: UnitJobs::default(),
         }
     }
@@ -467,6 +472,19 @@ impl<P: port::Port> Loop<P> {
         (g.cal_progress, g.cal_result, g.cal_cancel) = (None, Some(res), false);
     }
 
+    /// A batch whose C2H read timed out (`dmafault.rs`): counted, logged now and then, configured anew at the next pass.
+    fn dma_timed_out(&mut self, e: &str) {
+        use oos_hal::dho::boot::Clock;
+        if self.stop.last_batch.as_ref().is_some_and(|l| l.2 == 0) {
+            self.stop.last_batch = None;
+        }
+        let now = self.clock.now_us();
+        if let Some(line) = self.dma.timeout(now, e) {
+            report(&self.out, line);
+        }
+        self.config.current = None;
+    }
+
     /// A pass of normal acquisitions with the settings `s` configured as `p` (`sp`), as `req` asked for them, with
     /// `hold` and the final-frame request of STOP read at the top of the pass: in STOP nothing is armed; else, when
     /// SINGLE wants more, the average cleared when asked, one batch armed (or armed ahead), waited for and read.
@@ -479,6 +497,11 @@ impl<P: port::Port> Loop<P> {
         if hold {
             lock(&self.out).final_ack = final_req;
             self.clock.sleep_us(5000);
+            return;
+        }
+        // C2H reads timed out in a row: no arm until the wait is over, the loop serves requests meanwhile
+        if self.dma.waiting(self.clock.now_us()) {
+            self.clock.sleep_us(20_000);
             return;
         }
         if std::mem::take(&mut self.stop.paused) {
@@ -520,7 +543,8 @@ impl<P: port::Port> Loop<P> {
         {
             b.frames = a.frames;
         }
-        // one batch: arm, let the ring fill for up to 25 ms after the first frame, one play, one read
+        // one batch: arm, let the ring fill for up to 25 ms after the first frame (none when a record is that long,
+        // `plan::fill_wait_ms`), one play, one read
         // armed ahead with these settings and since the last SINGLE press: only the wait is left
         let ahead = self.armed.as_ref().is_some_and(|(a, st)| *a == b && *st == stamp);
         if !ahead {
@@ -532,10 +556,8 @@ impl<P: port::Port> Loop<P> {
         // UI waits for the thread to hold before it takes the record of the STOP as its last (#24); in Normal
         // without a trigger that wait was the whole `STOP_FINAL_WAIT`
         let asked = &req.asked;
-        let changed = || {
-            let g = lock(&self.out);
-            (g.want.as_ref(), g.slow) != (asked.0.as_ref(), asked.1) || g.stop_view.is_some() || g.hold
-        };
+        let (grace, held) = (plan::hold_grace_looks(&b, p), std::cell::Cell::new(0u32));
+        let changed = || cut_wait(&self.out, asked, grace, &held);
         // the workers still hold the buffers the next batch needs (one to read into, one to swap in): wait for them
         // and draw with them instead of reading a batch that would be dropped
         if let Some(x) = admit {
@@ -545,6 +567,9 @@ impl<P: port::Port> Loop<P> {
         // while the FPGA's ring fills this thread draws frames of the last batch (drawpipe.rs), one per look at
         // the frame count, so the read waits at most one frame longer
         let idle = || pipe.is_some_and(|x| x.help(&mut self.batch.helper));
+        if self.dma.stall_due() {
+            self.batch.dma.stall_next_read();
+        }
         let t_batch = self.clock.now_us();
         let got = seq::acquire_batch_on(
             &mut self.state,
@@ -555,7 +580,7 @@ impl<P: port::Port> Loop<P> {
             &mut self.batch.dma,
             &mut self.clock,
             ahead,
-            25,
+            plan::fill_wait_ms(p),
             |_| {},
             changed,
             idle,
@@ -566,6 +591,7 @@ impl<P: port::Port> Loop<P> {
         }
         match got {
             Ok(count) => {
+                self.dma.read_ok();
                 let held = batch::Held {
                     armed: &mut self.armed,
                     avg: &mut self.config.avg,
@@ -592,6 +618,9 @@ impl<P: port::Port> Loop<P> {
                     }
                 }
             }
+            // the FPGA did not deliver the play: counted, logged now and then, configured anew; the next arm
+            // starts with the stop sequence
+            Err(e) if e.starts_with(seq::DMA_TIMEOUT) => self.dma_timed_out(&e),
             Err(e) => {
                 if self.stop.last_batch.as_ref().is_some_and(|l| l.2 == 0) {
                     self.stop.last_batch = None;
@@ -606,6 +635,21 @@ impl<P: port::Port> Loop<P> {
             }
         }
     }
+}
+
+/// Whether the wait for a batch ends now: new settings at once; a STOP (`hold`) after `grace` looks (a deep record being
+/// recorded finishes first, `plan::hold_grace_looks`, issue #47), `held` counting them; a view read in STOP at once.
+#[cfg(any(target_os = "linux", test))]
+fn cut_wait(out: &HwShared, asked: &(Option<Settings>, Slow), grace: u32, held: &std::cell::Cell<u32>) -> bool {
+    let g = lock(out);
+    if (g.want.as_ref(), g.slow) != (asked.0.as_ref(), asked.1) {
+        return true;
+    }
+    if g.hold {
+        held.set(held.get() + 1);
+        return held.get() > grace;
+    }
+    g.stop_view.is_some()
 }
 
 /// Self-calibration (selfcal.rs) on `unit` with the tables `c`, the ADC cores first from `adc_base` when given, for

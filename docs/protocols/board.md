@@ -265,5 +265,7 @@ Items marked "assumed" are design choices or guesses. Nothing here is verified o
   `Long`).
 - `oos-fpgad temp | beep | guard`; `status` also prints the XADC line. pwm-gpio.ko is in the dev image and loaded by rcS.
 - oos-ui (the front-panel UART owner): `FA 05 00` once at start; power key (0x1b) -> `FA 05 02` at once and a dialog
-  Power off / Restart / Cancel; Power off = LEDs off, `sync`, `FA 05 01` twice; Restart = `FA 05 03`. Built and
+  Power off / Restart / Cancel; Power off = LEDs off, `oos-data-close close` (the USB stick unmounted, a sync, `/oos`
+  read only; a plain `sync` when that fails), `FA 05 01` twice; Restart = the same, then `FA 05 03`. When the power has
+  not gone 3 s later, `/oos` is made writable again (`reopen`). init's shutdown runs the same `close`. Built and
   unit-tested, dialog rendered; the key press is not yet verified on hardware.

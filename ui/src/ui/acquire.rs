@@ -1355,7 +1355,7 @@ pub fn fast_plan(
     let ti = t.ti;
     let used = |c: usize| m.ch[c].on && !f.ch[c].is_empty();
     let spans = std::array::from_fn(|c| {
-        (used(c) && !m.dots).then(|| crate::fastdraw::spans(w, h, &f.ch[c], &raw_map(m, w, h, c, f, ti)))
+        (used(c) && !m.dots.yt()).then(|| crate::fastdraw::spans(w, h, &f.ch[c], &raw_map(m, w, h, c, f, ti)))
     });
     // the statistics on the samples of the screen window, as the measurements of a dense record
     let fold = std::array::from_fn(|c| {

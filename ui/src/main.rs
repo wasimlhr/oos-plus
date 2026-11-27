@@ -672,16 +672,24 @@ const SETUP_FILE: &str = "/tmp/oos-ui.setup";
 /// Power-on pictures, first found wins: a picture copied by rcS from removable media, then the image's own.
 const SPLASH: [&str; 2] = ["/tmp/oos-splash.ppm", "/etc/oos/splash.ppm"];
 
-/// Power off / restart through the front-panel MCU, as the stock system does (board.md 4/8.3): file systems synced
-/// first, LEDs off, then `FA 05 01` twice (power off) or `FA 05 03` (restart). Whether the MCU waits for Linux to halt
-/// is not known; OOS keeps nothing on the card open for writing except during an update job (`Ui::update_busy`, which
-/// refuses the power-off), so a hard cut is harmless.
+/// Power off / restart through the front-panel MCU, as the stock system does (board.md 4/8.3): LEDs off, the card
+/// brought to a clean state first (`oos-data-close close`: the USB stick unmounted, everything synced, /oos read only;
+/// a plain sync when that fails), then `FA 05 01` twice (power off) or `FA 05 03` (restart). Whether the MCU waits for
+/// Linux to halt is not known; an update job keeps the card busy and refuses the power-off (`Ui::update_busy`). When
+/// the power has not gone after `POWER_WAIT_MS`, /oos is made writable again (`reopen`).
 #[cfg(target_os = "linux")]
 fn power(inp: &mut input::Inputs, a: ui::PowerAction) {
     use board::Board;
     eprintln!("oos-ui: power {:?}", a);
     inp.set_leds(0);
-    store::sync_disks();
+    let closed = oos_hal::fsutil::data_close("close");
+    match &closed {
+        Ok(l) => eprintln!("oos-ui: {}", l),
+        Err(e) => {
+            eprintln!("oos-ui: {}; synced only", e);
+            store::sync_disks();
+        }
+    }
     match a {
         ui::PowerAction::Off => {
             inp.send(&board::board().panel_cmd(board::PanelCmd::PowerOff));
@@ -689,7 +697,18 @@ fn power(inp: &mut input::Inputs, a: ui::PowerAction) {
         }
         ui::PowerAction::Restart => inp.send(&board::board().panel_cmd(board::PanelCmd::Restart)),
     }
+    std::thread::sleep(std::time::Duration::from_millis(POWER_WAIT_MS));
+    if closed.is_ok() {
+        match oos_hal::fsutil::data_close("reopen") {
+            Ok(l) => eprintln!("oos-ui: power {:?} did not come; {}", a, l),
+            Err(e) => eprintln!("oos-ui: power {:?} did not come; {}", a, e),
+        }
+    }
 }
+
+/// How long `power` waits for the MCU to cut the power before it gives the card back.
+#[cfg(target_os = "linux")]
+const POWER_WAIT_MS: u64 = 3000;
 
 #[cfg(target_os = "linux")]
 fn device_main(mut ui: Ui, args: &[String]) {
@@ -1465,10 +1484,15 @@ impl Device {
             if t != self.setup_last {
                 let tmp = format!("{}.new", SETUP_FILE);
                 if std::fs::write(&tmp, &t).and_then(|_| std::fs::rename(&tmp, setup_path)).is_ok() {
-                    // and across power cycles on OOS's own data partition (rcS copies it back to /tmp at boot)
+                    // and across power cycles on OOS's own data partition (rcS copies it back to /tmp at boot), synced
+                    // before the rename: a power cut leaves the old set-up or the new one
                     if sysconf::data_partition() {
-                        let _ = std::fs::write("/oos/oos-ui.setup.new", &t)
-                            .and_then(|_| std::fs::rename("/oos/oos-ui.setup.new", "/oos/oos-ui.setup"));
+                        let opts = oos_hal::fsutil::Opts::default();
+                        let _ = oos_hal::fsutil::write_atomic(
+                            std::path::Path::new("/oos/oos-ui.setup"),
+                            t.as_bytes(),
+                            &opts,
+                        );
                     }
                     self.setup_last = t;
                 }

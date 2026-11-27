@@ -190,7 +190,7 @@ fn scale_index(t: f32) -> usize { tscales().iter().position(|&s| (s / t - 1.0).a
 
 fn sparse_zoom() -> Ui {
     let mut u = studio();
-    u.m.dots = false; // vectors: the zoom joins the samples
+    u.m.dots = oos_model::model::Dots::Off; // vectors: the zoom joins the samples
     u.m.tscale = scale_index(50e-3);
     u.m.delay = 0.0;
     for _ in 0..8 { u.step(0.05); }
@@ -216,7 +216,7 @@ fn a_sparse_zoom_joins_the_samples_with_lines_and_marks_each_one_and_dots_mode_s
     let mut u = sparse_zoom();
     let dt = u.studio_zoom_sample_dt().unwrap();
     assert!(u.zoom_sparse(dt));
-    assert!(!u.m.dots, "the user's draw mode is vectors");
+    assert!(u.m.dots == oos_model::model::Dots::Off, "the user's draw mode is vectors");
     assert!(u.studio_zoom_samples_hint().expect("the hint").ends_with("samples/div"));
     assert!(u.phz.fat, "each real sample is marked");
     let (n, first, last) = lit(&u);
@@ -224,7 +224,7 @@ fn a_sparse_zoom_joins_the_samples_with_lines_and_marks_each_one_and_dots_mode_s
     assert!(n > u.phz.w * 9 / 10, "and it spans the zoom: {n} of {}", u.phz.w);
     shot(&mut u, "sparse-zoom");
     // Display > Dots: dots only
-    u.m.dots = true;
+    u.m.dots = oos_model::model::Dots::On;
     for _ in 0..4 { frame(&mut u); }
     let (n, _, _) = lit(&u);
     assert!(n < u.phz.w / 2, "dots only: {n} of {}", u.phz.w);

@@ -189,18 +189,65 @@ impl Ui {
         let ppd = side as f32 / 8.0;
         let (ca, cb) = (&self.m.ch[xc], &self.m.ch[yc]);
         let col = rgb(0x9c, 0xf0, 0x9c);
+        // Display > Dots: a dot per point (On, Auto), or each point joined to the one before (Off)
+        let dots = self.m.dots.xy();
+        let mut prev: Option<(i32, i32)> = None;
         for k in 0..a.len().min(b.len()) {
             if !a[k].is_finite() || !b[k].is_finite() {
+                prev = None;
                 continue;
             }
             let x = (sq.x as f32 + side as f32 / 2.0 + (a[k] + ca.offset) / ca.volts_per_div() * ppd) as i32;
             let y = (sq.y as f32 + side as f32 / 2.0 - (b[k] + cb.offset) / cb.volts_per_div() * ppd) as i32;
-            cv.pixel(x, y, col, 160);
-            cv.pixel(x + 1, y, col, 70);
-            cv.pixel(x, y + 1, col, 70);
+            if dots {
+                cv.pixel(x, y, col, 160);
+                cv.pixel(x + 1, y, col, 70);
+                cv.pixel(x, y + 1, col, 70);
+            } else if let Some((x0, y0)) = prev {
+                cv.line(x0, y0, x, y, col);
+            }
+            prev = Some((x, y));
         }
         cv.no_clip();
         cv.text(&f.s, sq.x + 6, sq.y + 16, &format!("XY  X = CH{}  Y = CH{}", xc + 1, yc + 1), col);
+    }
+
+    /// Display > Dots = Auto with the samples at least `MARK_SPACING_PX` apart (the interpolated time bases): each sample
+    /// of the newest record marked over its line, a 2 x 2 square lighter than the trace. On the layer over the traces,
+    /// so the phosphor maps and the pictures' grading stay those of the lines. The idea comes from fumingcaps' fork
+    /// (0.2.2).
+    pub(super) fn draw_sample_marks(&self, cv: &mut Canvas) {
+        let Some(rec) = &self.last[0] else { return };
+        if rec.pairs || rec.peak || rec.partial {
+            return;
+        }
+        // the samples the scope took: the hardware frame's window when there is one (the record's points are then
+        // interpolated between them), else the record's own points
+        let (t0, dt, raw) = match &rec.raw {
+            Some(r) if r.frame.envelope || r.frame.roll || r.frame.scan => return,
+            Some(r) => (r.t0, r.frame.dt, Some(r)),
+            None => (rec.t0, rec.dt, None),
+        };
+        let a = self.plot.area;
+        let (tdiv, _) = self.view();
+        if !(dt > 0.0) || !self.m.dots.marks(dt / tdiv as f64 * a.w as f64 / HDIV as f64) {
+            return;
+        }
+        cv.set_clip(a);
+        for c in (0..NCH).filter(|&c| self.m.ch[c].on && self.shows(c) && self.m.z_src != Some(c)) {
+            let col = mix(CH_COLORS[c], rgb(255, 255, 255), 140);
+            let v = match raw {
+                Some(r) => r.frame.ch[c].get(r.i0..r.i1).unwrap_or(&[]),
+                None => &rec.ch[c][..],
+            };
+            for (j, &v) in v.iter().enumerate().filter(|(_, v)| v.is_finite()) {
+                let (x, y) = (self.x_of_time((t0 + j as f64 * dt) as f32), self.y_of_volts(c, v));
+                if x >= a.x && x < a.x + a.w {
+                    cv.fill(Rect::new(x - 1, y - 1, 2, 2), col);
+                }
+            }
+        }
+        cv.no_clip();
     }
 
     pub(super) fn draw_markers(&self, cv: &mut Canvas) {
@@ -647,5 +694,46 @@ impl Ui {
             cv.triangle([(x - 7, top), (x + 7, top), (x, top + 12)], TEXT);
             cv.vline(x, top + 12, a.y + a.h - 1, mix(BG, TEXT, 140));
         }
+    }
+}
+
+#[cfg(test)]
+mod sample_marks_tests {
+    use super::*;
+    use crate::wave::Record;
+
+    /// The pixels `draw_sample_marks` lights on an empty canvas with CH1's record of `n` samples over the screen.
+    fn lit(dots: Dots, n: usize) -> usize {
+        let mut ui = crate::ui::testkit::demo_ui();
+        ui.m.dots = dots;
+        let (tdiv, _) = ui.view();
+        let window = tdiv as f64 * HDIV as f64;
+        let dt = window / n as f64;
+        let v: Vec<f32> = (0..n).map(|k| if k % 2 == 0 { 0.5 } else { -0.5 }).collect();
+        ui.last[0] = Some(Record {
+            t0: -window / 2.0,
+            dt,
+            ch: [v, Vec::new(), Vec::new(), Vec::new()],
+            triggered: true,
+            partial: false,
+            raw: None,
+            la: None,
+            pairs: false,
+            peak: false,
+        });
+        let mut cv = Canvas::new(PANEL_W, PANEL_H);
+        ui.draw_sample_marks(&mut cv);
+        cv.px.iter().filter(|&&p| p != 0).count()
+    }
+
+    // Break it catches: marks with On or Off, marks over a dense record (a dotted band over the line), or none where the
+    // samples lie far apart in Auto
+    #[test]
+    fn auto_marks_only_samples_that_lie_far_apart() {
+        // about 1000 px of plot: 50 samples lie 20 px apart, 2000 samples half a pixel
+        assert!(lit(Dots::Auto, 50) >= 4 * 40, "Auto, sparse: {}", lit(Dots::Auto, 50));
+        assert_eq!(lit(Dots::Auto, 2000), 0);
+        assert_eq!(lit(Dots::On, 50), 0);
+        assert_eq!(lit(Dots::Off, 50), 0);
     }
 }

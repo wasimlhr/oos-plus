@@ -52,6 +52,13 @@ Verified on the unit with Linux 6.12.115+, from the OOS development initramfs:
 (the stock FPGA version), 0x4034 = 0x2020 (stopped), 0x4044/0x4048 = FPGA DNA. Scripted as `oos-fpga-up`, register access as
 `oos-hw rd/wr` (`tools/hw/oos-hw.c`).
 
+`oos-fpga-up` and `oos-fpgad` load xdma.ko with `c2h_timeout=1` unless `xdma.params` in the system settings sets
+it (`poll_mode`, `interrupt_mode`, `c2h_timeout` and `h2c_timeout` 1 to 10 s, each once). A C2H read the FPGA does
+not finish then ends after 1 s with ETIMEDOUT instead of after the driver's 10 s; the live loop of oos-ui counts it
+(`dma timeouts` in `:SYSTem:STATe?`), configures anew and arms again, at once after the first and with a wait growing
+from 1 s to 30 s after more in a row (`ui/src/board/dho/hw/dmafault.rs`). Verified on the unit 2026-11-27 with a
+stall made by hand (see the pull request that added it).
+
 ## A BOOT sent too early is lost
 
 After a true power-on the Zynq runs its factory image (slot 0x000000) first, and only that image's boot monitor hears the

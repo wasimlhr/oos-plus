@@ -10,7 +10,8 @@
 //! without the switch. Each floor is the lowest step of the device's table at or above it (the highest step where the
 //! table has none), never below the minimum already set. A minimum found at one of these floors without this run
 //! having set it was left by an oos-ui that ended while running (a crash): it is taken as the table's lowest step.
-//! Thermal limits still win: the kernel caps a minimum above the maximum the cooling leaves.
+//! Thermal limits still win: the kernel caps a minimum above the maximum the cooling leaves. A floor counts as set
+//! only when its minimum reads back as written; a capped one is said once and written again a second later.
 
 use std::path::{Path, PathBuf};
 
@@ -108,17 +109,46 @@ impl Floors {
 
     /// Writes `plan`, keeping the value each minimum had before its first raise; the errors, one line each.
     pub fn apply(&mut self, root: &Path, want: Want) -> Vec<String> {
+        self.apply_with(root, want, |path, v| std::fs::write(path, v.to_string()))
+    }
+
+    /// `apply` with the write of a minimum in `write`. A minimum counts as set only when it reads back as written
+    /// (the kernel caps a minimum above the maximum a thermal limit leaves); one that reads back otherwise is an error,
+    /// and is kept for its restore when it moved off the value before. A raised minimum whose file is gone (the
+    /// device went away) is dropped with an error line: there is nothing to restore.
+    pub fn apply_with(
+        &mut self,
+        root: &Path,
+        want: Want,
+        mut write: impl FnMut(&Path, u64) -> std::io::Result<()>,
+    ) -> Vec<String> {
         let mut errors = Vec::new();
+        self.saved.retain(|(path, _)| {
+            let there = path.exists();
+            if !there {
+                errors.push(format!("{}: gone, its floor is dropped", path.display()));
+            }
+            there
+        });
         for (path, v, base) in self.plan(root, want) {
-            if let Err(e) = std::fs::write(&path, v.to_string()) {
+            if let Err(e) = write(&path, v) {
                 errors.push(format!("{}: {}", path.display(), e));
                 continue;
             }
+            let now = number(&path);
+            if now != Some(v) {
+                errors.push(format!(
+                    "{}: wrote {}, reads {}",
+                    path.display(),
+                    v,
+                    now.map_or("nothing".into(), |n| n.to_string())
+                ));
+            }
             let at = self.saved.iter().position(|s| s.0 == path);
-            match at {
+            match (at, now) {
                 // back at the value before: no longer raised
-                Some(i) if v == base => drop(self.saved.remove(i)),
-                None if v != base => self.saved.push((path, base)),
+                (Some(i), Some(n)) if n == base => drop(self.saved.remove(i)),
+                (None, Some(n)) if n != base => self.saved.push((path, base)),
                 _ => {}
             }
         }
@@ -279,5 +309,33 @@ mod tests {
         assert!(Floors::default().plan(&root, RUN).is_empty());
         std::fs::remove_dir_all(&root).unwrap();
         assert!(Floors::default().plan(&root, RUN).is_empty());
+    }
+
+    // Break it catches: a floor the kernel capped counted as set (no error, so no second try), its raise forgotten so
+    // STOP does not restore it, or a raised GPU minimum whose device went away kept for ever.
+    #[test]
+    fn a_floor_counts_only_when_it_reads_back_and_a_gone_device_is_dropped() {
+        let root = rk3399(816000, 200000000);
+        let mut f = Floors::default();
+        // a thermal cap at 1.2 GHz on the big cores: the minimum reads back lower than written
+        let errors = f.apply_with(&root, RUN, |p, v| {
+            let capped = if p.ends_with("scaling_min_freq") { v.min(1_200_000) } else { v };
+            std::fs::write(p, capped.to_string())
+        });
+        assert_eq!(errors.len(), 1, "{:?}", errors);
+        assert!(errors[0].contains("wrote 1416000, reads 1200000"), "{}", errors[0]);
+        assert_eq!(mins(&root), (1200000, 600000000, 200000000));
+        assert!(f.apply(&root, Want::default()).is_empty(), "STOP restores the capped raise too");
+        assert_eq!(mins(&root), (816000, 200000000, 200000000));
+        // the GPU raised, then its devfreq node gone: dropped once with a line, nothing written for it
+        assert!(f.apply(&root, RUN).is_empty());
+        std::fs::remove_dir_all(root.join("class/devfreq/ff9a0000.gpu")).unwrap();
+        let errors = f.apply(&root, Want::default());
+        assert_eq!(errors.len(), 1, "{:?}", errors);
+        assert!(errors[0].contains("gone"), "{}", errors[0]);
+        let cpu = number(&root.join("devices/system/cpu/cpu4/cpufreq/scaling_min_freq"));
+        assert!(f.saved.is_empty() && cpu == Some(816000));
+        assert!(f.apply(&root, Want::default()).is_empty(), "said once");
+        std::fs::remove_dir_all(&root).unwrap();
     }
 }

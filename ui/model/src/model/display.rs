@@ -157,6 +157,50 @@ pub enum HdmiMode {
 
 pub const HDMI_MODES: [HdmiMode; 3] = [HdmiMode::Mirror, HdmiMode::Waveform, HdmiMode::Layout];
 
+/// Display > Dots: Off joins the samples with lines, On draws a dot per sample, Auto lines with the samples marked over
+/// them once they lie `MARK_SPACING_PX` apart (the sparse, interpolated time bases), and dots in XY. The idea of Auto
+/// comes from fumingcaps' fork (0.2.2).
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Dots {
+    Off,
+    #[default]
+    On,
+    Auto,
+}
+
+pub const DOTS: [Dots; 3] = [Dots::Off, Dots::On, Dots::Auto];
+
+/// Auto marks the samples from this many pixels apart on the screen; closer marks make a dotted band over the line.
+pub const MARK_SPACING_PX: f64 = 8.0;
+
+impl From<bool> for Dots {
+    /// The switch of before Auto: on is On, off is Off.
+    fn from(on: bool) -> Dots {
+        if on {
+            Dots::On
+        } else {
+            Dots::Off
+        }
+    }
+}
+
+impl Dots {
+    /// Whether the traces of the time domain are drawn as dots (only On: Auto draws lines there).
+    pub fn yt(self) -> bool {
+        self == Dots::On
+    }
+
+    /// Whether XY draws dots (On and Auto) or joins its points (Off).
+    pub fn xy(self) -> bool {
+        self != Dots::Off
+    }
+
+    /// Whether the samples of a line `x_per_sample` pixels apart are marked over it (Auto, sparse).
+    pub fn marks(self, x_per_sample: f64) -> bool {
+        self == Dots::Auto && x_per_sample >= MARK_SPACING_PX
+    }
+}
+
 /// Size of the text on the screen (Display > Text size): Normal is the original look, Large and Larger use fonts 2 and
 /// 4 px bigger with the rows, cards and dialogs grown to match. A preference: Default keeps it.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
@@ -298,3 +342,21 @@ impl StripDock {
 pub const PERSIST: [(&str, f32); 7] =
     [("Min", 0.0), ("100 ms", 0.1), ("500 ms", 0.5), ("1 s", 1.0), ("5 s", 5.0), ("10 s", 10.0), ("Infinite", -1.0)];
 
+#[cfg(test)]
+mod dots_tests {
+    use super::*;
+
+    // Break it catches: Auto drawing dots in the time domain, marks at the dense time bases (a dotted band over the
+    // line), lines in XY with Auto, or the switch of before (true / false) loading as another choice
+    #[test]
+    fn auto_draws_lines_marks_sparse_samples_and_dots_in_xy() {
+        for (mode, yt, xy) in [(Dots::Off, false, false), (Dots::On, true, true), (Dots::Auto, false, true)] {
+            assert_eq!((mode.yt(), mode.xy()), (yt, xy), "{:?}", mode);
+        }
+        for (px, marks) in [(0.01, false), (4.0, false), (7.99, false), (MARK_SPACING_PX, true), (50.0, true)] {
+            assert_eq!(Dots::Auto.marks(px), marks, "{} px", px);
+            assert!(!Dots::On.marks(px) && !Dots::Off.marks(px));
+        }
+        assert_eq!((Dots::from(true), Dots::from(false), Dots::default()), (Dots::On, Dots::Off, Dots::On));
+    }
+}

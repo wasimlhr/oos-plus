@@ -117,7 +117,7 @@ mod tests {
         let mut m = Model::default();
         m.ch[0].on = true;
         assert!(allowed(&m));
-        m.dots = false;
+        m.dots = Dots::Off;
         assert!(allowed(&m));
         for f in [
             |m: &mut Model| m.trig_mode = TrigMode::Single,

@@ -18,7 +18,8 @@ in the README. How to use it: the guides listed on [[Home]].
 - Noise reject (wider comparator hysteresis); a slow, noisy edge is drawn on the edge you set, not on the other one
 
 **Display**
-- Dots or vectors, colour grade, waveform histogram, dotted graticule
+- Dots, vectors or Auto (lines with the real samples marked at fast time bases), colour grade, waveform histogram,
+  dotted graticule
 - Waveform windows: the plot split into two windows side by side, two stacked, or four, each channel, math channel and
   the LA in a window of your choice, all on one time base
 - Full screen: one tap at the top right of the plot hides the top bar and the cards, one more brings them back

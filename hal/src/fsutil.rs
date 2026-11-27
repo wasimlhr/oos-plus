@@ -7,6 +7,23 @@
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+/// The helper that brings the card to a clean state before the power goes or another kernel starts: the USB stick
+/// unmounted, everything synced, the data partition read only (`rootfs/initramfs/bin/oos-data-close`).
+pub const DATA_CLOSE: &str = "/bin/oos-data-close";
+
+/// Runs `DATA_CLOSE` with `what` (`close` or `reopen`): its line, or why it failed (the helper's own steps have time
+/// limits).
+pub fn data_close(what: &str) -> Result<String, String> {
+    let out =
+        std::process::Command::new(DATA_CLOSE).arg(what).output().map_err(|e| format!("{}: {}", DATA_CLOSE, e))?;
+    let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if out.status.success() {
+        Ok(line)
+    } else {
+        Err(if line.is_empty() { format!("{} {}: {}", DATA_CLOSE, what, out.status) } else { line })
+    }
+}
+
 /// What a failed sync of the directory after the rename means.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum DirSync {

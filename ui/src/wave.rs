@@ -1192,7 +1192,7 @@ pub fn trace_columns(pw: usize, ph: usize, t: &Trace, cols: (i32, i32), mut put:
         Some(z) => (w0 as f32 * z.get(k).copied().unwrap_or(0.0).clamp(0.0, 1.0)).round() as u16,
         None => w0,
     };
-    if m.dots && pairs {
+    if m.dots.yt() && pairs {
         for (j, p) in v.chunks(2).enumerate() {
             let (lo, hi_) = p
                 .iter()
@@ -1273,7 +1273,7 @@ fn trace_points(
         }
         let w = wt(k);
         let p = (xs[k], y_of(val));
-        if m.dots {
+        if m.dots.yt() {
             let (x, y) = (p.0.floor() as i32, p.1.round() as i32);
             if (c_lo..c_hi).contains(&x) && (0..hi).contains(&y) {
                 put(x, y, y, w);
@@ -1341,7 +1341,7 @@ mod tests {
     fn a_column_of_connected_segments_is_one_span() {
         use crate::model::Model;
         let (w, h) = (970usize, 448usize);
-        let m = Model { dots: false, ..Model::default() };
+        let m = Model { dots: Dots::Off, ..Model::default() };
         let v: Vec<f32> = (0..3600).map(|k| if k < 1800 { -1.0 } else { 1.0 }).collect();
         let window = m.time_per_div() as f64 * 10.0;
         let mut map = vec![0u16; w * h];
