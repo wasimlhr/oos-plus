@@ -193,8 +193,25 @@ fn said<'a>(m: &Model, pk: &'a [Packet]) -> impl Iterator<Item = &'a Packet> {
 /// The messages among the fields `p` of the decoder `m` is the view of: the frames of a protocol that says where one
 /// begins ([`crate::protocols::Protocol::frame_start`]), else what was sent without a long pause.
 pub(super) fn messages(m: &Model, p: &[Packet]) -> Vec<std::ops::Range<usize>> {
-    match m.dec_proto.module().and_then(|x| x.frame_start()) {
-        Some(begins) => oos_dsp::decode::frames(p, begins),
+    let module = m.dec_proto.module();
+    match module.and_then(|x| x.frame_start()) {
+        Some(begins) => {
+            let frames = oos_dsp::decode::frames(p, begins);
+            // (a pause longer than the frame has inside ends it: a lone word is a message of its own)
+            let Some(gap) = module.and_then(|x| x.frame_gap()) else { return frames };
+            let mut out = Vec::with_capacity(frames.len());
+            for r in frames {
+                let mut from = r.start;
+                for k in r.start + 1..r.end {
+                    if p[k].t0 - p[k - 1].t1 > gap {
+                        out.push(from..k);
+                        from = k;
+                    }
+                }
+                out.push(from..r.end);
+            }
+            out
+        }
         None => oos_dsp::decode::bursts(p),
     }
 }

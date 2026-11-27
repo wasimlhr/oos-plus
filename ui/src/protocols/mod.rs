@@ -302,6 +302,13 @@ pub trait Protocol: Sync {
         None
     }
 
+    /// The longest pause (seconds) a frame of the protocol has inside; a longer one ends it, as the start of the next
+    /// frame does. `None`: no pause splits a frame. MIL-STD-1553: a terminal answers within 12 us, so a word after
+    /// 14 us of quiet bus is not part of the message before it, whatever the other pauses of the record are.
+    fn frame_gap(&self) -> Option<f64> {
+        None
+    }
+
     /// The columns the Events pane has for a frame of the protocol in place of one text: a title and what the
     /// column holds of the frame ([`Col`]). Empty: the frame is one text, as the band writes it. The pane uses them
     /// when it lists messages, is wide enough, and every decoder that is on has the same columns.
