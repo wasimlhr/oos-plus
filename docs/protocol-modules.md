@@ -74,7 +74,7 @@ CH3.
 
 `ModuleInfo::polarity(slot, mirror)` says that option row `slot` is the Polarity row, and `oos_dsp::protocols`
 mirrors the main line about the threshold (`Mirror::Threshold`) or 0 V (`Mirror::Zero`, a bipolar line whose
-threshold is a magnitude) for Inverted, and for Auto reads both ways and keeps the reading with fewer failed fields (a
+threshold is a magnitude; `Mirror::Swap`, a pair read as two lines, exchanges them) for Inverted, and for Auto reads both ways and keeps the reading with fewer failed fields (a
 tie keeps Normal; a line that gave nothing as it is and a clean reading inverted goes to the inverted one). The module
 lists `protocols::POLARITY` (or `POLARITY_NO_AUTO`) at that place of `options`
 (`ui/src/protocols/mod.rs::the_polarity_row_is_where_the_info_says`). The row is the module's last, Normal is its
@@ -89,7 +89,7 @@ decoders that have the row):
 | MIL-STD-1553, DMX512 | Normal, Inverted, Auto | a swapped pair; parity and the frame checks tell |
 | ARINC 429 | Normal, Inverted | a swapped pair complements the 32 bits of a word and its odd parity stays odd, so no check can tell |
 | Manchester | none | its "A one is" row is the polarity of the code, and its four rows are used |
-| S/PDIF, USB PD, MLT-3, SENT | none | biphase mark, BMC, MLT-3 and SENT carry the data in the transitions (SENT: the time between two edges of one kind), not in the level: a swapped pair decodes as it is |
+| S/PDIF, USB PD, MLT-3, SENT, DCC | none | biphase mark, BMC, MLT-3, SENT and DCC carry the data in the transitions (SENT: the time between two edges of one kind; DCC: the lengths of the two halves of a period), not in the level: a swapped pair decodes as it is |
 | I2C, DS2482, I3C | none | open drain: one idle level, the lines are the protocol's own |
 | SPI, Quad-SPI | none | the clock polarity is in the mode row, the data and select polarity have rows of their own |
 | JTAG, SWD, I2S, Parallel | none | clocked buses: the clock, select and data levels are the protocol's own |
@@ -97,7 +97,7 @@ decoders that have the row):
 | C-PHY | none | three wires in three levels: swapping two wires permutes the states, which the decoder reads from the symbols |
 | CAN, CAN-FD | Normal, Inverted, Auto | CAN_H against RX/TX, or a pair swapped; stuffing and CRC errors tell. The row is relative to the Signal row (CAN_H or RX/TX), which the decoder follows as it always did |
 | LIN, FlexRay | Normal, Inverted, Auto | LIN: the line as an isolator or transceiver inverts it, the checksum tells; FlexRay: a swapped BP/BM pair, the header and frame CRCs tell |
-| DCC, USB | decided in the next pull request | |
+| USB | Normal, Inverted, Auto | D+ and D- swapped: Inverted exchanges the two sources (with D+ alone it mirrors the line); a swapped pair reads J as K, so every sync and PID check fails, which Auto sees. The row is the module's only one (`Mirror::Swap`) |
 
 ## Leaving decoders out
 

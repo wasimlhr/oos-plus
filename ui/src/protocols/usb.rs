@@ -11,7 +11,13 @@ use oos_dsp::decode::{self, USB_FULL};
 
 pub struct Usb;
 
+/// Polarity: Inverted exchanges D+ and D- (a cable or probe pair swapped); with D+ alone it mirrors the line.
+static USB_OPTIONS: [Opt; 1] = [POLARITY];
+
 impl Protocol for Usb {
+    fn options(&self) -> &'static [Opt] {
+        &USB_OPTIONS
+    }
     /// A packet in the Events pane: what it is (the field after the sync), address, endpoint, data, CRC.
     fn columns(&self) -> &'static [(&'static str, Col)] {
         &[

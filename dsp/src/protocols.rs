@@ -161,6 +161,9 @@ impl Polarity {
 pub enum Mirror {
     Threshold,
     Zero,
+    /// a pair read as two single-ended lines (USB: D+ and D-): swapping the pair is exchanging them; with the main
+    /// line alone it is mirrored about the threshold
+    Swap,
 }
 
 /// The decode of a line with the polarity applied: the packets and whether the line was read inverted.
@@ -253,7 +256,11 @@ impl ModuleInfo {
         let inverted = {
             let main: Vec<f32> = l.main().iter().map(|&x| mirror_of(x, l.thr, mirror)).collect();
             let mut lines = l.lines;
-            lines[0] = Some(&main[..]);
+            if mirror == Mirror::Swap && lines[2].is_some() {
+                lines.swap(0, 2);
+            } else {
+                lines[0] = Some(&main[..]);
+            }
             (self.decoder)(&Lines { lines, ..*l }).map(|p| (p, true))
         };
         if pol == Polarity::Inverted {
@@ -296,7 +303,7 @@ pub(crate) fn every_word_is_a_frame(what: BusWhat, _value: u32, p: &Packet) -> O
 /// `x` mirrored about the level of `mirror`.
 fn mirror_of(x: f32, thr: f32, mirror: Mirror) -> f32 {
     match mirror {
-        Mirror::Threshold => 2.0 * thr - x,
+        Mirror::Threshold | Mirror::Swap => 2.0 * thr - x,
         Mirror::Zero => -x,
     }
 }
