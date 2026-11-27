@@ -32,7 +32,7 @@ impl Ui {
     /// The shaded band between two time cursors (screen columns of the area `g`) in one lane.
     pub(super) fn studio_band(&self, cv: &mut Canvas, lane: Rect, g: Rect, (x0, x1): (i32, i32)) {
         let (l0, l1) = (into_lane(lane, g, x0), into_lane(lane, g, x1));
-        cv.blend(Rect::new(l0, lane.y, (l1 - l0).max(1), lane.h), super::studio::BAND, 46);
+        cv.blend(Rect::new(l0, lane.y, (l1 - l0).max(1), lane.h), self.cursor_tint(self.cursor_source()), 46);
     }
 
     /// The tags of the cursors that are on the plot, each with the cursor it stands for.

@@ -32,6 +32,8 @@ in the README. How to use it: the guides listed on [[Home]].
 **Measurement and maths**
 - 35 automatic measurements plus delay and phase between channels, 14 at once, with statistics
 - Time, voltage, tracking and XY cursors (XY keeps time and voltage cursor pairs on together, each with its read-out);
+  the read-out and the cursor lines carry the colour and the name of the trace they read (CH1, R1, M1 for a math result;
+  track cursors on two traces name both, "CH1 > M1"), and Cursors > Source shows the same colour;
   time cursors can snap to the nearest rising, falling or any edge of the source's mid-level (Cursor > Snap to edge, or
   Snap cursors now), so the time between two edges reads as delta time and 1/delta; DVM; frequency counter in the FPGA (reciprocal, up to 6 digits; frequency,
   period, totalize)

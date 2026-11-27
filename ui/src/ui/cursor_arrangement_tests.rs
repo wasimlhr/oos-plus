@@ -128,3 +128,75 @@ fn the_readout_box_clears_the_cursor_tags() {
         }
     }
 }
+
+/// Stacked lanes CH1, CH2, a plain reference and a math result in a slot, with cursors of `mode` on `source`.
+fn sourced(layout: Layout, mode: CursorMode, source: WaveId) -> Ui {
+    let mut u = setup(layout, windows::Arrangement::Stacked, CursorMode::Off);
+    for (i, label) in ["R1", "M1"].into_iter().enumerate() {
+        u.refs[i] = Some(RefWave {
+            color: i,
+            label: label.into(),
+            vpd: 0.5,
+            ..RefWave::test((0..128).map(|k| ((k as f32 + i as f32) * 0.2).sin() * 0.8).collect::<Vec<_>>(), 1e-5, -6e-4)
+        });
+    }
+    u.m.ch[2].on = false;
+    u.m.ch[3].on = false;
+    u.m.cursor = mode;
+    (u.m.cur_a, u.m.cur_b) = (0.3, 0.7);
+    assert!(u.set_cursor_source(source));
+    for _ in 0..3 {
+        frame(&mut u);
+    }
+    u
+}
+
+#[test]
+fn the_cursor_readout_names_its_source_and_a_math_result_reads_m() {
+    let u = sourced(Layout::Studio, CursorMode::Time, WaveId::Ref(0));
+    assert_eq!(u.cursor_source_label(WaveId::Ref(0)), "R1", "a plain reference");
+    assert_eq!(u.cursor_source_label(WaveId::Ref(1)), "M1", "a math result held in a slot reads as the math channel");
+    assert_eq!(u.cursor_source_label(WaveId::Ch(1)), "CH2");
+    assert_eq!(u.cursor_chip_text(WaveId::Ref(0)), "R1");
+    assert_eq!(u.cursor_badge().map(|b| b.0).as_deref(), Some("R1"));
+    let mut u = sourced(Layout::Studio, CursorMode::Track, WaveId::Ch(0));
+    assert_eq!(u.cursor_chip_text(WaveId::Ch(0)), "CH1", "track cursors on one source name it once");
+    assert!(u.set_cursor_b_source(WaveId::Ref(1)));
+    assert_eq!(u.cursor_chip_text(WaveId::Ch(0)), "CH1 > M1", "two sources are both named");
+}
+
+#[test]
+fn the_cursor_lines_take_the_colour_of_their_source() {
+    for source in [WaveId::Ch(0), WaveId::Ch(1), WaveId::Ref(0), WaveId::Ref(1)] {
+        let mut u = sourced(Layout::Studio, CursorMode::Time, source);
+        let mut cv = Canvas::new(u.scr.w, u.scr.h);
+        u.render(&mut cv);
+        let tint = u.cursor_tint(source);
+        assert_ne!(tint, CURSOR, "{source:?}: the tint differs from the neutral grey");
+        let a = u.plot.area;
+        let found = cv.px.iter().enumerate().any(|(i, &p)| p == tint && (i as i32 % u.scr.w) >= a.x && (i as i32 / u.scr.w) >= a.y);
+        assert!(found, "{source:?}: a cursor line is drawn in the tint of the source");
+    }
+}
+
+/// Pictures for a pull request: `OOS_SHOT_DIR=<dir> cargo test cursor_source_pictures`.
+#[test]
+fn cursor_source_pictures() {
+    let Ok(dir) = std::env::var("OOS_SHOT_DIR") else { return };
+    for (layout, name) in [(Layout::Studio, "studio"), (Layout::Default, "default")] {
+        for (mode, source, tag) in [
+            (CursorMode::Time, WaveId::Ref(0), "time-r1"),
+            (CursorMode::Track, WaveId::Ch(0), "track-ch1"),
+            (CursorMode::Volt, WaveId::Ref(1), "volt-m1"),
+        ] {
+            let mut u = sourced(layout, mode, source);
+            if mode == CursorMode::Track && layout == Layout::Studio {
+                assert!(u.set_cursor_b_source(WaveId::Ref(1)));
+                frame(&mut u);
+            }
+            let mut cv = Canvas::new(u.scr.w, u.scr.h);
+            u.render(&mut cv);
+            std::fs::write(format!("{dir}/cursor-{name}-{tag}.png"), crate::store::png_of(&cv)).unwrap();
+        }
+    }
+}

@@ -514,9 +514,10 @@ mod tests {
                     ui.draw_cursors(&mut cv);
                 }
                 let selected = ui.source_area(WaveId::Ref(1)).unwrap();
+                let tint = ui.cursor_tint(WaveId::Ref(1));
                 for &area in &ui.plot.wins {
                     let marked = (area.y..area.y + area.h).any(|y| {
-                        cv.px[(y * W + area.x) as usize..(y * W + area.x + area.w) as usize].contains(&CURSOR)
+                        cv.px[(y * W + area.x) as usize..(y * W + area.x + area.w) as usize].contains(&tint)
                     });
                     assert_eq!(marked, area == selected, "{mode:?}: cursor must stay in the selected source lane");
                 }
@@ -729,7 +730,27 @@ impl Ui {
         self.source_area(self.cursor_source()).unwrap_or(self.plot.area)
     }
     pub(super) fn cursor_badge(&self) -> Option<(String, Rgb)> {
-        self.cursor_wave().map(|id| (self.wave_name(id), self.wave_color(id)))
+        self.cursor_wave().map(|id| (self.cursor_chip_text(id), self.wave_color(id)))
+    }
+    /// The name a cursor readout gives a source: a math trace held in a reference slot reads `M<n>`, as `:CURSor` says.
+    pub(super) fn cursor_source_label(&self, id: WaveId) -> String {
+        match id {
+            WaveId::Ref(slot) => self.ref_math_index(slot).map_or_else(|| self.wave_name(id), |k| format!("M{}", k + 1)),
+            WaveId::Ch(_) => self.wave_name(id),
+        }
+    }
+    /// What the readout says its values are read from: the source, and with track cursors on two sources both.
+    pub(super) fn cursor_chip_text(&self, first: WaveId) -> String {
+        let second = self.cursor_b_source();
+        if self.m.cursor == CursorMode::Track && second != first && self.m.cur_b_source.is_some() {
+            format!("{} > {}", self.cursor_source_label(first), self.cursor_source_label(second))
+        } else {
+            self.cursor_source_label(first)
+        }
+    }
+    /// The colour of cursor lines and handles on a source: the neutral cursor grey drawn toward the trace's colour.
+    pub(super) fn cursor_tint(&self, id: WaveId) -> Rgb {
+        mix(CURSOR, self.wave_color(id), 60)
     }
     pub(super) fn cursor_source_context(&self) -> Option<(WaveId, f32, f32, &'static str)> {
         let id = self.cursor_wave()?;
