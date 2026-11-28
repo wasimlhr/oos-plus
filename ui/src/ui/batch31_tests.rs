@@ -549,3 +549,27 @@ fn the_rbw_in_use_and_the_peak_table_are_answered_as_the_page_shows_them() {
         assert!((got.0 - m.f).abs() <= 1e-6 * m.f.abs().max(1.0) && (got.1 - m.dbv).abs() < 1e-3, "{got:?} {m:?}");
     }
 }
+
+/// A measurement on a math channel is read from a hidden copy of the trace. Its row stays in the readouts while the
+/// math channel is shown (Studio), goes with the channel, and shows no R<n> or SIM button.
+#[test]
+fn a_row_on_a_math_channel_shows_in_the_readouts_although_its_copy_is_hidden() {
+    let mut u = Ui::new(Source::Demo { t: 0.0 });
+    scpi_line(&mut u, ":DISP:LAY STUDIO;:CHAN1:DISP ON;:CHAN2:DISP ON");
+    u.step(0.05);
+    scpi_line(&mut u, ":STOP;:MATH1:DISP ON;:MATH1:OPER SUBT;:MATH1:SOUR1 CHAN1;:MATH1:SOUR2 CHAN2");
+    scpi_line(&mut u, ":MEAS:CLEar;:MEAS:SLOT1 VPP,MATH1");
+    let mut cv = Canvas::new(W, H);
+    for _ in 0..6 {
+        u.step(0.05);
+        u.render(&mut cv);
+    }
+    assert_eq!(u.meas_shown_count(), 1, "the row is in the readouts");
+    assert!(!u.sim_return_button(), "no SIM button beside Run");
+    scpi_line(&mut u, ":MATH1:DISP OFF");
+    for _ in 0..3 {
+        u.step(0.05);
+        u.render(&mut cv);
+    }
+    assert_eq!(u.meas_shown_count(), 0, "it goes with the math channel");
+}
