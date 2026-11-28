@@ -1516,7 +1516,11 @@ impl Ui {
     pub(super) fn studio_source_live(&self, id: WaveId) -> bool {
         match id {
             WaveId::Ch(c) => c < n_ch() && self.m.ch[c].on && self.sim_refs.is_empty(),
-            WaveId::Ref(i) => self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on),
+            // the hidden copy of a math trace that a measurement reads lives as long as that math channel is shown
+            WaveId::Ref(i) => match self.ref_math_index(i) {
+                Some(k) => self.m.math_shown(k),
+                None => self.refs.get(i).and_then(Option::as_ref).is_some_and(|r| r.on),
+            },
         }
     }
 
