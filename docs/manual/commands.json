@@ -4755,7 +4755,7 @@
       [
        "<item>[,<A>[,<B>]]",
        "Text",
-       "Set: add a standard or pair readout (duplicates keep statistics and Single); a source may be `MATH<n>`, which the row reads from a copy of the math result in a reference slot (-221 when the result is not ready). Items: see Measure.",
+       "Set: add a standard or pair readout (duplicates keep statistics and Single); a source may be `MATH<n>`, which the row reads from a copy of the math result in a reference slot (the copy is hidden, so no R<k> is drawn and Studio offers no SIM; `:REFerence:SHOW` shows it) (-221 when the result is not ready). Items: see Measure.",
        "—"
       ]
      ],

@@ -271,7 +271,11 @@ impl Ui {
         }
         match id {
             WaveId::Ch(c) => c < NCH && !self.m.ch[c].on,
-            WaveId::Ref(i) => !self.record_mode() && self.ref_shown_slot(i) == Some(false),
+            // the hidden copy a measurement on a math channel reads: its row follows the math channel
+            WaveId::Ref(i) => match self.ref_math_index(i) {
+                Some(k) => !self.m.math_shown(k),
+                None => !self.record_mode() && self.ref_shown_slot(i) == Some(false),
+            },
         }
     }
 

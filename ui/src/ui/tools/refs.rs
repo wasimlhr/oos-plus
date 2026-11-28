@@ -388,9 +388,13 @@ impl Ui {
         let Some(slot) = held.or_else(|| self.refs.iter().position(Option::is_none)) else {
             return Err("every reference slot is in use".into());
         };
+        // a copy made only so that a measurement or a cursor can read the math trace stays hidden: shown, it draws an
+        // R<n> nobody asked for and makes Studio offer SIM (`sim_shown_refs`); a copy the user already shows stays shown
+        let shown = held.and_then(|s| self.refs[s].as_ref()).is_some_and(|w| w.on);
         let keep = std::mem::replace(&mut self.ref_page.sel, slot);
         let done = self.ref_save_math(k);
         self.ref_page.sel = keep;
+        if let Some(w) = self.refs[slot].as_mut().filter(|_| done.is_ok()) { w.on = shown; }
         done.map(|()| slot)
     }
 

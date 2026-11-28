@@ -275,6 +275,36 @@ fn a_measurement_can_be_added_on_a_math_channel() {
     assert!(line(&mut s, &mut ui, &cv, ":SYST:ERR?").starts_with("-221,"));
 }
 
+/// The reference copy that a measurement on MATH1 reads stays hidden: shown, it drew an R1 nobody asked for and made
+/// Studio offer SIM. The row still has its value, and a copy the user already shows stays shown.
+#[test]
+fn the_math_copy_of_a_measurement_is_not_shown_and_does_not_offer_sim() {
+    let (mut s, mut ui, cv) = session();
+    line(&mut s, &mut ui, &cv, ":DISP:LAY STUDIO;:CHAN1:DISP ON;:CHAN2:DISP ON");
+    ui.step(0.05);
+    line(&mut s, &mut ui, &cv, ":STOP;*CLS;:MATH1:DISP ON;:MATH1:OPER SUBT;:MATH1:SOUR1 CHAN1;:MATH1:SOUR2 CHAN2");
+    line(&mut s, &mut ui, &cv, ":MEAS:CLEar;:MEAS:SLOT1 VPP,MATH1");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":SYST:ERR?"), "0,\"No error\"");
+    // Studio prunes the rows of a hidden reference at the start of each drawn frame
+    let mut screen = Canvas::new(crate::ui::W, crate::ui::H);
+    for _ in 0..6 {
+        ui.step(0.05);
+        ui.render(&mut screen);
+    }
+    let slot = ui.ref_math_held(0).expect("the copy exists");
+    assert_eq!(line(&mut s, &mut ui, &cv, &format!(":REF:SHOW? {}", slot + 1)), "0", "hidden");
+    assert!(ui.sim_shown_refs().is_empty(), "so SIM has nothing to play");
+    let v: f64 = line(&mut s, &mut ui, &cv, ":MEAS:SLOT1?").parse().unwrap();
+    assert!(v < 1e30, "the row reads the hidden copy: {v}");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":MEAS:SLOT1:ITEM?"), "VPP,MATH1", "it reads back as it was added");
+    assert!(line(&mut s, &mut ui, &cv, ":MEAS:STRip?").contains("VPP,MATH1,"), "also in the strip");
+    assert_eq!(line(&mut s, &mut ui, &cv, ":DISP:LAY?"), "STUDIO");
+    // shown by the user, it stays shown when another measurement reads it
+    line(&mut s, &mut ui, &cv, &format!(":REF:SHOW {},ON", slot + 1));
+    line(&mut s, &mut ui, &cv, ":MEAS:SLOT2 VRMS,MATH1");
+    assert_eq!(line(&mut s, &mut ui, &cv, &format!(":REF:SHOW? {}", slot + 1)), "1", "a copy the user shows stays shown");
+}
+
 /// `:MEASure:STATistic:ITEM? <field>,<item>,MATH1` reads the statistics of the row on the math copy (it was
 /// `-224` and 9.9E37); with no row it says so (`-221`) instead of 9.9E37.
 #[test]
