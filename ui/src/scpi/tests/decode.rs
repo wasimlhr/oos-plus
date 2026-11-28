@@ -390,3 +390,32 @@ fn decode_auto_sizes_the_record_for_the_bit_rate_and_names_what_it_changed() {
     let again = line(&mut s, &mut ui, &cv, ":DECode:AUTO?");
     assert!(again.contains("kept"), "{again}");
 }
+
+/// A capture of CH1 and CH2 over SCPI (stop, raw record, word format, read, put the transfer settings back) leaves
+/// the decoder, the channels and the math channel as they were (the owner's check of 2026-11-27).
+#[test]
+fn a_waveform_capture_leaves_decode_channels_and_math_alone() {
+    let (mut s, mut ui, cv) = session();
+    line(&mut s, &mut ui, &cv, ":CHAN1:DISP ON;:CHAN2:DISP ON");
+    ui.step(0.05);
+    line(&mut s, &mut ui, &cv, ":MATH1:DISP ON;:MATH1:OPER SUBT;:MATH1:SOUR1 CHAN1;:MATH1:SOUR2 CHAN2");
+    line(&mut s, &mut ui, &cv, ":DEC:SEL 1;:DEC:PROTO 1553;:DEC:SOUR CHAN1;:DEC:THR 0;:DEC:STAT ON");
+    line(&mut s, &mut ui, &cv, ":MEAS:CLEar;:MEAS:SLOT1 VPP,MATH1;*CLS");
+    ui.step(0.05);
+    let state = |s: &mut Scpi, ui: &mut Ui| {
+        [":DEC:POL?", ":DEC:SOUR?", ":DEC:PROT?", ":DEC:STAT?", ":CHAN1:DISP?", ":CHAN2:DISP?", ":MATH1:DISP?", ":MATH1:OPER?", ":MEAS:SLOT1:ITEM?"]
+            .iter()
+            .map(|q| format!("{q}{}", line(s, ui, &cv, q)))
+            .collect::<Vec<_>>()
+    };
+    let before = state(&mut s, &mut ui);
+    assert!(before.iter().any(|l| l.contains("1553")), "{before:?}");
+    for ch in ["CHAN1", "CHAN2"] {
+        line(&mut s, &mut ui, &cv, ":STOP");
+        line(&mut s, &mut ui, &cv, &format!(":WAV:SOUR {ch};:WAV:MODE RAW;:WAV:FORM WORD;:WAV:STAR 1;:WAV:STOP 1000000"));
+        let data = s.exec_line(&mut ui, &cv, ":WAV:DATA?");
+        assert!(data.starts_with(b"#"), "{ch}: {}", String::from_utf8_lossy(&data[..data.len().min(80)]));
+        line(&mut s, &mut ui, &cv, ":WAV:MODE NORM;:WAV:FORM BYTE;:WAV:STAR 1;:WAV:STOP 3600;:WAV:SOUR CHAN1");
+    }
+    assert_eq!(state(&mut s, &mut ui), before);
+}

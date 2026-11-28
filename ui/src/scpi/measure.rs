@@ -142,11 +142,23 @@ fn slot_node(node: &str) -> Option<Option<u8>> {
     Some(n.filter(|n| (1..=SLOTS as usize).contains(n)).map(|n| n as u8))
 }
 
+/// A source as a row names it: a reference slot that only holds the copy of a math trace the row reads (a row on
+/// `MATH1` is stored on it) is `MATH1`, the name the row was added with, not `R1`.
+fn source_tok(ui: &Ui, id: WaveId) -> String {
+    match id {
+        WaveId::Ref(slot) => match ui.ref_math_index(slot) {
+            Some(k) => format!("MATH{}", k + 1),
+            None => wave_tok(id),
+        },
+        _ => wave_tok(id),
+    }
+}
+
 /// What a row measures as `STRip?` writes it, without the value: `VPP,CHAN1`, `RRDELAY,CHAN1,CHAN2`.
-fn slot_item(key: RowKey) -> String {
+fn slot_item(ui: &Ui, key: RowKey) -> String {
     match key {
-        RowKey::One(k, id) => format!("{},{}", meas_token(k), wave_tok(id)),
-        RowKey::Pair(k, a, b) => format!("{},{},{}", pair_token(k), wave_tok(a), wave_tok(b)),
+        RowKey::One(k, id) => format!("{},{}", meas_token(k), source_tok(ui, id)),
+        RowKey::Pair(k, a, b) => format!("{},{},{}", pair_token(k), source_tok(ui, a), source_tok(ui, b)),
         RowKey::Cat(id, ..) => format!("CAT{id}"),
     }
 }
@@ -156,7 +168,7 @@ fn slot_list(ui: &Ui) -> String {
     if ui.m.meas_slots.is_empty() {
         return String::new();
     }
-    ui.slots_in_use().into_iter().map(|(n, key)| format!("{n},{},{}", slot_item(key), e(ui.slot_value(key)))).collect::<Vec<_>>().join(";")
+    ui.slots_in_use().into_iter().map(|(n, key)| format!("{n},{},{}", slot_item(ui, key), e(ui.slot_value(key)))).collect::<Vec<_>>().join(";")
 }
 
 pub(crate) fn meas_kind(item: &str) -> Option<Meas> {
@@ -179,10 +191,10 @@ fn pair_token(k: usize) -> &'static str {
 pub(super) fn meas_strip(ui: &Ui) -> String {
     let mut p = Vec::new();
     for &(k, id) in &ui.m.meas {
-        p.push(format!("{},{},{}", meas_token(k), wave_tok(id), e(ui.fact_meas(k, id))));
+        p.push(format!("{},{},{}", meas_token(k), source_tok(ui, id), e(ui.fact_meas(k, id))));
     }
     for &(k, a, b) in &ui.m.meas2 {
-        p.push(format!("{},{},{},{}", pair_token(k), wave_tok(a), wave_tok(b), e(ui.pair_at(k, a, b))));
+        p.push(format!("{},{},{},{}", pair_token(k), source_tok(ui, a), source_tok(ui, b), e(ui.pair_at(k, a, b))));
     }
     for (id, [a, b, c, d], value) in ui.catalog_export_values() {
         p.push(format!("CAT{},{},{},{},{},{}", id, wave_tok(a), wave_tok(b), wave_tok(c), wave_tok(d), e(value)));
@@ -392,7 +404,7 @@ impl Scpi {
         }
         if kw(nodes[2], "ITEM") && query {
             return match ui.slot_row(n) {
-                Some(key) => t(&slot_item(key)),
+                Some(key) => t(&slot_item(ui, key)),
                 None => empty(self),
             };
         }
