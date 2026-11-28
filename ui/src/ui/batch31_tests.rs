@@ -565,6 +565,8 @@ fn a_row_on_a_math_channel_shows_in_the_readouts_although_its_copy_is_hidden() {
         u.render(&mut cv);
     }
     assert_eq!(u.meas_shown_count(), 1, "the row is in the readouts");
+    let slot = u.ref_math_held(0).expect("the copy");
+    assert_eq!((u.wave_name(WaveId::Ref(slot)), u.wave_caption(WaveId::Ref(slot))), ("M1".into(), "M1".into()), "named as the math");
     assert!(!u.sim_return_button(), "no SIM button beside Run");
     scpi_line(&mut u, ":MATH1:DISP OFF");
     for _ in 0..3 {

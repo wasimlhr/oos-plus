@@ -330,7 +330,8 @@ impl Ui {
     pub(super) fn wave_name(&self, id: WaveId) -> String {
         match id {
             WaveId::Ch(c) => format!("CH{}", c + 1),
-            WaveId::Ref(i) => format!("R{}", i + 1),
+            // the hidden copy a measurement or a cursor reads for a math trace is that math trace: M<n>, not R<n>
+            WaveId::Ref(i) => self.ref_math_index(i).map_or_else(|| format!("R{}", i + 1), |k| format!("M{}", k + 1)),
         }
     }
 
@@ -338,7 +339,7 @@ impl Ui {
     pub(super) fn wave_caption(&self, id: WaveId) -> String {
         match id {
             WaveId::Ch(c) => format!("CH{} ({})", c + 1, self.m.ch[c.min(NCH - 1)].unit.name()),
-            WaveId::Ref(i) => format!("R{}", i + 1),
+            WaveId::Ref(_) => self.wave_name(id),
         }
     }
 
