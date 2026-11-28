@@ -310,7 +310,7 @@ impl Ui {
             let val = self.pair_at(k, a, b);
             let tag = |id: WaveId| match id {
                 WaveId::Ch(c) => (c + 1).to_string(),
-                WaveId::Ref(i) => format!("R{}", i + 1),
+                WaveId::Ref(_) => self.wave_name(id),
             };
             let unit = match kind {
                 PairKind::Phase => "\u{b0}",
